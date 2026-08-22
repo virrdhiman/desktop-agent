@@ -1,3 +1,16 @@
+/**
+ * SettingsPanel — AI provider configuration
+ *
+ * Features:
+ * - 37 AI providers across 4 categories (free, local, community, paid)
+ * - Category filter tabs with counts
+ * - Provider search
+ * - API key input with security note
+ * - Base URL and model configuration
+ * - Sign-up links for each provider
+ * - Custom Rules editor (custom system prompts)
+ * - Plan Mode toggle
+ */
 import { useState, useCallback, useMemo } from 'react'
 import { useStore } from '../store'
 import type { ProviderConfig } from '../types'

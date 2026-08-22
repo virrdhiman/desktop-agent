@@ -1,3 +1,19 @@
+/**
+ * AgentChat — Main AI chat interface
+ *
+ * Features:
+ * - Streaming AI responses with real-time token display
+ * - Markdown rendering with syntax-highlighted code blocks
+ * - Tool call execution (26 tools) with multi-round follow-up (up to 5 rounds)
+ * - @context mentions (@file, @folder, @web) for precise targeting
+ * - Image paste (Ctrl+V) and drag-and-drop support
+ * - Model quick-switch dropdown in header
+ * - Multi-provider auto-fallback on failure
+ * - Plan Mode toggle (plan before executing)
+ * - Stop generation button
+ * - Session save/load
+ * - Token counter in input area
+ */
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useStore } from '../store'
 import type { ChatMessage, AgentStep } from '../types'
@@ -34,13 +50,57 @@ ${AGENT_TOOLS.map((t) => `- **${t.name}**: ${t.description}\n  Params: ${JSON.st
 6. **Be thorough** — complete the entire task, not just part of it
 7. **Search the web** — use web_search when you need docs, APIs, or references
 
+## PLAN MODE
+When the user has Plan Mode enabled, FIRST describe your plan in detail:
+1. List the files you'll read/modify
+2. Describe the changes you'll make
+3. Explain the order of operations
+4. Then ask the user to confirm before executing
+
+When Plan Mode is OFF, just execute directly.
+
 ## RESPONSE FORMAT
 Use markdown formatting:
 - Code blocks with language tags: \\\`\\\`\\\`typescript\\ncode\\n\\\`\\\`\\\`
 - **Bold** for emphasis
 - Lists for steps
 - Headers for structure
+- Use | tables for structured data
 Start with a brief plan, execute tools step by step, end with a summary.`
+
+// Simple syntax highlighter (uses RegExp constructor to avoid // comment parsing issues)
+function highlightSyntax(code: string, lang?: string): string {
+  let escaped = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+  const jsKW = 'const|let|var|function|return|if|else|for|while|do|switch|case|break|continue|new|this|class|extends|import|export|from|default|async|await|try|catch|throw|typeof|instanceof|in|of|true|false|null|undefined|void|delete|yield|static|super|with|debugger'
+  const pyKW = 'def|class|if|elif|else|for|while|return|import|from|as|try|except|finally|raise|with|yield|lambda|pass|break|continue|True|False|None|and|or|not|in|is|global|nonlocal|assert|del|print|self'
+  const goKW = 'func|package|import|var|const|type|struct|interface|return|if|else|for|range|switch|case|default|break|continue|go|defer|chan|map|make|new|true|false|nil'
+  const rsKW = 'fn|let|mut|const|struct|enum|impl|trait|pub|use|mod|crate|return|if|else|for|while|loop|match|break|continue|true|false|as|in|ref|move|async|await'
+
+  let kwStr = jsKW
+  if (lang === 'python' || lang === 'py') kwStr = pyKW
+  else if (lang === 'go') kwStr = goKW
+  else if (lang === 'rust' || lang === 'rs') kwStr = rsKW
+
+  // Keywords
+  escaped = escaped.replace(new RegExp('\\b(' + kwStr + ')\\b', 'g'), '<span style="color:#c678dd">$1</span>')
+
+  // Strings
+  escaped = escaped.replace(/('[^']*')/g, '<span style="color:#98c379">$1</span>')
+  escaped = escaped.replace(/("[^"]*")/g, '<span style="color:#98c379">$1</span>')
+
+  // Numbers
+  escaped = escaped.replace(new RegExp('\\b(\\d+\\.?\\d*)\\b', 'g'), '<span style="color:#d19a66">$1</span>')
+
+  // Hash comments
+  escaped = escaped.replace(/(#[^\n]*)/g, '<span style="color:#5c6370;font-style:italic">$1</span>')
+
+  // Capitalized types
+  escaped = escaped.replace(new RegExp('\\b([A-Z][a-zA-Z0-9]+)\\b', 'g'), '<span style="color:#e5c07b">$1</span>')
+
+  return escaped
+}
+
 
 // Simple markdown renderer component
 function MarkdownContent({ content }: { content: string }) {
@@ -53,21 +113,36 @@ function MarkdownContent({ content }: { content: string }) {
         if (block.type === 'code') {
           return (
             <div key={i} style={{ margin: '8px 0', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)' }}>
-              {block.lang && (
-                <div style={{
-                  padding: '4px 12px', background: 'var(--bg-tertiary)',
-                  fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace',
-                  borderBottom: '1px solid var(--border)',
-                }}>
-                  {block.lang}
-                </div>
-              )}
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '4px 12px', background: 'var(--bg-tertiary)',
+                borderBottom: '1px solid var(--border)',
+              }}>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                  {block.lang || 'code'}
+                </span>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(block.content)
+                    const btn = document.getElementById(`copy-${i}`)
+                    if (btn) { btn.textContent = '✓ Copied'; setTimeout(() => { btn.textContent = '📋 Copy' }, 1500) }
+                  }}
+                  id={`copy-${i}`}
+                  style={{
+                    padding: '2px 8px', borderRadius: 4, fontSize: 11, cursor: 'pointer',
+                    background: 'var(--bg-primary)', border: '1px solid var(--border)',
+                    color: 'var(--text-secondary)',
+                  }}
+                >
+                  📋 Copy
+                </button>
+              </div>
               <pre style={{
                 margin: 0, padding: '12px 16px', background: '#0d1117',
                 fontSize: 12, fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
                 overflow: 'auto', lineHeight: 1.5, whiteSpace: 'pre-wrap',
               }}>
-                <code>{block.content}</code>
+                <code dangerouslySetInnerHTML={{ __html: highlightSyntax(block.content, block.lang) }} />
               </pre>
             </div>
           )
@@ -467,7 +542,7 @@ export default function AgentChat() {
     if (workspacePath) contextParts.push(`Workspace: ${workspacePath}`)
     if (selectedFile) contextParts.push(`Current file: ${selectedFile}\n\`\`\`\n${fileContent.slice(0, 5000)}\n\`\`\``)
 
-    const systemPrompt = `${TOOL_SYSTEM_PROMPT}\n${workspacePath ? `\nCurrent workspace: ${workspacePath}` : ''}\n${contextParts.length > 0 ? '\nContext:\n' + contextParts.join('\n') : ''}`
+    const systemPrompt = `${TOOL_SYSTEM_PROMPT}\n${planMode ? '\n📋 PLAN MODE IS ACTIVE — Plan before executing!' : '\n⚡ EXECUTE MODE — Act directly.'}${workspacePath ? `\nCurrent workspace: ${workspacePath}` : ''}\n${contextParts.length > 0 ? '\nContext:\n' + contextParts.join('\n') : ''}${appSettings.customRules ? `\n\n📝 Custom Rules:\n${appSettings.customRules}` : ''}`
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -682,10 +757,70 @@ export default function AgentChat() {
             💾
           </button>
           {messages.length > 0 && (
-            <button className="btn btn-sm" onClick={clearMessages}>Clear</button>
+            <>
+              <button className="btn btn-sm" onClick={() => {
+                const md = messages.map(m => `**${m.role === 'user' ? 'You' : 'Agent'}** (${new Date(m.timestamp).toLocaleTimeString()})\n\n${m.content}\n`).join('\n---\n\n')
+                const blob = new Blob([md], { type: 'text/markdown' })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url; a.download = `chat-${new Date().toISOString().slice(0,10)}.md`; a.click()
+                URL.revokeObjectURL(url)
+              }}>📤 Export</button>
+              <button className="btn btn-sm" onClick={clearMessages}>Clear</button>
+            </>
           )}
         </div>
       </div>
+
+      {/* Sessions sidebar */}
+      {showSessions && (
+        <div style={{
+          position: 'absolute', top: 0, right: 0, width: 280, height: '100%',
+          background: 'var(--bg-secondary)', borderLeft: '1px solid var(--border)',
+          zIndex: 50, display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        }}>
+          <div className="panel-header">
+            <h2 style={{ fontSize: 13 }}>💾 Sessions</h2>
+            <button className="btn btn-sm" onClick={() => setShowSessions(false)}>✕</button>
+          </div>
+          <div className="panel-body" style={{ flex: 1, overflowY: 'auto', padding: 4 }}>
+            {sessions.length === 0 ? (
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: 12, textAlign: 'center' }}>
+                No saved sessions yet
+              </div>
+            ) : (
+              sessions.map((s) => (
+                <div
+                  key={s.id}
+                  onClick={() => { loadSession(s.id); setShowSessions(false) }}
+                  style={{
+                    padding: '8px 10px', borderRadius: 6, cursor: 'pointer', marginBottom: 2,
+                    background: currentSessionId === s.id ? 'rgba(59,130,246,0.1)' : 'transparent',
+                    border: currentSessionId === s.id ? '1px solid var(--accent)' : '1px solid transparent',
+                  }}
+                  onMouseEnter={(e) => { if (currentSessionId !== s.id) e.currentTarget.style.background = 'var(--bg-tertiary)' }}
+                  onMouseLeave={(e) => { if (currentSessionId !== s.id) e.currentTarget.style.background = 'transparent' }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                      {s.title}
+                    </div>
+                    <span
+                      onClick={(e) => { e.stopPropagation(); deleteSession(s.id) }}
+                      style={{ fontSize: 11, color: 'var(--text-muted)', padding: '0 4px', cursor: 'pointer' }}
+                    >
+                      ✕
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                    {new Date(s.timestamp).toLocaleString()} · {s.messages.length} msgs
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Drag overlay */}
       {dragOver && (
@@ -852,6 +987,18 @@ export default function AgentChat() {
         borderTop: '1px solid var(--border)',
         background: 'var(--bg-secondary)',
       }}>
+        {/* Status bar */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            {planMode && (
+              <span className="badge badge-green" style={{ fontSize: 10 }}>📋 Plan Mode</span>
+            )}
+          </div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+            ~{Math.ceil(input.length / 4)} tokens · {input.length} chars{' '}
+            {messages.length > 0 && `· ${messages.length} msgs`}
+          </div>
+        </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
           <button
             className="btn btn-sm"

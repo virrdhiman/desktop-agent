@@ -1,3 +1,14 @@
+/**
+ * BranchManager — Git branch management UI
+ *
+ * Features:
+ * - List all local branches with current branch highlighted
+ * - Create new branches
+ * - Switch between branches
+ * - Delete branches
+ * - Stash management (stash/pop)
+ * - Branch info (ahead/behind tracking)
+ */
 import { useEffect, useState, useCallback } from 'react'
 import { useStore } from '../store'
 
