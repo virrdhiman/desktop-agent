@@ -1,3 +1,14 @@
+/**
+ * CodeEditor — Monaco-powered code editor
+ *
+ * Features:
+ * - Full VS Code editor (Monaco) with syntax highlighting
+ * - Tab management for multiple open files
+ * - Ctrl+S to save, Ctrl+W to close tabs
+ * - File dirty indicator (unsaved changes dot)
+ * - Language auto-detection from file extension
+ * - Minimap, bracket matching, code folding
+ */
 import { useCallback, useEffect, useState } from 'react'
 import Editor from '@monaco-editor/react'
 import { useStore } from '../store'

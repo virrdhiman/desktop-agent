@@ -1,3 +1,12 @@
+/**
+ * TaskPanel — Agent task tracking
+ *
+ * Shows all autonomous agent tasks with:
+ * - Expandable task cards with step details
+ * - Tool call tracking (running/done/error)
+ * - Timestamps for each step
+ * - Error display
+ */
 import { useState } from 'react'
 import { useStore } from '../store'
 

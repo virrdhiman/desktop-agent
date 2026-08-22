@@ -1,6 +1,17 @@
+/**
+ * Freebuff Agent — Preload Script
+ *
+ * Exposes a safe, typed API bridge between the renderer (React app)
+ * and the main process (Node.js). Uses contextBridge for security.
+ *
+ * All methods are invoked via ipcRenderer.invoke() and return promises.
+ * Event listeners (onAIStream, onTerminalData) use ipcRenderer.on().
+ */
 import { contextBridge, ipcRenderer } from 'electron'
 
 contextBridge.exposeInMainWorld('api', {
+  // ═══ File System ══════════════════════════════════════════════════════════════
+  // Browse, read, write, create, delete files and directories
   // File System
   openDirectory: () => ipcRenderer.invoke('fs:openDirectory'),
   readDirectory: (dirPath: string) => ipcRenderer.invoke('fs:readDirectory', dirPath),
@@ -13,7 +24,8 @@ contextBridge.exposeInMainWorld('api', {
   rename: (oldPath: string, newPath: string) => ipcRenderer.invoke('fs:rename', oldPath, newPath),
   walkDirectory: (dirPath: string) => ipcRenderer.invoke('fs:walkDirectory', dirPath),
 
-  // Git
+  // ═══ Git ══════════════════════════════════════════════════════════════════════
+  // Full git operations: status, diff, commit, push, pull, branches, stash
   gitStatus: (repoPath: string) => ipcRenderer.invoke('git:status', repoPath),
   gitDiff: (repoPath: string, filePath?: string) => ipcRenderer.invoke('git:diff', repoPath, filePath),
   gitDiffStaged: (repoPath: string) => ipcRenderer.invoke('git:diffStaged', repoPath),
@@ -33,7 +45,8 @@ contextBridge.exposeInMainWorld('api', {
   gitStage: (repoPath: string, files: string[]) => ipcRenderer.invoke('git:stage', repoPath, files),
   gitUnstage: (repoPath: string, files: string[]) => ipcRenderer.invoke('git:unstage', repoPath, files),
 
-  // Terminal PTY
+  // ═══ Terminal ══════════════════════════════════════════════════════════════════
+  // Real shell terminals via node-pty (PowerShell/bash)
   terminalCreate: (termId: string, cwd: string) => ipcRenderer.invoke('terminal:create', termId, cwd),
   terminalWrite: (termId: string, data: string) => ipcRenderer.invoke('terminal:write', termId, data),
   terminalResize: (termId: string, cols: number, rows: number) => ipcRenderer.invoke('terminal:resize', termId, cols, rows),
@@ -45,25 +58,30 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('terminal:exit', (_e, termId, exitCode) => cb(termId, exitCode))
   },
 
-  // Tool Execution (agent can call these autonomously)
+  // ═══ Agent Tools ══════════════════════════════════════════════════════════════
+  // Autonomous agent tool execution (26 tools) (agent can call these autonomously)
   toolExecute: (tool: { name: string; args: Record<string, any> }) => ipcRenderer.invoke('tool:execute', tool),
 
-  // Settings
+  // ═══ Settings ══════════════════════════════════════════════════════════════════
+  // API keys, providers, workspace config
   loadSettings: () => ipcRenderer.invoke('settings:load'),
   saveSettings: (settings: any) => ipcRenderer.invoke('settings:save', settings),
 
-  // AI (with streaming support)
+  // ═══ AI ════════════════════════════════════════════════════════════════════════
+  // Chat completions with streaming support (with streaming support)
   aiChat: (config: { provider: string; apiKey: string; baseUrl: string; model: string; messages: any[]; stream?: boolean }) =>
     ipcRenderer.invoke('ai:chat', config),
   onAIStream: (cb: (token: string) => void) => {
     ipcRenderer.on('ai:stream', (_e, token) => cb(token))
   },
 
-  // Shell
+  // ═══ OS Shell ══════════════════════════════════════════════════════════════════
+  // Open files and folders in native OS apps
   openPath: (targetPath: string) => ipcRenderer.invoke('shell:openPath', targetPath),
   showItemInFolder: (targetPath: string) => ipcRenderer.invoke('shell:showItemInFolder', targetPath),
 
-  // Conversations
+  // ═══ Conversations ═════════════════════════════════════════════════════════════
+  // Save/load chat history across sessions
   saveConversations: (data: { messages: any[]; taskId: string }) => ipcRenderer.invoke('conversations:save', data),
   loadConversations: () => ipcRenderer.invoke('conversations:load'),
 })
@@ -111,6 +129,8 @@ export type ElectronAPI = {
   onAIStream: (cb: (token: string) => void) => void
   openPath: (targetPath: string) => Promise<void>
   showItemInFolder: (targetPath: string) => Promise<void>
+  saveConversations: (data: { messages: any[]; taskId: string }) => Promise<{ success: boolean } | { error: string }>
+  loadConversations: () => Promise<any[] | { error: string }>
 }
 
 type FileEntry = { name: string; isDirectory: boolean; path: string }
@@ -121,4 +141,4 @@ type GitStatus = {
 }
 type GitLogEntry = { hash: string; date: string; message: string; author: string }
 type ProviderConfig = { id: string; name: string; apiKey: string; baseUrl: string; model: string }
-type Settings = { providers: ProviderConfig[]; activeProvider: string; workspacePath: string }
+type Settings = { providers: ProviderConfig[]; activeProvider: string; workspacePath: string; customRules?: string; planMode?: boolean }

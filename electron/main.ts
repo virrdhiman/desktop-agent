@@ -1,18 +1,40 @@
+/**
+ * Freebuff Agent — Electron Main Process
+ *
+ * Backend for the desktop AI agent. Handles:
+ * - Window management (BrowserWindow creation)
+ * - IPC handlers for renderer ↔ main communication
+ * - File system operations (read, write, create, delete, search)
+ * - Git operations (status, diff, commit, push, pull, branch, stash)
+ * - Terminal PTY management (real shell terminals)
+ * - AI API calls with streaming (OpenAI-compatible + Anthropic)
+ * - Tool execution for the autonomous agent (26 tools)
+ * - Web3/blockchain tools (balance, explorer, IPFS, contracts)
+ * - Settings, API keys, and conversation persistence
+ */
 import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import { simpleGit, SimpleGit } from 'simple-git'
 import { spawn as ptySpawn } from 'node-pty'
 
+/** Main BrowserWindow reference — kept globally for sending events to renderer */
 let mainWindow: BrowserWindow | null = null
+
+/** Cache of SimpleGit instances per working directory */
 const gitInstances: Map<string, SimpleGit> = new Map()
+
+/** Active terminal PTY instances keyed by terminal ID */
 const terminals: Map<string, IPtyInstance> = new Map()
 
+/** Represents a running PTY terminal instance */
 interface IPtyInstance {
-  pty: any
-  buffer: string
+  pty: any // node-pty IPty instance
+  buffer: string // accumulated output buffer
 }
 
+/** ─── Window Management ─────────────────────────────────────────────────────────── */
+// Window lifecycle: create, ready, close, activate
 // ─── Window ──────────────────────────────────────────────────────────────────
 
 function createWindow() {
@@ -47,6 +69,8 @@ app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow()
 })
 
+/** ─── Git Helpers ────────────────────────────────────────────────────────────── */
+// Utility to get/create cached SimpleGit instances
 // ─── Git Helpers ─────────────────────────────────────────────────────────────
 
 function getGit(dirPath: string): SimpleGit {
@@ -56,6 +80,8 @@ function getGit(dirPath: string): SimpleGit {
   return gitInstances.get(dirPath)!
 }
 
+/** ─── File System IPC ────────────────────────────────────────────────────────── */
+// All file system operations: open, read, write, create, delete, rename, walk
 // ─── File System IPC ─────────────────────────────────────────────────────────
 
 ipcMain.handle('fs:openDirectory', async () => {
@@ -166,6 +192,8 @@ ipcMain.handle('fs:walkDirectory', async (_event, dirPath: string) => {
   return results
 })
 
+/** ─── Git IPC ────────────────────────────────────────────────────────────────── */
+// All git operations: status, diff, commit, push, pull, branch, stash, log
 // ─── Git IPC ─────────────────────────────────────────────────────────────────
 
 ipcMain.handle('git:status', async (_event, repoPath: string) => {
@@ -371,6 +399,8 @@ ipcMain.handle('git:unstage', async (_event, repoPath: string, files: string[]) 
   }
 })
 
+/** ─── Terminal PTY IPC ──────────────────────────────────────────────────────── */
+// Real terminal management using node-pty (PowerShell on Windows, bash on Mac/Linux)
 // ─── Terminal PTY IPC ────────────────────────────────────────────────────────
 
 ipcMain.handle('terminal:create', async (_event, termId: string, cwd: string) => {
@@ -421,6 +451,9 @@ ipcMain.handle('terminal:kill', async (_event, termId: string) => {
   }
 })
 
+/** ─── Tool Execution IPC ────────────────────────────────────────────────────── */
+// Autonomous agent tools: file ops, git ops, code search, Web3, web search
+// The agent calls these tools at runtime to interact with the user's system
 // ─── Tool Execution IPC ──────────────────────────────────────────────────────
 
 ipcMain.handle(
@@ -806,6 +839,8 @@ ipcMain.handle(
   }
 )
 
+/** ─── Settings / API Keys IPC ──────────────────────────────────────────────── */
+// Settings persistence: 37 AI providers, workspace path, custom rules
 // ─── Settings / API Keys IPC ─────────────────────────────────────────────────
 
 const SETTINGS_PATH = path.join(app.getPath('userData'), 'settings.json')
@@ -885,6 +920,9 @@ ipcMain.handle('settings:save', async (_event, settings: any) => {
   }
 })
 
+/** ─── Streaming AI IPC ──────────────────────────────────────────────────────── */
+// AI chat with streaming support: OpenAI-compatible + Anthropic protocols
+// Supports auto-fallback across providers
 // ─── Streaming AI IPC ────────────────────────────────────────────────────────
 
 ipcMain.handle(
@@ -1007,6 +1045,8 @@ ipcMain.handle(
   }
 )
 
+/** ─── Conversation History IPC ─────────────────────────────────────────────── */
+// Save/load chat sessions to disk for persistence across app restarts
 // ─── Conversation History IPC ────────────────────────────────────────────────
 
 ipcMain.handle('conversations:save', async (_event, data: { messages: any[]; taskId: string }) => {
@@ -1039,6 +1079,8 @@ ipcMain.handle('conversations:load', async () => {
   }
 })
 
+/** ─── Shell IPC ─────────────────────────────────────────────────────────────── */
+// OS shell operations: open files, show in file manager
 // ─── Shell IPC ───────────────────────────────────────────────────────────────
 
 ipcMain.handle('shell:openPath', async (_event, targetPath: string) => {

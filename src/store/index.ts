@@ -1,3 +1,22 @@
+/**
+ * Freebuff Agent — Zustand State Store
+ *
+ * Centralized state management for the entire application.
+ * All UI state flows through this store — no prop drilling.
+ *
+ * State slices:
+ * - Workspace: current directory, workspace path
+ * - Navigation: active panel, command palette visibility
+ * - Layout: terminal visibility, editor height
+ * - File Browser: files, selected file, open tabs, dirty state
+ * - Git: status, log, diff, branches, repo detection
+ * - Chat: messages, streaming, loading state
+ * - Tasks: agent task tracking with steps
+ * - Terminal: tab management, PTY instances
+ * - Sessions: conversation history persistence
+ * - Plan Mode: toggle for plan-before-execute mode
+ * - Settings: providers, API keys, workspace, custom rules
+ */
 import { create } from 'zustand'
 import type {
   FileEntry, GitStatus, GitLogEntry, GitBranchInfo, ChatMessage, TerminalEntry, TerminalTab,

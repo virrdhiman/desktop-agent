@@ -1,3 +1,12 @@
+/**
+ * MultiTerminal — Multi-tab terminal with PTY
+ *
+ * Features:
+ * - Multiple terminal tabs (add/remove)
+ * - Real PTY shells (PowerShell on Windows, bash on Mac/Linux)
+ * - xterm.js with fit addon and web links
+ * - Per-instance cleanup on close
+ */
 import { useEffect, useRef, useCallback } from 'react'
 import { Terminal } from 'xterm'
 import { FitAddon } from 'xterm-addon-fit'

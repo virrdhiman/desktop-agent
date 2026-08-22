@@ -1,3 +1,14 @@
+/**
+ * GitPanel — Full git operations panel
+ *
+ * Features:
+ * - Git status (branch, staged, modified, untracked, deleted files)
+ * - Commit with message input
+ * - Push and pull
+ * - Syntax-highlighted diff viewer (unified + split view)
+ * - Color-coded lines: green (added), red (removed), blue (hunk headers)
+ * - Commit history with hashes and dates
+ */
 import { useEffect, useState, useCallback } from 'react'
 import { useStore } from '../store'
 
@@ -351,7 +362,7 @@ function SplitDiffView({ diff }: { diff: string }) {
   )
 }
 
-function FileRow({ file, label, color, onClick }: { file: string; label: string; color: string; onClick: () => void }) {
+function FileRow({ file, label, color, onClick, onStage, onUnstage }: { file: string; label: string; color: string; onClick: () => void; onStage?: () => void; onUnstage?: () => void }) {
   return (
     <div
       onClick={onClick}
@@ -363,7 +374,17 @@ function FileRow({ file, label, color, onClick }: { file: string; label: string;
       onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
     >
       <span className={`badge badge-${color}`} style={{ minWidth: 18, textAlign: 'center' }}>{label}</span>
-      <span style={{ fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file}</span>
+      <span style={{ fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{file}</span>
+      {onStage && (
+        <button className="btn btn-sm" onClick={(e) => { e.stopPropagation(); onStage() }} style={{ padding: '1px 6px', fontSize: 10 }} title="Stage">
+          +
+        </button>
+      )}
+      {onUnstage && (
+        <button className="btn btn-sm" onClick={(e) => { e.stopPropagation(); onUnstage() }} style={{ padding: '1px 6px', fontSize: 10 }} title="Unstage">
+          -
+        </button>
+      )}
     </div>
   )
 }

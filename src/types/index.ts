@@ -1,3 +1,15 @@
+/**
+ * Freebuff Agent — Type Definitions
+ *
+ * All TypeScript interfaces, types, and constants used throughout the app.
+ * Includes:
+ * - File system types (FileEntry)
+ * - Git types (GitStatus, GitLogEntry, GitBranchInfo)
+ * - AI types (ChatMessage, ToolCall, AgentTask, AgentStep)
+ * - Provider types (ProviderConfig, Settings)
+ * - Terminal types (TerminalEntry, TerminalTab)
+ * - AGENT_TOOLS constant — the tool definitions sent to the AI model
+ */
 export interface FileEntry {
   name: string
   isDirectory: boolean

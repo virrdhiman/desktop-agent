@@ -1,5 +1,18 @@
+/**
+ * Freebuff Agent — Root Application Component
+ *
+ * The main layout orchestrator. Manages:
+ * - Settings initialization on startup
+ * - Git status detection
+ * - File indexing for search
+ * - Global keyboard shortcuts (Ctrl+P, Ctrl+G, Ctrl+B, Ctrl+Shift+A, Ctrl+`)
+ * - Panel routing (chat, files, git, branches, tasks, sessions, terminal, settings)
+ * - Editor split view (chat + editor side by side)
+ * - Bottom terminal panel
+ */
 import { useEffect } from 'react'
 import { useStore } from './store'
+import type { ChatMessage } from './types'
 import Sidebar from './components/Sidebar'
 import AgentChat from './components/AgentChat'
 import FileBrowser from './components/FileBrowser'
@@ -9,6 +22,7 @@ import MultiTerminal from './components/MultiTerminal'
 import SettingsPanel from './components/SettingsPanel'
 import TaskPanel from './components/TaskPanel'
 import BranchManager from './components/BranchManager'
+import SessionsPanel from './components/SessionsPanel'
 import CommandPalette from './components/CommandPalette'
 
 export default function App() {
@@ -37,6 +51,18 @@ export default function App() {
         window.api.walkDirectory(s.workspacePath).then((files) => {
           setAllFiles(files)
         })
+      }
+    })
+    // Load saved conversations
+    window.api.loadConversations().then((convs: any) => {
+      if (Array.isArray(convs)) {
+        const sessions = convs.map((c: any) => ({
+          id: c.id || `session-${Date.now()}`,
+          title: c.messages?.[0]?.content?.slice(0, 60) || 'Untitled',
+          timestamp: parseInt(c.id) || Date.now(),
+          messages: (c.messages || []) as ChatMessage[],
+        })).slice(0, 50)
+        useStore.setState({ sessions })
       }
     })
   }, [])
@@ -104,6 +130,7 @@ export default function App() {
             {activePanel === 'git' && <GitPanel />}
             {activePanel === 'branches' && <BranchManager />}
             {activePanel === 'tasks' && <TaskPanel />}
+            {activePanel === 'sessions' && <SessionsPanel />}
             {activePanel === 'terminal' && <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}><MultiTerminal /></div>}
             {activePanel === 'settings' && <SettingsPanel />}
           </div>

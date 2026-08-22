@@ -1,12 +1,21 @@
+/**
+ * Sidebar — Navigation sidebar
+ *
+ * Vertical icon bar with tooltips showing keyboard shortcuts:
+ * - 🤖 Agent, 📁 Files, 🔀 Git, 🌿 Branches, 📋 Tasks, 💾 Sessions, ⬛ Terminal, ⚙️ Settings
+ * - 🔍 Command Palette trigger (Ctrl+P)
+ * - ▶ Terminal toggle (Ctrl+`)
+ */
 import { useStore } from '../store'
 import type { Panel } from '../types'
 
 const PANELS: { id: Panel; icon: string; label: string; shortcut?: string }[] = [
-  { id: 'chat', icon: '🤖', label: 'Agent', shortcut: '' },
-  { id: 'files', icon: '📁', label: 'Files' },
+  { id: 'chat', icon: '🤖', label: 'Agent', shortcut: 'Ctrl+Shift+A' },
+  { id: 'files', icon: '📁', label: 'Files', shortcut: 'Ctrl+B' },
   { id: 'git', icon: '🔀', label: 'Git', shortcut: 'Ctrl+G' },
   { id: 'branches', icon: '🌿', label: 'Branches' },
   { id: 'tasks', icon: '📋', label: 'Tasks' },
+  { id: 'sessions', icon: '💾', label: 'Sessions' },
   { id: 'terminal', icon: '⬛', label: 'Terminal', shortcut: 'Ctrl+`' },
   { id: 'settings', icon: '⚙️', label: 'Settings' },
 ]
@@ -16,7 +25,7 @@ export default function Sidebar() {
 
   return (
     <nav className="sidebar">
-      {/* Logo / brand */}
+      {/* Logo */}
       <div style={{
         width: 32, height: 32, borderRadius: 8, display: 'flex',
         alignItems: 'center', justifyContent: 'center',

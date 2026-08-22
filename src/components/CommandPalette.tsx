@@ -1,3 +1,12 @@
+/**
+ * CommandPalette — Ctrl+P file search and command palette
+ *
+ * Cursor-like quick navigation:
+ * - Files mode: fuzzy search all workspace files
+ * - Commands mode: navigate panels, toggle features, git actions
+ * - Tab to switch between files and commands
+ * - Arrow keys to navigate, Enter to select
+ */
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useStore } from '../store'
 

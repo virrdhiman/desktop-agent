@@ -1,3 +1,14 @@
+/**
+ * FileBrowser — File tree navigation panel
+ *
+ * Features:
+ * - Tree-view file navigation
+ * - Click to open files in Monaco editor
+ * - Breadcrumb path display
+ * - Navigate up to parent directory
+ * - File icons by extension
+ * - Hidden files and node_modules filtered
+ */
 import { useEffect, useState, useCallback } from 'react'
 import { useStore } from '../store'
 import type { FileEntry } from '../types'
@@ -9,10 +20,13 @@ export default function FileBrowser() {
     files, setFiles,
     selectedFile, setSelectedFile,
     expandedDirs, toggleDir,
-    addOpenFile, setGitStatus, setIsRepo,
+    addOpenFile, closeOpenFile, setGitStatus, setIsRepo,
   } = useStore()
 
   const [error, setError] = useState<string | null>(null)
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; file: FileEntry } | null>(null)
+  const [renaming, setRenaming] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
 
   const openFolder = useCallback(async () => {
     const dir = await window.api.openDirectory()
@@ -57,11 +71,62 @@ export default function FileBrowser() {
     setCurrentDirectory(entry.path)
   }, [])
 
+  const handleContextMenu = useCallback((e: React.MouseEvent, file: FileEntry) => {
+    e.preventDefault()
+    setContextMenu({ x: e.clientX, y: e.clientY, file })
+  }, [])
+
+  const handleDelete = useCallback(async (file: FileEntry) => {
+    if (!confirm(`Delete ${file.name}?`)) return
+    await window.api.deleteFile(file.path)
+    if (currentDirectory) loadDir(currentDirectory)
+    setContextMenu(null)
+  }, [currentDirectory])
+
+  const handleRename = useCallback(async (file: FileEntry) => {
+    setRenaming(file.path)
+    setRenameValue(file.name)
+    setContextMenu(null)
+  }, [])
+
+  const confirmRename = useCallback(async (oldPath: string) => {
+    const dir = oldPath.substring(0, oldPath.lastIndexOf('/') + 1)
+    const newPath = dir + renameValue
+    if (newPath !== oldPath) {
+      await window.api.rename(oldPath, newPath)
+      if (selectedFile === oldPath) {
+        setSelectedFile(newPath)
+        closeOpenFile(oldPath)
+        addOpenFile(newPath)
+      }
+    }
+    setRenaming(null)
+    if (currentDirectory) loadDir(currentDirectory)
+  }, [renameValue, currentDirectory, selectedFile])
+
+  const handleNewFile = useCallback(async () => {
+    const name = prompt('New file name:')
+    if (!name) return
+    const filePath = currentDirectory + '/' + name
+    await window.api.createFile(filePath)
+    if (currentDirectory) loadDir(currentDirectory)
+  }, [currentDirectory])
+
+  const handleNewFolder = useCallback(async () => {
+    const name = prompt('New folder name:')
+    if (!name) return
+    const dirPath = currentDirectory + '/' + name
+    await window.api.createDirectory(dirPath)
+    if (currentDirectory) loadDir(currentDirectory)
+  }, [currentDirectory])
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div className="panel-header" style={{ minHeight: 40, padding: '8px 12px' }}>
         <h2 style={{ fontSize: 13 }}>📂 Files</h2>
         <div style={{ display: 'flex', gap: 4 }}>
+          <button className="btn btn-sm" onClick={handleNewFile} title="New File">+</button>
+          <button className="btn btn-sm" onClick={handleNewFolder} title="New Folder">📁+</button>
           <button className="btn btn-sm btn-primary" onClick={openFolder}>Open</button>
           {currentDirectory !== workspacePath && (
             <button className="btn btn-sm" onClick={navigateUp}>⬆</button>
@@ -94,6 +159,7 @@ export default function FileBrowser() {
             <div
               key={f.path}
               onClick={() => f.isDirectory ? handleDirClick(f) : openFile(f.path)}
+              onContextMenu={(e) => handleContextMenu(e, f)}
               className="file-tree-item"
               style={{
                 color: selectedFile === f.path ? 'var(--accent)' : 'var(--text-primary)',
@@ -103,13 +169,56 @@ export default function FileBrowser() {
               <span style={{ width: 18, textAlign: 'center' }}>
                 {f.isDirectory ? (expandedDirs.has(f.path) ? '📂' : '📁') : getFileIcon(f.name)}
               </span>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {f.name}
-              </span>
+              {renaming === f.path ? (
+                <input
+                  autoFocus
+                  value={renameValue}
+                  onChange={(e) => setRenameValue(e.target.value)}
+                  onBlur={() => confirmRename(f.path)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') confirmRename(f.path); if (e.key === 'Escape') setRenaming(null) }}
+                  style={{ flex: 1, padding: '1px 4px', fontSize: 12, background: 'var(--bg-primary)', border: '1px solid var(--accent)', borderRadius: 3, color: 'var(--text-primary)', outline: 'none' }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              ) : (
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {f.name}
+                </span>
+              )}
             </div>
           ))
         )}
       </div>
+
+      {/* Context menu */}
+      {contextMenu && (
+        <>
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 999 }} onClick={() => setContextMenu(null)} />
+          <div style={{
+            position: 'fixed', left: contextMenu.x, top: contextMenu.y,
+            background: 'var(--bg-secondary)', border: '1px solid var(--border)',
+            borderRadius: 8, padding: '4px 0', minWidth: 160, zIndex: 1000,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+          }}>
+            <div onClick={() => { openFile(contextMenu.file.path); setContextMenu(null) }} style={{ padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', gap: 8 }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-tertiary)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+            >📄 Open</div>
+            <div onClick={() => handleRename(contextMenu.file)} style={{ padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', gap: 8 }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-tertiary)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+            >✏️ Rename</div>
+            <div onClick={() => window.api.showItemInFolder(contextMenu.file.path)} style={{ padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', gap: 8 }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-tertiary)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+            >📁 Show in Explorer</div>
+            <div style={{ height: 1, background: 'var(--border)', margin: '2px 0' }} />
+            <div onClick={() => handleDelete(contextMenu.file)} style={{ padding: '6px 12px', cursor: 'pointer', fontSize: 12, color: 'var(--error)', display: 'flex', gap: 8 }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-tertiary)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+            >🗑️ Delete</div>
+          </div>
+        </>
+      )}
     </div>
   )
 }
