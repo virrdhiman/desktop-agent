@@ -1,4 +1,10 @@
 /**
+ * @author Virender Dhiman
+ * @year 2025
+ * @project VD Agent
+ * @license MIT
+ */
+/**
  * TaskPanel — Agent task tracking
  *
  * Shows all autonomous agent tasks with:

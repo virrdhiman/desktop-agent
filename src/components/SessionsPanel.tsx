@@ -1,4 +1,10 @@
 /**
+ * @author Virender Dhiman
+ * @year 2025
+ * @project VD Agent
+ * @license MIT
+ */
+/**
  * SessionsPanel — Conversation history manager
  *
  * Features:
