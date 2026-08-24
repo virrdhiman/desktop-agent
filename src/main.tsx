@@ -1,4 +1,10 @@
 /**
+ * @author Virender Dhiman
+ * @year 2025
+ * @project Freebuff Agent
+ * @license MIT
+ */
+/**
  * Freebuff Agent — React Entry Point
  *
  * Mounts the React app into the DOM with:

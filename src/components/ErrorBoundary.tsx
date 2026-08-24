@@ -1,4 +1,10 @@
 /**
+ * @author Virender Dhiman
+ * @year 2025
+ * @project Freebuff Agent
+ * @license MIT
+ */
+/**
  * ErrorBoundary — React error boundary for crash recovery
  *
  * Catches JavaScript errors in the component tree and shows

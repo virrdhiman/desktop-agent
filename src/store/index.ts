@@ -1,4 +1,10 @@
 /**
+ * @author Virender Dhiman
+ * @year 2025
+ * @project Freebuff Agent
+ * @license MIT
+ */
+/**
  * Freebuff Agent — Zustand State Store
  *
  * Centralized state management for the entire application.
@@ -63,6 +69,10 @@ interface AppState {
   // All files (for search)
   allFiles: { name: string; path: string; isDirectory: boolean }[]
   setAllFiles: (files: { name: string; path: string; isDirectory: boolean }[]) => void
+
+  // Search results
+  searchResults: string | null
+  setSearchResults: (results: string | null) => void
 
   // Git
   refreshGit: () => Promise<void>
@@ -178,6 +188,10 @@ export const useStore = create<AppState>((set, get) => ({
   // All files
   allFiles: [],
   setAllFiles: (files) => set({ allFiles: files }),
+
+  // Search results
+  searchResults: null,
+  setSearchResults: (results) => set({ searchResults: results }),
 
   // Git
   refreshGit: async () => { const s = get(); if (!s.workspacePath) return; const status = await window.api.gitStatus(s.workspacePath); if (!('error' in status)) s.setGitStatus(status as any); },

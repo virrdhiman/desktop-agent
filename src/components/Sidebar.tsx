@@ -1,10 +1,18 @@
 /**
+ * @author Virender Dhiman
+ * @year 2025
+ * @project Freebuff Agent
+ * @license MIT
+ */
+/**
  * Sidebar — Navigation sidebar
  *
  * Vertical icon bar with tooltips showing keyboard shortcuts:
- * - 🤖 Agent, 📁 Files, 🔀 Git, 🌿 Branches, 📋 Tasks, 💾 Sessions, ⬛ Terminal, ⚙️ Settings
- * - 🔍 Command Palette trigger (Ctrl+P)
- * - ▶ Terminal toggle (Ctrl+`)
+ * - Agent, Files, Git, Branches, Tasks, Sessions, Terminal, Settings
+ * - Command Palette trigger (Ctrl+P)
+ * - Terminal toggle (Ctrl+`)
+ *
+ * Accessibility: role="navigation", aria-label on every button, aria-keyshortcuts
  */
 import { useStore } from '../store'
 import type { Panel } from '../types'
@@ -24,14 +32,18 @@ export default function Sidebar() {
   const { activePanel, setActivePanel, toggleTerminal, showTerminal, toggleCommandPalette } = useStore()
 
   return (
-    <nav className="sidebar">
+    <nav className="sidebar" role="navigation" aria-label="Main navigation">
       {/* Logo */}
-      <div style={{
-        width: 32, height: 32, borderRadius: 8, display: 'flex',
-        alignItems: 'center', justifyContent: 'center',
-        background: 'linear-gradient(135deg, var(--accent), #a855f7)',
-        fontSize: 16, fontWeight: 700, color: 'white', marginBottom: 8,
-      }}>
+      <div
+        role="img"
+        aria-label="Freebuff Agent logo"
+        style={{
+          width: 32, height: 32, borderRadius: 8, display: 'flex',
+          alignItems: 'center', justifyContent: 'center',
+          background: 'linear-gradient(135deg, var(--accent), #a855f7)',
+          fontSize: 16, fontWeight: 700, color: 'white', marginBottom: 8,
+        }}
+      >
         F
       </div>
 
@@ -40,6 +52,8 @@ export default function Sidebar() {
         className="sidebar-button"
         onClick={toggleCommandPalette}
         title="Command Palette (Ctrl+P)"
+        aria-label="Open command palette"
+        aria-keyshortcuts="Control+P"
         style={{ marginBottom: 4 }}
       >
         🔍
@@ -48,10 +62,14 @@ export default function Sidebar() {
       <div style={{ width: 24, height: 1, background: 'var(--border)', margin: '4px 0' }} />
 
       {/* Panel buttons */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
+      <div role="tablist" aria-label="Panels" style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
         {PANELS.map((p) => (
           <button
             key={p.id}
+            role="tab"
+            aria-selected={activePanel === p.id}
+            aria-label={`${p.label} panel${p.shortcut ? ` (${p.shortcut})` : ''}`}
+            aria-keyshortcuts={p.shortcut || undefined}
             className={`sidebar-button ${activePanel === p.id ? 'active' : ''}`}
             onClick={() => setActivePanel(p.id)}
             title={`${p.label}${p.shortcut ? ` (${p.shortcut})` : ''}`}
@@ -68,6 +86,9 @@ export default function Sidebar() {
         className={`sidebar-button ${showTerminal ? 'active' : ''}`}
         onClick={toggleTerminal}
         title="Toggle Terminal (Ctrl+`)"
+        aria-label={`${showTerminal ? 'Hide' : 'Show'} terminal`}
+        aria-keyshortcuts="Control+`"
+        aria-pressed={showTerminal}
         style={{ marginBottom: 8 }}
       >
         ▶

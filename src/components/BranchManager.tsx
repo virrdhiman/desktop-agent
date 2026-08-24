@@ -1,4 +1,10 @@
 /**
+ * @author Virender Dhiman
+ * @year 2025
+ * @project Freebuff Agent
+ * @license MIT
+ */
+/**
  * BranchManager — Git branch management UI
  *
  * Features:
@@ -24,8 +30,10 @@ export default function BranchManager() {
 
   const loadBranches = useCallback(async () => {
     if (!workspacePath) return
-    const result = await window.api.gitBranches(workspacePath)
-    if (!('error' in result)) setGitBranches(result)
+    try {
+      const result = await window.api.gitBranches(workspacePath)
+      if (!('error' in result)) setGitBranches(result)
+    } catch (err) { console.error('Failed to load branches:', err) }
   }, [workspacePath])
 
   useEffect(() => { loadBranches() }, [loadBranches])
@@ -33,11 +41,15 @@ export default function BranchManager() {
   const handleCreate = useCallback(async () => {
     if (!newBranch.trim() || !workspacePath) return
     setLoading(true)
-    const result = await window.api.gitCreateBranch(workspacePath, newBranch.trim())
-    if ('error' in result) {
-      addTerminalEntry({ id: Date.now().toString(), type: 'error', content: `Branch creation failed: ${result.error}`, timestamp: Date.now() })
-    } else {
-      addTerminalEntry({ id: Date.now().toString(), type: 'success', content: `Created branch: ${newBranch.trim()}`, timestamp: Date.now() })
+    try {
+      const result = await window.api.gitCreateBranch(workspacePath, newBranch.trim())
+      if ('error' in result) {
+        addTerminalEntry({ id: Date.now().toString(), type: 'error', content: `Branch creation failed: ${result.error}`, timestamp: Date.now() })
+      } else {
+        addTerminalEntry({ id: Date.now().toString(), type: 'success', content: `Created branch: ${newBranch.trim()}`, timestamp: Date.now() })
+      }
+    } catch (err: any) {
+      addTerminalEntry({ id: Date.now().toString(), type: 'error', content: `Branch creation error: ${err.message}`, timestamp: Date.now() })
     }
     setNewBranch('')
     await loadBranches()
@@ -47,11 +59,15 @@ export default function BranchManager() {
   const handleSwitch = useCallback(async (branch: string) => {
     if (!workspacePath) return
     setLoading(true)
-    const result = await window.api.gitSwitchBranch(workspacePath, branch)
-    if ('error' in result) {
-      addTerminalEntry({ id: Date.now().toString(), type: 'error', content: `Switch failed: ${result.error}`, timestamp: Date.now() })
-    } else {
-      addTerminalEntry({ id: Date.now().toString(), type: 'success', content: `Switched to: ${branch}`, timestamp: Date.now() })
+    try {
+      const result = await window.api.gitSwitchBranch(workspacePath, branch)
+      if ('error' in result) {
+        addTerminalEntry({ id: Date.now().toString(), type: 'error', content: `Switch failed: ${result.error}`, timestamp: Date.now() })
+      } else {
+        addTerminalEntry({ id: Date.now().toString(), type: 'success', content: `Switched to: ${branch}`, timestamp: Date.now() })
+      }
+    } catch (err: any) {
+      addTerminalEntry({ id: Date.now().toString(), type: 'error', content: `Switch error: ${err.message}`, timestamp: Date.now() })
     }
     await loadBranches()
     setLoading(false)
@@ -60,11 +76,15 @@ export default function BranchManager() {
   const handleDelete = useCallback(async (branch: string) => {
     if (!workspacePath || !confirm(`Delete branch "${branch}"?`)) return
     setLoading(true)
-    const result = await window.api.gitDeleteBranch(workspacePath, branch)
-    if ('error' in result) {
-      addTerminalEntry({ id: Date.now().toString(), type: 'error', content: `Delete failed: ${result.error}`, timestamp: Date.now() })
-    } else {
-      addTerminalEntry({ id: Date.now().toString(), type: 'success', content: `Deleted branch: ${branch}`, timestamp: Date.now() })
+    try {
+      const result = await window.api.gitDeleteBranch(workspacePath, branch)
+      if ('error' in result) {
+        addTerminalEntry({ id: Date.now().toString(), type: 'error', content: `Delete failed: ${result.error}`, timestamp: Date.now() })
+      } else {
+        addTerminalEntry({ id: Date.now().toString(), type: 'success', content: `Deleted branch: ${branch}`, timestamp: Date.now() })
+      }
+    } catch (err: any) {
+      addTerminalEntry({ id: Date.now().toString(), type: 'error', content: `Delete error: ${err.message}`, timestamp: Date.now() })
     }
     await loadBranches()
     setLoading(false)
@@ -73,12 +93,16 @@ export default function BranchManager() {
   const handleStash = useCallback(async () => {
     if (!workspacePath) return
     setLoading(true)
-    const result = await window.api.gitStash(workspacePath)
-    if ('error' in result) {
-      addTerminalEntry({ id: Date.now().toString(), type: 'error', content: `Stash failed: ${result.error}`, timestamp: Date.now() })
-    } else {
-      addTerminalEntry({ id: Date.now().toString(), type: 'success', content: `Changes stashed`, timestamp: Date.now() })
-      setStashMsg(result.message || 'Stashed')
+    try {
+      const result = await window.api.gitStash(workspacePath)
+      if ('error' in result) {
+        addTerminalEntry({ id: Date.now().toString(), type: 'error', content: `Stash failed: ${result.error}`, timestamp: Date.now() })
+      } else {
+        addTerminalEntry({ id: Date.now().toString(), type: 'success', content: `Changes stashed`, timestamp: Date.now() })
+        setStashMsg(result.message || 'Stashed')
+      }
+    } catch (err: any) {
+      addTerminalEntry({ id: Date.now().toString(), type: 'error', content: `Stash error: ${err.message}`, timestamp: Date.now() })
     }
     setLoading(false)
   }, [workspacePath])
@@ -86,12 +110,16 @@ export default function BranchManager() {
   const handleStashPop = useCallback(async () => {
     if (!workspacePath) return
     setLoading(true)
-    const result = await window.api.gitStashPop(workspacePath)
-    if ('error' in result) {
-      addTerminalEntry({ id: Date.now().toString(), type: 'error', content: `Stash pop failed: ${result.error}`, timestamp: Date.now() })
-    } else {
-      addTerminalEntry({ id: Date.now().toString(), type: 'success', content: 'Stash popped', timestamp: Date.now() })
-      setStashMsg(null)
+    try {
+      const result = await window.api.gitStashPop(workspacePath)
+      if ('error' in result) {
+        addTerminalEntry({ id: Date.now().toString(), type: 'error', content: `Stash pop failed: ${result.error}`, timestamp: Date.now() })
+      } else {
+        addTerminalEntry({ id: Date.now().toString(), type: 'success', content: 'Stash popped', timestamp: Date.now() })
+        setStashMsg(null)
+      }
+    } catch (err: any) {
+      addTerminalEntry({ id: Date.now().toString(), type: 'error', content: `Stash pop error: ${err.message}`, timestamp: Date.now() })
     }
     setLoading(false)
   }, [workspacePath])

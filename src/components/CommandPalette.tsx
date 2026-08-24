@@ -1,4 +1,10 @@
 /**
+ * @author Virender Dhiman
+ * @year 2025
+ * @project Freebuff Agent
+ * @license MIT
+ */
+/**
  * CommandPalette — Ctrl+P file search and command palette
  *
  * Cursor-like quick navigation:
@@ -38,7 +44,7 @@ export default function CommandPalette() {
 
   // Build command list
   const commands: Command[] = useMemo(() => [
-    { id: 'open-folder', label: 'Open Folder', description: 'Open a workspace folder', category: 'Workspace', icon: '📂', action: async () => { const dir = await window.api.openDirectory(); if (dir) { setWorkspacePath(dir); setShowCommandPalette(false) } } },
+    { id: 'open-folder', label: 'Open Folder', description: 'Open a workspace folder', category: 'Workspace', icon: '📂', action: async () => { try { const dir = await window.api.openDirectory(); if (dir) { setWorkspacePath(dir); setShowCommandPalette(false) } } catch (err) { console.error('Failed to open folder:', err) } } },
     { id: 'toggle-terminal', label: 'Toggle Terminal', description: 'Show/hide the terminal panel', category: 'View', icon: '⬛', shortcut: 'Ctrl+`', action: () => { toggleTerminal(); setShowCommandPalette(false) } },
     { id: 'panel-chat', label: 'Go to Agent Chat', category: 'Navigation', icon: '🤖', action: () => { setActivePanel('chat'); setShowCommandPalette(false) } },
     { id: 'panel-files', label: 'Go to File Browser', category: 'Navigation', icon: '📁', action: () => { setActivePanel('files'); setShowCommandPalette(false) } },

@@ -1,4 +1,10 @@
 /**
+ * @author Virender Dhiman
+ * @year 2025
+ * @project Freebuff Agent
+ * @license MIT
+ */
+/**
  * SettingsPanel — AI provider configuration
  *
  * Features:
@@ -15,21 +21,24 @@ import { useState, useCallback, useMemo } from 'react'
 import { useStore } from '../store'
 import type { ProviderConfig } from '../types'
 
-type Category = 'all' | 'free' | 'local' | 'community' | 'paid'
+type Category = 'all' | 'free' | 'local' | 'community' | 'image_video' | 'paid'
 
 const CATEGORY_LABELS: Record<Category, { label: string; icon: string; color: string }> = {
   all: { label: 'All', icon: '📋', color: 'var(--text-secondary)' },
   free: { label: 'Free Official', icon: '🆓', color: '#4ade80' },
   local: { label: 'Local', icon: '🏠', color: '#60a5fa' },
   community: { label: 'Community', icon: '🏴‍☠️', color: '#c084fc' },
+  image_video: { label: 'Image/Video', icon: '🎨', color: '#f472b6' },
   paid: { label: 'Paid', icon: '💰', color: '#fbbf24' },
 }
 
 const COMMUNITY_IDS = ['g4f', 'chatgpt2api', 'zukijourney', 'electronhub', 'voidai', 'nagaai', 'navyapi', 'mnn', 'webraftai', 'voltai', 'hcap', 'zanityai', 'kimetsu', 'pollinations']
 const LOCAL_IDS = ['ollama', 'lmstudio', 'llamacpp']
+const IMAGE_VIDEO_IDS = ['flux', 'pollinations_img', 'runway', 'kling', 'replicate', 'stability']
 
-function getProviderCategory(p: ProviderConfig): 'free' | 'local' | 'community' | 'paid' {
+function getProviderCategory(p: ProviderConfig): 'free' | 'local' | 'community' | 'image_video' | 'paid' {
   if (LOCAL_IDS.includes(p.id)) return 'local'
+  if (IMAGE_VIDEO_IDS.includes(p.id)) return 'image_video'
   if (COMMUNITY_IDS.includes(p.id)) return 'community'
   if (p.freeTier) return 'free'
   return 'paid'
@@ -43,31 +52,37 @@ export default function SettingsPanel() {
   const [searchQuery, setSearchQuery] = useState('')
 
   const openFolder = useCallback(async () => {
-    const dir = await window.api.openDirectory()
-    if (!dir) return
-    const newSettings = { ...settings, workspacePath: dir }
-    setSettings(newSettings)
-    setWorkspacePath(dir)
-    setCurrentDirectory(dir)
-    await window.api.saveSettings(newSettings)
+    try {
+      const dir = await window.api.openDirectory()
+      if (!dir) return
+      const newSettings = { ...settings, workspacePath: dir }
+      setSettings(newSettings)
+      setWorkspacePath(dir)
+      setCurrentDirectory(dir)
+      await window.api.saveSettings(newSettings)
+    } catch (err) { console.error('Failed to open folder:', err) }
   }, [settings])
 
   const selectProvider = useCallback(async (id: string) => {
-    const newSettings = { ...settings, activeProvider: id }
-    setSettings(newSettings)
-    await window.api.saveSettings(newSettings)
+    try {
+      const newSettings = { ...settings, activeProvider: id }
+      setSettings(newSettings)
+      await window.api.saveSettings(newSettings)
+    } catch (err) { console.error('Failed to save provider:', err) }
   }, [settings])
 
   const saveProvider = useCallback(async (provider: ProviderConfig) => {
-    const newSettings = {
-      ...settings,
-      providers: settings.providers.map((p) =>
-        p.id === provider.id ? { ...provider, apiKey: apiKeyInput } : p
-      ),
-    }
-    setSettings(newSettings)
-    setEditing(null)
-    await window.api.saveSettings(newSettings)
+    try {
+      const newSettings = {
+        ...settings,
+        providers: settings.providers.map((p) =>
+          p.id === provider.id ? { ...provider, apiKey: apiKeyInput } : p
+        ),
+      }
+      setSettings(newSettings)
+      setEditing(null)
+      await window.api.saveSettings(newSettings)
+    } catch (err) { console.error('Failed to save provider:', err) }
   }, [settings, apiKeyInput])
 
   const filteredProviders = useMemo(() => {
@@ -86,6 +101,7 @@ export default function SettingsPanel() {
     free: settings.providers.filter((p) => getProviderCategory(p) === 'free').length,
     local: settings.providers.filter((p) => getProviderCategory(p) === 'local').length,
     community: settings.providers.filter((p) => getProviderCategory(p) === 'community').length,
+    image_video: settings.providers.filter((p) => getProviderCategory(p) === 'image_video').length,
     paid: settings.providers.filter((p) => getProviderCategory(p) === 'paid').length,
   }), [settings.providers])
 
@@ -292,7 +308,7 @@ export default function SettingsPanel() {
               <div style={{ padding: 12, borderRadius: 'var(--radius)', background: 'rgba(34,197,94,0.05)', border: '1px solid rgba(34,197,94,0.2)' }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#4ade80', marginBottom: 4 }}>🆓 Free Official ({counts.free})</div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                  Groq, Cerebras, SambaNova, HuggingFace, DeepSeek, Gemini, GitHub, OpenRouter, Mistral, Together, Fireworks, DeepInfra, SiliconFlow, xAI, Novita
+                  Groq, Cerebras, SambaNova, HuggingFace, DeepSeek, Gemini, GitHub, OpenRouter, Mistral, Together, Fireworks, DeepInfra, SiliconFlow, xAI, Novita, MiMo
                 </div>
               </div>
               <div style={{ padding: 12, borderRadius: 'var(--radius)', background: 'rgba(96,165,250,0.05)', border: '1px solid rgba(96,165,250,0.2)' }}>
@@ -380,6 +396,53 @@ export default function SettingsPanel() {
                 >
                   {settings.planMode ? 'ON' : 'OFF'}
                 </button>
+              </div>
+            </div>
+
+            {/* Import / Export Settings */}
+            <div style={{ marginTop: 20, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>💾 Import / Export Settings</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  className="btn btn-sm"
+                  onClick={() => {
+                    const blob = new Blob([JSON.stringify(settings, null, 2)], { type: 'application/json' })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = 'freebuff-settings.json'
+                    a.click()
+                    URL.revokeObjectURL(url)
+                  }}
+                >
+                  📤 Export
+                </button>
+                <button
+                  className="btn btn-sm"
+                  onClick={() => {
+                    const input = document.createElement('input')
+                    input.type = 'file'
+                    input.accept = '.json'
+                    input.onchange = async (e) => {
+                      const file = (e.target as HTMLInputElement).files?.[0]
+                      if (!file) return
+                      const text = await file.text()
+                      try {
+                        const imported = JSON.parse(text)
+                        setSettings(imported)
+                        await window.api.saveSettings(imported)
+                      } catch {
+                        alert('Invalid settings file')
+                      }
+                    }
+                    input.click()
+                  }}
+                >
+                  📥 Import
+                </button>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+                Export saves all provider configs, keys, and preferences. Import restores them.
               </div>
             </div>
           </div>

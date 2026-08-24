@@ -1,6 +1,16 @@
+<!--
+  @author Virender Dhiman
+  @year 2025
+  @project Freebuff Agent
+  @license MIT
+-->
+
 # 🛠️ Agent Tools Reference
 
-Freebuff Agent has **26 autonomous tools** it can use to interact with your filesystem, git, web, and blockchain.
+Freebuff Agent has **33 autonomous tools** it can use to interact with your filesystem, git, web, image generation, video, speech, and blockchain.
+
+**Author:** Virender Dhiman  
+**License:** MIT
 
 ## 📁 File System Tools
 
@@ -147,6 +157,38 @@ Get deployment instructions for a smart contract.
 { "name": "web3_deploy", "args": { "file": "contracts/Token.sol", "chain": "sepolia" } }
 ```
 
+## 🎨 Image / Video / Speech Tools
+
+### `generate_image`
+Generate an image from a text prompt.
+```json
+{ "name": "generate_image", "args": { "prompt": "a sunset over mountains", "provider": "pollinations" } }
+```
+
+### `image_analysis`
+Analyze an image (describe contents, extract text, etc.).
+```json
+{ "name": "image_analysis", "args": { "image_path": "screenshot.png", "prompt": "what is in this image?" } }
+```
+
+### `generate_video`
+Generate a video from a text prompt.
+```json
+{ "name": "generate_video", "args": { "prompt": "a cat playing piano" } }
+```
+
+### `speech_to_text`
+Transcribe an audio file to text.
+```json
+{ "name": "speech_to_text", "args": { "audio_path": "recording.wav" } }
+```
+
+### `text_to_speech`
+Convert text to speech audio.
+```json
+{ "name": "text_to_speech", "args": { "text": "Hello world" } }
+```
+
 ## 🤖 Tool Execution Flow
 
 1. User sends a message
@@ -160,5 +202,5 @@ Get deployment instructions for a smart contract.
 
 To add a new tool:
 1. Add the tool definition in `src/types/index.ts` → `AGENT_TOOLS`
-2. Add the implementation in `electron/main.ts` → `tool:execute` handler
+2. Add the implementation in `electron/handlers/tools.ts` → `tool:execute` handler
 3. The agent will automatically see and use the new tool

@@ -1,4 +1,10 @@
 /**
+ * @author Virender Dhiman
+ * @year 2025
+ * @project Freebuff Agent
+ * @license MIT
+ */
+/**
  * Freebuff Agent — Type Definitions
  *
  * All TypeScript interfaces, types, and constants used throughout the app.
@@ -109,7 +115,7 @@ export interface TerminalTab {
   cwd: string
 }
 
-export type Panel = 'chat' | 'files' | 'git' | 'terminal' | 'settings' | 'tasks' | 'branches' | 'sessions'
+export type Panel = 'chat' | 'files' | 'git' | 'terminal' | 'settings' | 'tasks' | 'branches' | 'sessions' | 'search'
 
 // Tool definitions the agent can use
 export const AGENT_TOOLS = [
@@ -242,5 +248,40 @@ export const AGENT_TOOLS = [
     name: 'web3_deploy',
     description: 'Get deployment instructions for a smart contract',
     parameters: { file: 'string — contract file path', chain: 'string — target network' },
+  },
+  {
+    name: 'generate_image',
+    description: 'Generate an image from a text prompt using Pollinations.ai (free, no API key)',
+    parameters: { prompt: 'string — image description', width: 'number (optional, default 1024)', height: 'number (optional, default 1024)', model: 'string (optional: flux, turbo)', seed: 'number (optional)' },
+  },
+  {
+    name: 'generate_video',
+    description: 'Get video generation instructions for Wan, Runway, or Kling',
+    parameters: { provider: 'string — wan|runway|kling', prompt: 'string (optional)' },
+  },
+  {
+    name: 'comfyui_workflow',
+    description: 'Get ComfyUI setup and workflow instructions',
+    parameters: {},
+  },
+  {
+    name: 'speech_to_text',
+    description: 'Transcribe audio/speech to text using browser Web Speech API (free, local)',
+    parameters: { audio_path: 'string (optional — path to audio file)' },
+  },
+  {
+    name: 'text_to_speech',
+    description: 'Convert text to spoken audio using browser SpeechSynthesis API (free, local)',
+    parameters: { text: 'string — text to speak', voice: 'string (optional — voice name)', rate: 'number (optional, 0.1-10, default 1)' },
+  },
+  {
+    name: 'image_analysis',
+    description: 'Analyze an image using a multimodal AI model (describe contents, read text, etc.)',
+    parameters: { image_url: 'string — URL or local path of image', question: 'string (optional — specific question about the image)' },
+  },
+  {
+    name: 'code_review',
+    description: 'Review code in a file for bugs, improvements, and best practices',
+    parameters: { path: 'string — file to review', focus: 'string (optional — security|performance|style|all)' },
   },
 ] as const

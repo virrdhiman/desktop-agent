@@ -1,4 +1,10 @@
 /**
+ * @author Virender Dhiman
+ * @year 2025
+ * @project Freebuff Agent
+ * @license MIT
+ */
+/**
  * GitPanel — Full git operations panel
  *
  * Features:
@@ -9,7 +15,7 @@
  * - Color-coded lines: green (added), red (removed), blue (hunk headers)
  * - Commit history with hashes and dates
  */
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, memo } from 'react'
 import { useStore } from '../store'
 
 export default function GitPanel() {
@@ -27,16 +33,18 @@ export default function GitPanel() {
 
   const refresh = useCallback(async () => {
     if (!workspacePath) return
-    const isRepoCheck = await window.api.gitIsRepo(workspacePath)
-    setIsRepo(isRepoCheck)
-    if (!isRepoCheck) return
+    try {
+      const isRepoCheck = await window.api.gitIsRepo(workspacePath)
+      setIsRepo(isRepoCheck)
+      if (!isRepoCheck) return
 
-    const [status, log] = await Promise.all([
-      window.api.gitStatus(workspacePath),
-      window.api.gitLog(workspacePath, 30),
-    ])
-    if (!('error' in status)) setGitStatus(status as any)
-    if (Array.isArray(log)) setGitLog(log)
+      const [status, log] = await Promise.all([
+        window.api.gitStatus(workspacePath),
+        window.api.gitLog(workspacePath, 30),
+      ])
+      if (!('error' in status)) setGitStatus(status as any)
+      if (Array.isArray(log)) setGitLog(log)
+    } catch (err) { console.error('Git refresh failed:', err) }
   }, [workspacePath])
 
   useEffect(() => { refresh() }, [refresh])
@@ -46,11 +54,15 @@ export default function GitPanel() {
     setLoading(true)
     addTerminalEntry({ id: Date.now().toString(), type: 'command', content: `git commit -m "${commitMsg}"`, timestamp: Date.now() })
 
-    const result = await window.api.gitCommit(workspacePath, commitMsg)
-    if ('error' in result) {
-      addTerminalEntry({ id: (Date.now() + 1).toString(), type: 'error', content: result.error, timestamp: Date.now() })
-    } else {
-      addTerminalEntry({ id: (Date.now() + 1).toString(), type: 'success', content: `Committed successfully. ${result.summary || ''}`, timestamp: Date.now() })
+    try {
+      const result = await window.api.gitCommit(workspacePath, commitMsg)
+      if ('error' in result) {
+        addTerminalEntry({ id: (Date.now() + 1).toString(), type: 'error', content: result.error, timestamp: Date.now() })
+      } else {
+        addTerminalEntry({ id: (Date.now() + 1).toString(), type: 'success', content: `Committed successfully. ${result.summary || ''}`, timestamp: Date.now() })
+      }
+    } catch (err: any) {
+      addTerminalEntry({ id: (Date.now() + 1).toString(), type: 'error', content: `Commit error: ${err.message}`, timestamp: Date.now() })
     }
     setCommitMsg('')
     await refresh()
@@ -62,11 +74,15 @@ export default function GitPanel() {
     setLoading(true)
     addTerminalEntry({ id: Date.now().toString(), type: 'command', content: 'git push', timestamp: Date.now() })
 
-    const result = await window.api.gitPush(workspacePath)
-    if ('error' in result) {
-      addTerminalEntry({ id: (Date.now() + 1).toString(), type: 'error', content: result.error, timestamp: Date.now() })
-    } else {
-      addTerminalEntry({ id: (Date.now() + 1).toString(), type: 'success', content: 'Push successful!', timestamp: Date.now() })
+    try {
+      const result = await window.api.gitPush(workspacePath)
+      if ('error' in result) {
+        addTerminalEntry({ id: (Date.now() + 1).toString(), type: 'error', content: result.error, timestamp: Date.now() })
+      } else {
+        addTerminalEntry({ id: (Date.now() + 1).toString(), type: 'success', content: 'Push successful!', timestamp: Date.now() })
+      }
+    } catch (err: any) {
+      addTerminalEntry({ id: (Date.now() + 1).toString(), type: 'error', content: `Push error: ${err.message}`, timestamp: Date.now() })
     }
     await refresh()
     setLoading(false)
@@ -77,11 +93,15 @@ export default function GitPanel() {
     setLoading(true)
     addTerminalEntry({ id: Date.now().toString(), type: 'command', content: 'git pull', timestamp: Date.now() })
 
-    const result = await window.api.gitPull(workspacePath)
-    if ('error' in result) {
-      addTerminalEntry({ id: (Date.now() + 1).toString(), type: 'error', content: result.error, timestamp: Date.now() })
-    } else {
-      addTerminalEntry({ id: (Date.now() + 1).toString(), type: 'success', content: `Pull successful. ${result.summary || ''}`, timestamp: Date.now() })
+    try {
+      const result = await window.api.gitPull(workspacePath)
+      if ('error' in result) {
+        addTerminalEntry({ id: (Date.now() + 1).toString(), type: 'error', content: result.error, timestamp: Date.now() })
+      } else {
+        addTerminalEntry({ id: (Date.now() + 1).toString(), type: 'success', content: `Pull successful. ${result.summary || ''}`, timestamp: Date.now() })
+      }
+    } catch (err: any) {
+      addTerminalEntry({ id: (Date.now() + 1).toString(), type: 'error', content: `Pull error: ${err.message}`, timestamp: Date.now() })
     }
     await refresh()
     setLoading(false)
@@ -90,11 +110,15 @@ export default function GitPanel() {
   const handleInit = useCallback(async () => {
     if (!workspacePath) return
     setLoading(true)
-    const result = await window.api.gitInit(workspacePath)
-    if ('error' in result) {
-      addTerminalEntry({ id: Date.now().toString(), type: 'error', content: result.error, timestamp: Date.now() })
-    } else {
-      addTerminalEntry({ id: Date.now().toString(), type: 'success', content: 'Repository initialized!', timestamp: Date.now() })
+    try {
+      const result = await window.api.gitInit(workspacePath)
+      if ('error' in result) {
+        addTerminalEntry({ id: Date.now().toString(), type: 'error', content: result.error, timestamp: Date.now() })
+      } else {
+        addTerminalEntry({ id: Date.now().toString(), type: 'success', content: 'Repository initialized!', timestamp: Date.now() })
+      }
+    } catch (err: any) {
+      addTerminalEntry({ id: Date.now().toString(), type: 'error', content: `Init error: ${err.message}`, timestamp: Date.now() })
     }
     await refresh()
     setLoading(false)
@@ -102,9 +126,11 @@ export default function GitPanel() {
 
   const showDiff = useCallback(async (file?: string) => {
     if (!workspacePath) return
-    const d = await window.api.gitDiff(workspacePath, file)
-    setDiffFile(file || null)
-    setGitDiff(typeof d === 'string' ? d : d.error || '')
+    try {
+      const d = await window.api.gitDiff(workspacePath, file)
+      setDiffFile(file || null)
+      setGitDiff(typeof d === 'string' ? d : d.error || '')
+    } catch (err) { console.error('Failed to get diff:', err) }
   }, [workspacePath])
 
   if (!workspacePath) {
@@ -179,15 +205,48 @@ export default function GitPanel() {
             <div className="divider" />
 
             <div className="panel-body" style={{ flex: 1, overflowY: 'auto', paddingTop: 8 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase' }}>Changes</div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>Changes</span>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  {(gitStatus?.modified.length || 0) + (gitStatus?.not_added.length || 0) > 0 && (
+                    <button
+                      className="btn btn-sm"
+                      style={{ fontSize: 9, padding: '2px 6px' }}
+                      onClick={async () => {
+                        const all = [...(gitStatus?.modified || []), ...(gitStatus?.not_added || [])]
+                        if (all.length && workspacePath) {
+                          await window.api.gitStage(workspacePath, all)
+                          refresh()
+                        }
+                      }}
+                    >
+                      Stage All
+                    </button>
+                  )}
+                  {(gitStatus?.staged.length || 0) > 0 && (
+                    <button
+                      className="btn btn-sm"
+                      style={{ fontSize: 9, padding: '2px 6px' }}
+                      onClick={async () => {
+                        if (gitStatus?.staged.length && workspacePath) {
+                          await window.api.gitUnstage(workspacePath, gitStatus.staged)
+                          refresh()
+                        }
+                      }}
+                    >
+                      Unstage All
+                    </button>
+                  )}
+                </div>
+              </div>
               {gitStatus?.staged.map((f) => (
-                <FileRow key={`s-${f}`} file={f} label="S" color="green" onClick={() => showDiff(f)} />
+                <FileRow key={`s-${f}`} file={f} label="S" color="green" onClick={() => showDiff(f)} onUnstage={() => window.api.gitUnstage(workspacePath, [f]).then(refresh)} />
               ))}
               {gitStatus?.modified.map((f) => (
-                <FileRow key={`m-${f}`} file={f} label="M" color="yellow" onClick={() => showDiff(f)} />
+                <FileRow key={`m-${f}`} file={f} label="M" color="yellow" onClick={() => showDiff(f)} onStage={() => window.api.gitStage(workspacePath, [f]).then(refresh)} />
               ))}
               {gitStatus?.not_added.map((f) => (
-                <FileRow key={`n-${f}`} file={f} label="?" color="blue" onClick={() => showDiff(f)} />
+                <FileRow key={`n-${f}`} file={f} label="?" color="blue" onClick={() => showDiff(f)} onStage={() => window.api.gitStage(workspacePath, [f]).then(refresh)} />
               ))}
               {gitStatus?.deleted.map((f) => (
                 <FileRow key={`d-${f}`} file={f} label="D" color="red" onClick={() => showDiff(f)} />
@@ -262,7 +321,7 @@ export default function GitPanel() {
 }
 
 // Syntax-highlighted unified diff viewer
-function SyntaxHighlightedDiff({ diff }: { diff: string }) {
+const SyntaxHighlightedDiff = memo(function SyntaxHighlightedDiff({ diff }: { diff: string }) {
   const lines = diff.split('\n')
   return (
     <div style={{ flex: 1, overflow: 'auto', background: '#0d1117' }}>
@@ -299,10 +358,10 @@ function SyntaxHighlightedDiff({ diff }: { diff: string }) {
       })}
     </div>
   )
-}
+})
 
 // Split diff view (left: old, right: new)
-function SplitDiffView({ diff }: { diff: string }) {
+const SplitDiffView = memo(function SplitDiffView({ diff }: { diff: string }) {
   const lines = diff.split('\n')
   const leftLines: string[] = []
   const rightLines: string[] = []
@@ -360,12 +419,16 @@ function SplitDiffView({ diff }: { diff: string }) {
       </div>
     </div>
   )
-}
+})
 
-function FileRow({ file, label, color, onClick, onStage, onUnstage }: { file: string; label: string; color: string; onClick: () => void; onStage?: () => void; onUnstage?: () => void }) {
+const FileRow = memo(function FileRow({ file, label, color, onClick, onStage, onUnstage }: { file: string; label: string; color: string; onClick: () => void; onStage?: () => void; onUnstage?: () => void }) {
   return (
     <div
       onClick={onClick}
+      role="button"
+      tabIndex={0}
+      aria-label={`${file} (${label})`}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick() } }}
       style={{
         padding: '4px 8px', borderRadius: 4, cursor: 'pointer', fontSize: 12,
         display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2,
@@ -376,15 +439,15 @@ function FileRow({ file, label, color, onClick, onStage, onUnstage }: { file: st
       <span className={`badge badge-${color}`} style={{ minWidth: 18, textAlign: 'center' }}>{label}</span>
       <span style={{ fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{file}</span>
       {onStage && (
-        <button className="btn btn-sm" onClick={(e) => { e.stopPropagation(); onStage() }} style={{ padding: '1px 6px', fontSize: 10 }} title="Stage">
+        <button className="btn btn-sm" aria-label={`Stage ${file}`} onClick={(e) => { e.stopPropagation(); onStage() }} style={{ padding: '1px 6px', fontSize: 10 }} title="Stage">
           +
         </button>
       )}
       {onUnstage && (
-        <button className="btn btn-sm" onClick={(e) => { e.stopPropagation(); onUnstage() }} style={{ padding: '1px 6px', fontSize: 10 }} title="Unstage">
+        <button className="btn btn-sm" aria-label={`Unstage ${file}`} onClick={(e) => { e.stopPropagation(); onUnstage() }} style={{ padding: '1px 6px', fontSize: 10 }} title="Unstage">
           -
         </button>
       )}
     </div>
   )
-}
+})

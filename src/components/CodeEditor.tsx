@@ -1,4 +1,10 @@
 /**
+ * @author Virender Dhiman
+ * @year 2025
+ * @project Freebuff Agent
+ * @license MIT
+ */
+/**
  * CodeEditor — Monaco-powered code editor
  *
  * Features:
@@ -10,7 +16,8 @@
  * - Minimap, bracket matching, code folding
  */
 import { useCallback, useEffect, useState } from 'react'
-import Editor from '@monaco-editor/react'
+import { lazy, Suspense } from 'react'
+const Editor = lazy(() => import('@monaco-editor/react'))
 import { useStore } from '../store'
 
 function getLanguage(filePath: string): string {
@@ -60,10 +67,12 @@ export default function CodeEditor() {
 
   const handleSave = useCallback(async () => {
     if (!selectedFile) return
-    const result = await window.api.writeFile(selectedFile, editorContent)
-    if ('success' in result) {
-      setFileContent(editorContent)
-    }
+    try {
+      const result = await window.api.writeFile(selectedFile, editorContent)
+      if ('success' in result) {
+        setFileContent(editorContent)
+      }
+    } catch (err) { console.error('Failed to save file:', err) }
   }, [selectedFile, editorContent])
 
   // Ctrl+S handler
@@ -188,8 +197,9 @@ export default function CodeEditor() {
         </div>
       )}
 
-      {/* Monaco Editor */}
+      {/* Monaco Editor (lazy-loaded) */}
       {selectedFile ? (
+        <Suspense fallback={<div style={{ padding: 20, color: 'var(--text-muted)' }}>Loading editor...</div>}>
         <Editor
           language={getLanguage(selectedFile)}
           value={editorContent}
@@ -229,6 +239,7 @@ export default function CodeEditor() {
             </div>
           }
         />
+        </Suspense>
       ) : (
         <div className="empty-state" style={{ flex: 1 }}>
           <div className="empty-state-icon">📝</div>

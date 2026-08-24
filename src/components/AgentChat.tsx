@@ -1,4 +1,10 @@
 /**
+ * @author Virender Dhiman
+ * @year 2025
+ * @project Freebuff Agent
+ * @license MIT
+ */
+/**
  * AgentChat — Main AI chat interface
  *
  * Features:
@@ -409,7 +415,11 @@ export default function AgentChat() {
       content: `agent:tool ${toolName} ${JSON.stringify(args).slice(0, 120)}`,
       timestamp: Date.now(),
     })
-    return await window.api.toolExecute({ name: toolName, args })
+    try {
+      return await window.api.toolExecute({ name: toolName, args })
+    } catch (err: any) {
+      return { error: `Tool execution failed: ${err.message}` }
+    }
   }, [])
 
   const processToolCalls = useCallback(async (content: string, taskId: string) => {
@@ -476,23 +486,24 @@ export default function AgentChat() {
 
     for (const p of fallbackChain) {
       setStreamingContent('')
-      const result = await window.api.aiChat({
-        provider: p.id,
-        apiKey: p.apiKey,
-        baseUrl: p.baseUrl,
-        model: modelOverride || p.model,
-        messages: apiMessages,
-        stream: true,
-      })
+      try {
+        const result = await window.api.aiChat({
+          provider: p.id,
+          apiKey: p.apiKey,
+          baseUrl: p.baseUrl,
+          model: modelOverride || p.model,
+          messages: apiMessages,
+          stream: true,
+        })
 
-      if ('error' in result) {
-        // If it's the first provider, try next
-        if (fallbackChain.indexOf(p) < fallbackChain.length - 1) {
-          addTerminalEntry({
-            id: Date.now().toString(),
-            type: 'error',
-            content: `${p.name} failed: ${result.error}. Trying next provider...`,
-            timestamp: Date.now(),
+        if ('error' in result) {
+          // If it's the first provider, try next
+          if (fallbackChain.indexOf(p) < fallbackChain.length - 1) {
+            addTerminalEntry({
+              id: Date.now().toString(),
+              type: 'error',
+              content: `${p.name} failed: ${result.error}. Trying next provider...`,
+              timestamp: Date.now(),
           })
           continue
         }
@@ -511,6 +522,19 @@ export default function AgentChat() {
 
       const streamed = useStore.getState().streamingContent
       return { content: streamed || result.content }
+      } catch (err: any) {
+        // IPC transport error — try next provider
+        if (fallbackChain.indexOf(p) < fallbackChain.length - 1) {
+          addTerminalEntry({
+            id: Date.now().toString(),
+            type: 'error',
+            content: `${p.name} connection error: ${err.message}. Trying next provider...`,
+            timestamp: Date.now(),
+          })
+          continue
+        }
+        return { error: err.message }
+      }
     }
     return { error: 'All providers failed' }
   }, [getActiveProvider, settings.providers, modelOverride])
@@ -994,9 +1018,27 @@ export default function AgentChat() {
               <span className="badge badge-green" style={{ fontSize: 10 }}>📋 Plan Mode</span>
             )}
           </div>
-          <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-            ~{Math.ceil(input.length / 4)} tokens · {input.length} chars{' '}
-            {messages.length > 0 && `· ${messages.length} msgs`}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+              ~{Math.ceil(input.length / 4)} tokens · {input.length} chars{' '}
+              {messages.length > 0 && `· ${messages.length} msgs`}
+            </span>
+            {/* Context window usage bar */}
+            {(() => {
+              const totalChars = messages.reduce((s, m) => s + m.content.length + (m.toolCalls?.reduce((ts, t) => ts + JSON.stringify(t).length, 0) || 0), 0)
+              const estimatedTokens = Math.ceil(totalChars / 4)
+              const maxTokens = 128000
+              const pct = Math.min(100, (estimatedTokens / maxTokens) * 100)
+              const color = pct > 80 ? '#ef4444' : pct > 50 ? '#f59e0b' : '#4ade80'
+              return (
+                <div title={`${estimatedTokens.toLocaleString()} / ${maxTokens.toLocaleString()} tokens used`} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <div style={{ width: 60, height: 4, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
+                    <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 2, transition: 'width 0.3s' }} />
+                  </div>
+                  <span style={{ fontSize: 9, color }}>{pct.toFixed(0)}%</span>
+                </div>
+              )
+            })()}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
@@ -1074,6 +1116,7 @@ export default function AgentChat() {
           <textarea
             ref={inputRef}
             className="input"
+            aria-label="Chat message input"
             value={input}
             onChange={(e) => {
               const val = e.target.value

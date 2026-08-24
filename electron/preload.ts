@@ -1,56 +1,70 @@
 /**
+ * @author Virender Dhiman
+ * @year 2025
+ * @project Freebuff Agent
+ * @license MIT
+ */
+/**
  * Freebuff Agent — Preload Script
  *
  * Exposes a safe, typed API bridge between the renderer (React app)
  * and the main process (Node.js). Uses contextBridge for security.
  *
- * All methods are invoked via ipcRenderer.invoke() and return promises.
+ * All methods are invoked via invokeWithTimeout() and return promises.
  * Event listeners (onAIStream, onTerminalData) use ipcRenderer.on().
  */
 import { contextBridge, ipcRenderer } from 'electron'
+
+/** Invoke with a timeout — prevents renderer from hanging if main process stalls */
+function invokeWithTimeout(channel: string, ...args: any[]): Promise<any> {
+  return Promise.race([
+    invokeWithTimeout(channel, ...args),
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`IPC timeout: ${channel} did not respond in 30s`)), 30000)),
+  ])
+}
 
 contextBridge.exposeInMainWorld('api', {
   // ═══ File System ══════════════════════════════════════════════════════════════
   // Browse, read, write, create, delete files and directories
   // File System
-  openDirectory: () => ipcRenderer.invoke('fs:openDirectory'),
-  readDirectory: (dirPath: string) => ipcRenderer.invoke('fs:readDirectory', dirPath),
-  readFile: (filePath: string) => ipcRenderer.invoke('fs:readFile', filePath),
-  writeFile: (filePath: string, content: string) => ipcRenderer.invoke('fs:writeFile', filePath, content),
-  getParentPath: (dirPath: string) => ipcRenderer.invoke('fs:getParentPath', dirPath),
-  createFile: (filePath: string) => ipcRenderer.invoke('fs:createFile', filePath),
-  createDirectory: (dirPath: string) => ipcRenderer.invoke('fs:createDirectory', dirPath),
-  deleteFile: (filePath: string) => ipcRenderer.invoke('fs:deleteFile', filePath),
-  rename: (oldPath: string, newPath: string) => ipcRenderer.invoke('fs:rename', oldPath, newPath),
-  walkDirectory: (dirPath: string) => ipcRenderer.invoke('fs:walkDirectory', dirPath),
+  openDirectory: () => invokeWithTimeout('fs:openDirectory'),
+  readDirectory: (dirPath: string) => invokeWithTimeout('fs:readDirectory', dirPath),
+  readFile: (filePath: string) => invokeWithTimeout('fs:readFile', filePath),
+  writeFile: (filePath: string, content: string) => invokeWithTimeout('fs:writeFile', filePath, content),
+  getParentPath: (dirPath: string) => invokeWithTimeout('fs:getParentPath', dirPath),
+  createFile: (filePath: string) => invokeWithTimeout('fs:createFile', filePath),
+  createDirectory: (dirPath: string) => invokeWithTimeout('fs:createDirectory', dirPath),
+  deleteFile: (filePath: string) => invokeWithTimeout('fs:deleteFile', filePath),
+  rename: (oldPath: string, newPath: string) => invokeWithTimeout('fs:rename', oldPath, newPath),
+  walkDirectory: (dirPath: string) => invokeWithTimeout('fs:walkDirectory', dirPath),
 
   // ═══ Git ══════════════════════════════════════════════════════════════════════
   // Full git operations: status, diff, commit, push, pull, branches, stash
-  gitStatus: (repoPath: string) => ipcRenderer.invoke('git:status', repoPath),
-  gitDiff: (repoPath: string, filePath?: string) => ipcRenderer.invoke('git:diff', repoPath, filePath),
-  gitDiffStaged: (repoPath: string) => ipcRenderer.invoke('git:diffStaged', repoPath),
-  gitCommit: (repoPath: string, message: string) => ipcRenderer.invoke('git:commit', repoPath, message),
-  gitCommitStaged: (repoPath: string, message: string) => ipcRenderer.invoke('git:commitStaged', repoPath, message),
-  gitPush: (repoPath: string, branch?: string) => ipcRenderer.invoke('git:push', repoPath, branch),
-  gitPull: (repoPath: string) => ipcRenderer.invoke('git:pull', repoPath),
-  gitInit: (repoPath: string) => ipcRenderer.invoke('git:init', repoPath),
-  gitLog: (repoPath: string, count?: number) => ipcRenderer.invoke('git:log', repoPath, count),
-  gitIsRepo: (dirPath: string) => ipcRenderer.invoke('git:isRepo', dirPath),
-  gitBranches: (repoPath: string) => ipcRenderer.invoke('git:branches', repoPath),
-  gitCreateBranch: (repoPath: string, branchName: string) => ipcRenderer.invoke('git:createBranch', repoPath, branchName),
-  gitSwitchBranch: (repoPath: string, branchName: string) => ipcRenderer.invoke('git:switchBranch', repoPath, branchName),
-  gitDeleteBranch: (repoPath: string, branchName: string) => ipcRenderer.invoke('git:deleteBranch', repoPath, branchName),
-  gitStash: (repoPath: string) => ipcRenderer.invoke('git:stash', repoPath),
-  gitStashPop: (repoPath: string) => ipcRenderer.invoke('git:stashPop', repoPath),
-  gitStage: (repoPath: string, files: string[]) => ipcRenderer.invoke('git:stage', repoPath, files),
-  gitUnstage: (repoPath: string, files: string[]) => ipcRenderer.invoke('git:unstage', repoPath, files),
+  gitStatus: (repoPath: string) => invokeWithTimeout('git:status', repoPath),
+  gitDiff: (repoPath: string, filePath?: string) => invokeWithTimeout('git:diff', repoPath, filePath),
+  gitDiffStaged: (repoPath: string) => invokeWithTimeout('git:diffStaged', repoPath),
+  gitCommit: (repoPath: string, message: string) => invokeWithTimeout('git:commit', repoPath, message),
+  gitCommitStaged: (repoPath: string, message: string) => invokeWithTimeout('git:commitStaged', repoPath, message),
+  gitPush: (repoPath: string, branch?: string) => invokeWithTimeout('git:push', repoPath, branch),
+  gitPull: (repoPath: string) => invokeWithTimeout('git:pull', repoPath),
+  gitInit: (repoPath: string) => invokeWithTimeout('git:init', repoPath),
+  gitLog: (repoPath: string, count?: number) => invokeWithTimeout('git:log', repoPath, count),
+  gitIsRepo: (dirPath: string) => invokeWithTimeout('git:isRepo', dirPath),
+  gitBranches: (repoPath: string) => invokeWithTimeout('git:branches', repoPath),
+  gitCreateBranch: (repoPath: string, branchName: string) => invokeWithTimeout('git:createBranch', repoPath, branchName),
+  gitSwitchBranch: (repoPath: string, branchName: string) => invokeWithTimeout('git:switchBranch', repoPath, branchName),
+  gitDeleteBranch: (repoPath: string, branchName: string) => invokeWithTimeout('git:deleteBranch', repoPath, branchName),
+  gitStash: (repoPath: string) => invokeWithTimeout('git:stash', repoPath),
+  gitStashPop: (repoPath: string) => invokeWithTimeout('git:stashPop', repoPath),
+  gitStage: (repoPath: string, files: string[]) => invokeWithTimeout('git:stage', repoPath, files),
+  gitUnstage: (repoPath: string, files: string[]) => invokeWithTimeout('git:unstage', repoPath, files),
 
   // ═══ Terminal ══════════════════════════════════════════════════════════════════
   // Real shell terminals via node-pty (PowerShell/bash)
-  terminalCreate: (termId: string, cwd: string) => ipcRenderer.invoke('terminal:create', termId, cwd),
-  terminalWrite: (termId: string, data: string) => ipcRenderer.invoke('terminal:write', termId, data),
-  terminalResize: (termId: string, cols: number, rows: number) => ipcRenderer.invoke('terminal:resize', termId, cols, rows),
-  terminalKill: (termId: string) => ipcRenderer.invoke('terminal:kill', termId),
+  terminalCreate: (termId: string, cwd: string) => invokeWithTimeout('terminal:create', termId, cwd),
+  terminalWrite: (termId: string, data: string) => invokeWithTimeout('terminal:write', termId, data),
+  terminalResize: (termId: string, cols: number, rows: number) => invokeWithTimeout('terminal:resize', termId, cols, rows),
+  terminalKill: (termId: string) => invokeWithTimeout('terminal:kill', termId),
   onTerminalData: (cb: (termId: string, data: string) => void) => {
     ipcRenderer.on('terminal:data', (_e, termId, data) => cb(termId, data))
   },
@@ -60,30 +74,30 @@ contextBridge.exposeInMainWorld('api', {
 
   // ═══ Agent Tools ══════════════════════════════════════════════════════════════
   // Autonomous agent tool execution (26 tools) (agent can call these autonomously)
-  toolExecute: (tool: { name: string; args: Record<string, any> }) => ipcRenderer.invoke('tool:execute', tool),
+  toolExecute: (tool: { name: string; args: Record<string, any> }) => invokeWithTimeout('tool:execute', tool),
 
   // ═══ Settings ══════════════════════════════════════════════════════════════════
   // API keys, providers, workspace config
-  loadSettings: () => ipcRenderer.invoke('settings:load'),
-  saveSettings: (settings: any) => ipcRenderer.invoke('settings:save', settings),
+  loadSettings: () => invokeWithTimeout('settings:load'),
+  saveSettings: (settings: any) => invokeWithTimeout('settings:save', settings),
 
   // ═══ AI ════════════════════════════════════════════════════════════════════════
   // Chat completions with streaming support (with streaming support)
   aiChat: (config: { provider: string; apiKey: string; baseUrl: string; model: string; messages: any[]; stream?: boolean }) =>
-    ipcRenderer.invoke('ai:chat', config),
+    invokeWithTimeout('ai:chat', config),
   onAIStream: (cb: (token: string) => void) => {
     ipcRenderer.on('ai:stream', (_e, token) => cb(token))
   },
 
   // ═══ OS Shell ══════════════════════════════════════════════════════════════════
   // Open files and folders in native OS apps
-  openPath: (targetPath: string) => ipcRenderer.invoke('shell:openPath', targetPath),
-  showItemInFolder: (targetPath: string) => ipcRenderer.invoke('shell:showItemInFolder', targetPath),
+  openPath: (targetPath: string) => invokeWithTimeout('shell:openPath', targetPath),
+  showItemInFolder: (targetPath: string) => invokeWithTimeout('shell:showItemInFolder', targetPath),
 
   // ═══ Conversations ═════════════════════════════════════════════════════════════
   // Save/load chat history across sessions
-  saveConversations: (data: { messages: any[]; taskId: string }) => ipcRenderer.invoke('conversations:save', data),
-  loadConversations: () => ipcRenderer.invoke('conversations:load'),
+  saveConversations: (data: { messages: any[]; taskId: string }) => invokeWithTimeout('conversations:save', data),
+  loadConversations: () => invokeWithTimeout('conversations:load'),
 })
 
 export type ElectronAPI = {

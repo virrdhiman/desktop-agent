@@ -1,4 +1,10 @@
 /**
+ * @author Virender Dhiman
+ * @year 2025
+ * @project Freebuff Agent
+ * @license MIT
+ */
+/**
  * Freebuff Agent — Root Application Component
  *
  * The main layout orchestrator. Manages:
@@ -23,6 +29,7 @@ import SettingsPanel from './components/SettingsPanel'
 import TaskPanel from './components/TaskPanel'
 import BranchManager from './components/BranchManager'
 import SessionsPanel from './components/SessionsPanel'
+import SearchResults from './components/SearchResults'
 import CommandPalette from './components/CommandPalette'
 
 export default function App() {
@@ -131,6 +138,7 @@ export default function App() {
             {activePanel === 'branches' && <BranchManager />}
             {activePanel === 'tasks' && <TaskPanel />}
             {activePanel === 'sessions' && <SessionsPanel />}
+            {activePanel === 'search' && <SearchResults />}
             {activePanel === 'terminal' && <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}><MultiTerminal /></div>}
             {activePanel === 'settings' && <SettingsPanel />}
           </div>

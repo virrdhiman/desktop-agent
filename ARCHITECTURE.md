@@ -1,6 +1,16 @@
+<!--
+  @author Virender Dhiman
+  @year 2025
+  @project Freebuff Agent
+  @license MIT
+-->
+
 # 🏗️ Architecture Deep-Dive
 
 This document explains the technical architecture of Freebuff Agent for contributors and maintainers.
+
+**Author:** Virender Dhiman  
+**License:** MIT
 
 ## Overview
 

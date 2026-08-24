@@ -1,12 +1,24 @@
+<!--
+  @author Virender Dhiman
+  @year 2025
+  @project Freebuff Agent
+  @license MIT
+-->
+
 # Freebuff Agent 🤖
 
-> A Cursor-like AI coding agent desktop app with **37 AI providers**, **26 autonomous tools**, Web3 blockchain integration, and a full development environment — all **open source** and mostly **free**.
+> A Cursor-like AI coding agent desktop app with **44 AI providers**, **33 autonomous tools**, Web3 blockchain integration, and a full development environment — all **open source** and mostly **free**.
+>
+> **Author:** Virender Dhiman  
+> **License:** MIT  
+> **Year:** 2025
 
 ![Electron](https://img.shields.io/badge/Electron-31-blue)
 ![React](https://img.shields.io/badge/React-18-61dafb)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)
-![Tools](https://img.shields.io/badge/Tools-26-green)
-![Providers](https://img.shields.io/badge/Providers-37-orange)
+![Tools](https://img.shields.io/badge/Tools-33-green)
+![Providers](https://img.shields.io/badge/Providers-44-orange)
+![Tests](https://img.shields.io/badge/Tests-65-brightgreen)
 
 ---
 
@@ -14,7 +26,7 @@
 
 ### 🤖 Autonomous Agent
 - AI reads files, edits code, runs commands, manages git — all autonomously
-- **26 built-in tools** including file ops, git, web search, and Web3 blockchain
+- **33 built-in tools** including file ops, git, web search, image/video generation, speech-to-text, and Web3 blockchain
 - **Multi-round tool execution** (up to 5 rounds of tool → result → follow-up)
 - **Streaming responses** — tokens appear in real-time
 - **Auto-fallback** — if one AI provider fails, tries the next free one automatically
@@ -102,7 +114,7 @@
 
 ---
 
-## 🛠️ Agent Tools (26)
+## 🛠️ Agent Tools (33)
 
 The agent has autonomous access to these tools:
 
@@ -113,15 +125,18 @@ The agent has autonomous access to these tools:
 | **Project** | `read_directory_tree`, `multi_file_edit` |
 | **Git** | `git_status`, `git_diff`, `git_commit`, `git_log`, `git_branch`, `git_stash`, `git_generate_commit`, `git_undo_last`, `git_discard_changes` |
 | **Web** | `web_search` |
+| **Image** | `generate_image`, `image_analysis` |
+| **Video** | `generate_video` |
+| **Speech** | `speech_to_text`, `text_to_speech` |
 | **Web3** | `web3_balance`, `web3_explorer`, `web3_ipfs`, `web3_contract`, `web3_deploy` |
 
 See [TOOLS.md](./TOOLS.md) for the complete tools reference with examples.
 
 ---
 
-## 🆓 AI Providers (37)
+## 🆓 AI Providers (44)
 
-### Free Official (15)
+### Free Official (16)
 | Provider | Models | Rate Limit | Key |
 |----------|--------|------------|-----|
 | **Groq** ⚡ | llama-3.3-70b | 30 req/min | [Get Key](https://console.groq.com/keys) |
@@ -257,6 +272,19 @@ Desktop Agent/
 
 ---
 
+## 🧪 Testing
+
+```bash
+# Run all 65 tests
+npm test
+
+# Watch mode
+npm run test:watch
+
+# With coverage
+npm run test:coverage
+```
+
 ## 📦 Tech Stack
 
 | Technology | Purpose |
@@ -276,6 +304,7 @@ Desktop Agent/
 
 ## 📄 Documentation
 
+- [USAGE.md](./USAGE.md) — Complete how-to-use guide with examples
 - [TOOLS.md](./TOOLS.md) — Complete agent tools reference with examples
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — Technical deep-dive for contributors
 
@@ -287,8 +316,9 @@ Desktop Agent/
 2. Create a feature branch
 3. Make your changes
 4. Run `npx tsc --noEmit` to verify types
-5. Run `npx vite build` to verify build
-6. Submit a pull request
+5. Run `npx vitest run` to run all 65 tests
+6. Run `npx vite build` to verify build
+7. Submit a pull request
 
 ---
 
@@ -296,6 +326,8 @@ Desktop Agent/
 
 MIT License — use it however you want.
 
+Copyright (c) 2025 Virender Dhiman
+
 ---
 
-Built with ❤️ by Freebuff
+Built with ❤️ by **Virender Dhiman** ([@virenderdhiman](https://github.com/virenderdhiman))

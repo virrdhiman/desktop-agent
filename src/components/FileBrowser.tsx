@@ -1,4 +1,10 @@
 /**
+ * @author Virender Dhiman
+ * @year 2025
+ * @project Freebuff Agent
+ * @license MIT
+ */
+/**
  * FileBrowser — File tree navigation panel
  *
  * Features:
@@ -27,29 +33,37 @@ export default function FileBrowser() {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; file: FileEntry } | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
+  const [filterQuery, setFilterQuery] = useState('')
 
   const openFolder = useCallback(async () => {
-    const dir = await window.api.openDirectory()
-    if (!dir) return
-    setWorkspacePath(dir)
-    setCurrentDirectory(dir)
+    try {
+      const dir = await window.api.openDirectory()
+      if (!dir) return
+      setWorkspacePath(dir)
+      setCurrentDirectory(dir)
 
-    const isRepo = await window.api.gitIsRepo(dir)
-    setIsRepo(isRepo)
-    if (isRepo) {
-      const status = await window.api.gitStatus(dir)
-      if (!('error' in status)) setGitStatus(status)
-    }
+      const isRepo = await window.api.gitIsRepo(dir)
+      setIsRepo(isRepo)
+      if (isRepo) {
+        const status = await window.api.gitStatus(dir)
+        if (!('error' in status)) setGitStatus(status)
+      }
+    } catch (err) { console.error('Failed to open folder:', err) }
   }, [])
 
   const loadDir = useCallback(async (dirPath: string) => {
-    const result = await window.api.readDirectory(dirPath)
-    if ('error' in result) {
-      setError(result.error)
-      return
+    try {
+      const result = await window.api.readDirectory(dirPath)
+      if ('error' in result) {
+        setError(result.error)
+        return
+      }
+
+      setFiles(result as FileEntry[])
+      setError(null)
+    } catch (err: any) {
+      setError(err.message || 'Failed to load directory')
     }
-    setFiles(result as FileEntry[])
-    setError(null)
   }, [])
 
   useEffect(() => {
@@ -62,8 +76,10 @@ export default function FileBrowser() {
   }, [])
 
   const navigateUp = useCallback(async () => {
-    const parent = await window.api.getParentPath(currentDirectory)
-    setCurrentDirectory(parent)
+    try {
+      const parent = await window.api.getParentPath(currentDirectory)
+      setCurrentDirectory(parent)
+    } catch (err) { console.error('Failed to navigate up:', err) }
   }, [currentDirectory])
 
   const handleDirClick = useCallback((entry: FileEntry) => {
@@ -78,8 +94,10 @@ export default function FileBrowser() {
 
   const handleDelete = useCallback(async (file: FileEntry) => {
     if (!confirm(`Delete ${file.name}?`)) return
-    await window.api.deleteFile(file.path)
-    if (currentDirectory) loadDir(currentDirectory)
+    try {
+      await window.api.deleteFile(file.path)
+      if (currentDirectory) loadDir(currentDirectory)
+    } catch (err) { console.error('Failed to delete:', err) }
     setContextMenu(null)
   }, [currentDirectory])
 
@@ -107,17 +125,21 @@ export default function FileBrowser() {
   const handleNewFile = useCallback(async () => {
     const name = prompt('New file name:')
     if (!name) return
-    const filePath = currentDirectory + '/' + name
-    await window.api.createFile(filePath)
-    if (currentDirectory) loadDir(currentDirectory)
+    try {
+      const filePath = currentDirectory + '/' + name
+      await window.api.createFile(filePath)
+      if (currentDirectory) loadDir(currentDirectory)
+    } catch (err) { console.error('Failed to create file:', err) }
   }, [currentDirectory])
 
   const handleNewFolder = useCallback(async () => {
     const name = prompt('New folder name:')
     if (!name) return
-    const dirPath = currentDirectory + '/' + name
-    await window.api.createDirectory(dirPath)
-    if (currentDirectory) loadDir(currentDirectory)
+    try {
+      const dirPath = currentDirectory + '/' + name
+      await window.api.createDirectory(dirPath)
+      if (currentDirectory) loadDir(currentDirectory)
+    } catch (err) { console.error('Failed to create folder:', err) }
   }, [currentDirectory])
 
   return (
@@ -145,6 +167,19 @@ export default function FileBrowser() {
         </div>
       )}
 
+      {/* File filter */}
+      {workspacePath && files.length > 5 && (
+        <div style={{ padding: '4px 8px', borderBottom: '1px solid var(--border)' }}>
+          <input
+            className="input"
+            placeholder="Filter files..."
+            value={filterQuery}
+            onChange={(e) => setFilterQuery(e.target.value)}
+            style={{ width: '100%', fontSize: 11, padding: '3px 6px' }}
+          />
+        </div>
+      )}
+
       <div className="panel-body" style={{ padding: 4, flex: 1, overflowY: 'auto' }}>
         {!workspacePath ? (
           <div className="empty-state">
@@ -155,7 +190,9 @@ export default function FileBrowser() {
         ) : error ? (
           <div style={{ color: 'var(--error)', padding: 12, fontSize: 13 }}>{error}</div>
         ) : (
-          files.map((f) => (
+          files
+            .filter(f => !filterQuery || f.name.toLowerCase().includes(filterQuery.toLowerCase()))
+            .map((f) => (
             <div
               key={f.path}
               onClick={() => f.isDirectory ? handleDirClick(f) : openFile(f.path)}
