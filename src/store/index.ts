@@ -138,6 +138,16 @@ interface AppState {
   settings: Settings
   setSettings: (settings: Settings) => void
   getActiveProvider: () => ProviderConfig | undefined
+
+  // Session Stats (token tracking)
+  sessionStats: { inputTokens: number; outputTokens: number; estimatedCost: number; providerUsed: string; toolsExecuted: number }
+  addTokens: (input: number, output: number) => void
+  addToolExecution: (providerName: string) => void
+
+  // File Edit History (for diff viewer)
+  fileEditHistory: { path: string; before: string; after: string; timestamp: number }[]
+  addFileEdit: (edit: { path: string; before: string; after: string }) => void
+  clearEditHistory: () => void
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -315,4 +325,44 @@ export const useStore = create<AppState>((set, get) => ({
     const { settings } = get()
     return settings.providers.find((p) => p.id === settings.activeProvider)
   },
+
+  // Session Stats
+  sessionStats: { inputTokens: 0, outputTokens: 0, estimatedCost: 0, providerUsed: '', toolsExecuted: 0 },
+  addTokens: (input, output) => set((s) => {
+    const provider = s.settings.providers.find(p => p.id === s.settings.activeProvider)
+    // Rough cost estimates per 1M tokens
+    const costs: Record<string, { input: number; output: number }> = {
+      groq: { input: 0.05, output: 0.08 },
+      cerebras: { input: 0.1, output: 0.1 },
+      deepseek: { input: 0.14, output: 0.28 },
+      gemini: { input: 0.075, output: 0.3 },
+      mistral: { input: 0.25, output: 0.25 },
+      together: { input: 0.1, output: 0.1 },
+      fireworks: { input: 0.2, output: 0.2 },
+      deepinfra: { input: 0.07, output: 0.07 },
+      openai: { input: 2.5, output: 10 },
+      anthropic: { input: 3, output: 15 },
+    }
+    const rate = costs[s.settings.activeProvider] || costs.groq
+    const cost = (input / 1_000_000) * rate.input + (output / 1_000_000) * rate.output
+    return {
+      sessionStats: {
+        ...s.sessionStats,
+        inputTokens: s.sessionStats.inputTokens + input,
+        outputTokens: s.sessionStats.outputTokens + output,
+        estimatedCost: s.sessionStats.estimatedCost + cost,
+        providerUsed: provider?.name || s.settings.activeProvider,
+      },
+    }
+  }),
+  addToolExecution: (providerName) => set((s) => ({
+    sessionStats: { ...s.sessionStats, toolsExecuted: s.sessionStats.toolsExecuted + 1, providerUsed: providerName },
+  })),
+
+  // File Edit History
+  fileEditHistory: [],
+  addFileEdit: (edit) => set((s) => ({
+    fileEditHistory: [...s.fileEditHistory.slice(-20), { ...edit, timestamp: Date.now() }],
+  })),
+  clearEditHistory: () => set({ fileEditHistory: [] }),
 }))

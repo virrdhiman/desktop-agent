@@ -6,12 +6,30 @@ release/
 .DS_Store
 Thumbs.db
 
-# added by UPLOAD-ALL-REPOS
+# Environment
 .env
 .env.*
 !.env.example
 .venv/
 __pycache__/
 *.pyc
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Python
 .next/
+
+# Build
 build/
+*.tgz
+*.tar.gz
+
+# OS
+classic
+thumbs.db
+Desktop.ini
