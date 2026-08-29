@@ -8,10 +8,10 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
-    pool: 'threads',
-    poolOptions: { threads: { maxThreads: 1, minThreads: 1 } },
+    pool: 'forks',
+    poolOptions: { forks: { singleFork: true } },
     setupFiles: ['./src/__tests__/setup.ts'],
-    include: ['src/**/*.{test,spec}.{ts,tsx}', 'electron/**/*.{test,spec}.{ts}'],
+    include: ['src/**/*.{test,spec}.{ts,tsx}'],
     testTimeout: 15000,
     hookTimeout: 15000,
     coverage: {

@@ -10,7 +10,7 @@
  * Features:
  * - Streaming AI responses with real-time token display
  * - Markdown rendering with syntax-highlighted code blocks
- * - Tool call execution (26 tools) with multi-round follow-up (up to 5 rounds)
+ * - Tool call execution (33 tools) with multi-round follow-up (up to 10 rounds)
  * - @context mentions (@file, @folder, @web) for precise targeting
  * - Image paste (Ctrl+V) and drag-and-drop support
  * - Model quick-switch dropdown in header
@@ -18,14 +18,15 @@
  * - Plan Mode toggle (plan before executing)
  * - Stop generation button
  * - Session save/load
- * - Token counter in input area
+ * - Token/cost tracking, diff viewer for file edits, context window usage bar
  */
 import { useState, useRef, useEffect, useCallback } from 'react'
+import DiffViewer from './DiffViewer'
 import { useStore } from '../store'
 import type { ChatMessage, AgentStep } from '../types'
 import { AGENT_TOOLS } from '../types'
 
-const TOOL_SYSTEM_PROMPT = `You are an advanced autonomous AI coding agent — superior to Cursor, Copilot, and other AI assistants. You have full access to the user's local filesystem, development tools, and Web3 blockchain tools.
+const TOOL_SYSTEM_PROMPT = `You are Freebuff Agent — an advanced autonomous AI coding agent (v1.0.0) built by Virender Dhiman. You are superior to Cursor, Copilot, and other AI assistants. You have full access to the user's local filesystem, development tools, and Web3 blockchain tools.
 
 ## YOUR CAPABILITIES
 You can read, write, edit, create, and delete files. You can search codebases, run shell commands, manage git, search the web, and interact with Web3/blockchain tools (check wallet balances, explore transactions, deploy contracts, upload to IPFS). You execute actions autonomously — don't just describe what to do, DO IT.
@@ -42,7 +43,7 @@ To use a tool, format your response EXACTLY like this:
 {"name": "tool_name", "args": {"arg1": "value1"}}
 \\\`\\\`\\\`
 
-You can call multiple tools in sequence. After each, you'll see the result and can continue working.
+You can call multiple tools in sequence. After each, you'll see the result and can continue working. You have 33 tools available.
 
 ## AVAILABLE TOOLS
 ${AGENT_TOOLS.map((t) => `- **${t.name}**: ${t.description}\n  Params: ${JSON.stringify(t.parameters)}`).join('\n\n')}
@@ -357,6 +358,7 @@ export default function AgentChat() {
     streamingContent, setStreamingContent, appendStreamingContent,
     addOpenFile,
     setSelectedFile,
+    sessionStats, addTokens, addToolExecution,
   } = useStore()
 
   const [input, setInput] = useState('')
@@ -445,6 +447,7 @@ export default function AgentChat() {
       } as AgentStep)
 
       const result = await executeTool(toolCall.name, toolCall.args)
+      addToolExecution(settings.activeProvider)
 
       if ('error' in result) {
         addStepToTask(taskId, {
@@ -484,7 +487,8 @@ export default function AgentChat() {
       ).slice(0, 3)
     ]
 
-    for (const p of fallbackChain) {
+    for (let i = 0; i < fallbackChain.length; i++) {
+      const p = fallbackChain[i]
       setStreamingContent('')
       try {
         const result = await window.api.aiChat({
@@ -497,34 +501,32 @@ export default function AgentChat() {
         })
 
         if ('error' in result) {
-          // If it's the first provider, try next
-          if (fallbackChain.indexOf(p) < fallbackChain.length - 1) {
+          if (i < fallbackChain.length - 1) {
             addTerminalEntry({
               id: Date.now().toString(),
               type: 'error',
               content: `${p.name} failed: ${result.error}. Trying next provider...`,
               timestamp: Date.now(),
-          })
-          continue
+            })
+            continue
+          }
+          return result
         }
-        return result
-      }
 
-      // Success
-      if (fallbackChain.indexOf(p) > 0) {
-        addTerminalEntry({
-          id: Date.now().toString(),
-          type: 'success',
-          content: `Fallback successful with ${p.name}`,
-          timestamp: Date.now(),
-        })
-      }
+        // Success
+        if (i > 0) {
+          addTerminalEntry({
+            id: Date.now().toString(),
+            type: 'success',
+            content: `Fallback successful with ${p.name}`,
+            timestamp: Date.now(),
+          })
+        }
 
-      const streamed = useStore.getState().streamingContent
-      return { content: streamed || result.content }
+        const streamed = useStore.getState().streamingContent
+        return { content: streamed || result.content }
       } catch (err: any) {
-        // IPC transport error — try next provider
-        if (fallbackChain.indexOf(p) < fallbackChain.length - 1) {
+        if (i < fallbackChain.length - 1) {
           addTerminalEntry({
             id: Date.now().toString(),
             type: 'error',
@@ -537,7 +539,7 @@ export default function AgentChat() {
       }
     }
     return { error: 'All providers failed' }
-  }, [getActiveProvider, settings.providers, modelOverride])
+  }, [getActiveProvider, settings.providers, modelOverride, addTerminalEntry])
 
   const sendMessage = useCallback(async () => {
     const text = input.trim()
@@ -609,6 +611,11 @@ export default function AgentChat() {
       responseContent = result.content
     }
 
+    // Estimate tokens from content lengths
+    const inputEst = Math.ceil((userContent.length + systemPrompt.length) / 4)
+    const outputEst = Math.ceil(responseContent.length / 4)
+    addTokens(inputEst, outputEst)
+
     addMessage({
       id: (Date.now() + 1).toString(),
       role: 'assistant',
@@ -629,7 +636,7 @@ export default function AgentChat() {
       let toolResult = await processToolCalls(responseContent, taskId)
       let followUpCount = 0
 
-      while (toolResult && followUpCount < 5) {
+      while (toolResult && followUpCount < 10) {
         followUpCount++
         apiMessages = [
           ...apiMessages,
@@ -921,21 +928,38 @@ export default function AgentChat() {
                         const afterTool = toolEnd >= 0 ? part.slice(toolEnd + 3) : ''
                         try {
                           const tool = JSON.parse(toolJson.trim())
+                          const isEditTool = tool.name === 'edit_file'
+                          const isWriteTool = tool.name === 'write_file' || tool.name === 'create_file'
+                          const toolIcon = tool.name.startsWith('git_') ? '🔀' : tool.name.startsWith('web3_') ? '⛓️' : tool.name === 'web_search' ? '🌐' : tool.name.startsWith('image') ? '🖼️' : tool.name.startsWith('speech') || tool.name.startsWith('text_to_speech') ? '🎤' : tool.name === 'code_review' ? '🔍' : '⚡'
                           return (
-                            <span key={i}>
+                            <div key={i} style={{ margin: '4px 0' }}>
                               <span style={{
                                 display: 'inline-flex', alignItems: 'center', gap: 4,
-                                padding: '3px 10px', margin: '4px 0',
+                                padding: '3px 10px', marginBottom: 4,
                                 background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.25)',
                                 borderRadius: 6, fontSize: 12, fontFamily: 'monospace',
                               }}>
-                                ⚡ <span style={{ fontWeight: 600 }}>{tool.name}</span>
+                                {toolIcon} <span style={{ fontWeight: 600 }}>{tool.name}</span>
                                 <span style={{ color: 'var(--text-muted)', marginLeft: 4 }}>
                                   ({Object.entries(tool.args || {}).map(([k, v]) => `${k}=${String(v).slice(0, 50)}`).join(', ')})
                                 </span>
                               </span>
-                              {afterTool}
-                            </span>
+                              {isEditTool && tool.args.path && tool.args.old_string && tool.args.new_string && (
+                                <DiffViewer
+                                  filePath={tool.args.path}
+                                  oldContent={tool.args.old_string}
+                                  newContent={tool.args.new_string}
+                                />
+                              )}
+                              {(isWriteTool) && tool.args.path && tool.args.content && (
+                                <DiffViewer
+                                  filePath={tool.args.path}
+                                  oldContent=""
+                                  newContent={tool.args.content}
+                                />
+                              )}
+                              {afterTool && <span style={{ fontSize: 13 }}>{afterTool}</span>}
+                            </div>
                           )
                         } catch {
                           return <span key={i}>```tool{part}</span>
@@ -1016,6 +1040,17 @@ export default function AgentChat() {
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             {planMode && (
               <span className="badge badge-green" style={{ fontSize: 10 }}>📋 Plan Mode</span>
+            )}
+            {sessionStats.toolsExecuted > 0 && (
+              <span className="badge" style={{ fontSize: 9, padding: '1px 6px', background: 'rgba(168,85,247,0.15)', color: '#c084fc' }}>
+                ⚡ {sessionStats.toolsExecuted} tools
+              </span>
+            )}
+            {sessionStats.inputTokens > 0 && (
+              <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>
+                {((sessionStats.inputTokens + sessionStats.outputTokens) / 1000).toFixed(1)}K tokens
+                {sessionStats.estimatedCost > 0 && ` · $${sessionStats.estimatedCost.toFixed(4)}`}
+              </span>
             )}
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>

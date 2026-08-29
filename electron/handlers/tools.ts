@@ -346,7 +346,40 @@ export function registerToolHandlers() {
             const focus = tool.args.focus || 'all'
             const content = await fs.promises.readFile(filePath, 'utf-8')
             const ext = path.extname(filePath).toLowerCase()
-            return { result: `Code to review (${focus} focus):\n\nFile: ${filePath}\nLanguage: ${ext}\nLines: ${content.split('\n').length}\n\n\`\`\`${ext.slice(1)}\n${content.slice(0, 8000)}${content.length > 8000 ? '\n... (truncated)' : ''}\n\`\`\`\n\nPlease analyze for: ${focus === 'all' ? 'bugs, security, performance, style, error handling, test coverage' : focus + ' issues'}` }
+            const lines = content.split('\n')
+            const issues: string[] = []
+            // Static analysis checks
+            const longFunctions = content.match(/function\s+(\w+)[\s\S]{1000,}?\}/g)
+            if (longFunctions) issues.push(`Long functions (${longFunctions.length}): Consider splitting into smaller functions`)
+            const todos = content.match(/TODO|FIXME|HACK|XXX/gi)
+            if (todos) issues.push(`Unresolved TODOs/FIXMEs: ${todos.length} found`)
+            const consoleLogs = content.match(/console\.(log|debug|info)\(/g)
+            if (consoleLogs) issues.push(`console.log statements: ${consoleLogs.length} (remove before production)`)
+            const anyTypes = content.match(/:\s*any[\s;)/,]/g)
+            if (anyTypes && ext.endsWith('ts')) issues.push(`any types: ${anyTypes.length} (use specific types)`)
+            const emptyCatch = content.match(/catch\s*\([^)]*\)\s*\{\s*\}/g)
+            if (emptyCatch) issues.push(`Empty catch blocks: ${emptyCatch.length} (handle errors properly)`)
+            const longLines = lines.filter(l => l.length > 120)
+            if (longLines.length > 0) issues.push(`Lines >120 chars: ${longLines.length} (consider breaking up)`)
+            const unusedImports = content.match(/^import.*from.*;$/gm)
+            if (unusedImports && unusedImports.length > 15) issues.push(`Many imports (${unusedImports.length}): check for unused`)
+            const complexity = (content.match(/(if|else|for|while|switch|case|&&|\|\|)/g) || []).length
+            if (complexity > 50) issues.push(`High cyclomatic complexity (${complexity}): consider refactoring`)
+            // Security checks
+            if (focus === 'security' || focus === 'all') {
+              if (content.includes('eval(')) issues.push('Security: eval() detected — potential code injection')
+              if (content.includes('innerHTML') && !content.includes('DOMPurify')) issues.push('Security: innerHTML without sanitization')
+              if (content.match(/password|secret|token/i) && !content.includes('process.env')) issues.push('Security: Hardcoded secrets detected')
+              if (content.includes('dangerouslySetInnerHTML')) issues.push('Security: dangerouslySetInnerHTML used — XSS risk')
+            }
+            const summary = [
+              `Code Review: ${filePath}`,
+              `Language: ${ext} | Lines: ${lines.length} | Chars: ${content.length}`,
+              `Complexity score: ${complexity}`,
+              issues.length > 0 ? `\nIssues found (${issues.length}):\n${issues.map((i, n) => `  ${n + 1}. ${i}`).join('\n')}` : '\nNo issues detected! Code looks clean.',
+              `\n\n\`\`\`${ext.slice(1)}\n${content.slice(0, 6000)}${content.length > 6000 ? '\n... (truncated)' : ''}\n\`\`\`\n\nPlease provide a detailed review focusing on: ${focus === 'all' ? 'bugs, security, performance, style, error handling, and test coverage' : focus + ' issues'}`,
+            ].join('\n')
+            return { result: summary }
           }
           case 'generate_image': {
             const prompt = encodeURIComponent(tool.args.prompt || 'a beautiful landscape')

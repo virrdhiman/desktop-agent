@@ -89,10 +89,14 @@ export default function Sidebar() {
         aria-label={`${showTerminal ? 'Hide' : 'Show'} terminal`}
         aria-keyshortcuts="Control+`"
         aria-pressed={showTerminal}
-        style={{ marginBottom: 8 }}
       >
         ▶
       </button>
+
+      {/* Version */}
+      <div style={{ fontSize: 8, color: 'var(--text-muted)', textAlign: 'center', marginTop: 4, lineHeight: 1.3 }} title="Freebuff Agent v1.0.0 by Virender Dhiman">
+        v1.0.0
+      </div>
     </nav>
   )
 }
