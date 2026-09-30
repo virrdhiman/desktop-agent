@@ -2,12 +2,13 @@
   @author Virender Dhiman
   @year 2026
   @project VD Agent
-  @license MIT
+  @license Proprietary. See LICENSE.
 -->
 
 # VD Agent Usage Guide
 
-**Author:** Virender Dhiman
+**Author:** [Virender Dhiman](https://virender.in)
+**License:** [VD Agent License](./LICENSE) (proprietary, free to use with credit)
 
 ---
 
@@ -44,8 +45,8 @@
 ### Install
 
 ```bash
-git clone https://github.com/virenderdhiman/vd-agent.git
-cd vd-agent
+git clone https://github.com/virrdhiman/desktop-agent.git
+cd desktop-agent
 npm install
 npm run dev
 ```
@@ -350,7 +351,10 @@ npm run build          # production build
 ## 17. FAQ
 
 **Is it free?**
-The app is free and open source (MIT). Many providers have free tiers, and their limits are set by the provider and change over time. Local models cost nothing.
+The app is free to download and use, including for commercial work, under the [VD Agent License](./LICENSE). It is proprietary, source-available software owned by Virender Dhiman: you may not resell, redistribute, or rebrand it, and you must keep the credit. Many providers have free tiers, and their limits are set by the provider and change over time. Local models cost nothing.
+
+**How do I credit VD Agent?**
+When you share, review, or demo it, use: `VD Agent by Virender Dhiman - https://virender.in` and link to https://github.com/virrdhiman/desktop-agent. A ⭐ on GitHub is appreciated.
 
 **Can I use several providers?**
 Yes. Add keys for several official free providers and VD falls back between them on rate limits or unavailable models. Invalid keys are reported instead of skipped.

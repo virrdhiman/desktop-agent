@@ -2,7 +2,7 @@
  * @author Virender Dhiman
  * @year 2025
  * @project VD Agent
- * @license MIT
+ * @license Proprietary. See LICENSE.
  */
 /**
  * SettingsPanel — AI provider configuration
@@ -17,11 +17,13 @@
  * - Custom Rules editor (appended to the system prompt)
  * - Plan Mode toggle
  * - Settings import/export (export never includes API keys)
+ * - About card with author credit, license, and repository links
  */
 import { useState, useCallback, useMemo } from 'react'
 import { useStore } from '../store'
 import type { ProviderConfig } from '../types'
 import { getProviderCategory, mergeImportedSettings, withoutApiKeys } from '../lib/providers'
+import { APP_NAME, APP_VERSION, AUTHOR_NAME, AUTHOR_URL, COPYRIGHT, LICENSE_URL, REPO_URL } from '../lib/brand'
 
 type Category = 'all' | 'free' | 'local' | 'community' | 'image_video' | 'paid'
 
@@ -445,6 +447,27 @@ export default function SettingsPanel() {
               </div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
                 Export saves provider configs and preferences without API keys. Import keeps the keys already stored on this machine.
+              </div>
+            </div>
+
+            {/* About */}
+            <div className="card" style={{ marginTop: 20, padding: 16 }} aria-label="About VD Agent">
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>ℹ️ About {APP_NAME} v{APP_VERSION}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: 10 }}>
+                Built by <strong style={{ color: 'var(--text-primary)' }}>{AUTHOR_NAME}</strong>. {COPYRIGHT}
+                <br />
+                Free to download and use under the VD Agent License. Please keep the credit when you share it, and star the repository if it helps you.
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <a className="btn btn-sm" href={AUTHOR_URL} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
+                  🌐 virender.in
+                </a>
+                <a className="btn btn-sm btn-primary" href={REPO_URL} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
+                  ⭐ Star on GitHub
+                </a>
+                <a className="btn btn-sm" href={LICENSE_URL} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
+                  📄 License
+                </a>
               </div>
             </div>
           </div>

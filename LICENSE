@@ -1,21 +1,113 @@
-MIT License
+VD Agent License
+Version 1.0 - September 2026
 
-Copyright (c) 2025 Virender Dhiman
+Copyright (c) 2025-2026 Virender Dhiman (https://virender.in).
+All rights reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+VD Agent (the "Software"), including its source code, compiled builds,
+documentation, the "VD Agent" and "VD" names, and its logo, is the exclusive
+property of Virender Dhiman. The Software is licensed, not sold. Every right
+that is not expressly granted in this license is reserved.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+Official source: https://github.com/virrdhiman/desktop-agent
+Author:          https://virender.in
+
+
+1. WHAT YOU MAY DO
+
+Free of charge, and subject to the conditions in section 2, you may:
+
+  a. download the Software from the official source or its official releases,
+     and build it from that source;
+  b. install and run it on any number of devices you own or control;
+  c. use it for personal, educational, or commercial work, including work on
+     projects for your employer or clients; and
+  d. modify your own copy for your own use, as long as you do not distribute
+     the modified version.
+
+The Software claims no ownership of your files, prompts, or the output you
+produce with it.
+
+
+2. CONDITIONS
+
+  a. Give credit. Keep every copyright notice, author credit, and this license
+     intact, both in the source code and in the application. When you publicly
+     share, showcase, review, write about, or demonstrate the Software, credit
+     it as:
+
+         VD Agent by Virender Dhiman - https://virender.in
+         https://github.com/virrdhiman/desktop-agent
+
+  b. Do not redistribute. Do not sell, rent, lease, sublicense, or distribute
+     copies of the Software, modified or unmodified, and do not publish it or
+     a fork of it as your own work or as a separate product. Share a link to
+     the official source instead. A fork on GitHub that exists only to submit
+     contributions back to the official repository is allowed.
+
+  c. Do not rebrand. Do not remove or change the VD Agent name, logo, or
+     author credits, and do not use them to suggest that the author endorses
+     you or your product.
+
+  d. Do not offer it as a service. Do not provide the Software, or a service
+     substantially based on it, to third parties as a hosted or managed
+     service.
+
+  e. Follow the law and third-party terms, including the terms of any AI
+     provider you connect to the Software.
+
+
+3. CONTRIBUTIONS
+
+If you submit a contribution (for example a pull request or patch), you
+confirm that you have the right to submit it, and you grant Virender Dhiman a
+perpetual, worldwide, royalty-free, irrevocable license to use, modify,
+relicense, and distribute it as part of the Software or otherwise.
+
+
+4. THIRD-PARTY COMPONENTS
+
+The Software includes open-source components that are licensed under their
+own terms. This license does not limit your rights under those licenses. AI
+providers and other services you connect are governed by their own terms.
+
+
+5. SCOPE
+
+This license applies to VD Agent version 1.0.1 and later. It does not change
+the terms under which any earlier copy was distributed.
+
+
+6. TERMINATION
+
+Your rights under this license end automatically if you break any of its
+conditions. When that happens you must stop using the Software and delete
+your copies. The author may reinstate your rights in writing.
+
+
+7. NO WARRANTY
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. The Software can run
+commands and change files with your user permissions; you are responsible
+for reviewing what it does to your files, repositories, and systems.
+
+
+8. LIMITATION OF LIABILITY
+
+IN NO EVENT SHALL THE AUTHOR OR COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM,
+DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR
+OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE
+USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+
+9. OTHER PERMISSIONS
+
+For permission to do anything this license does not allow, such as
+redistribution, bundling, white-labelling, or hosting, contact the author
+through https://virender.in.
+
+
+If VD Agent is useful to you, please star the official repository. Stars are
+appreciated, not required.

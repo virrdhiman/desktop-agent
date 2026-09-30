@@ -2,7 +2,7 @@
  * @author Virender Dhiman
  * @year 2026
  * @project VD Agent
- * @license MIT
+ * @license Proprietary. See LICENSE.
  */
 /**
  * Chat history persistence in the store: auto-save, stable session identity, load, delete, restore.

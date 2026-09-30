@@ -2,7 +2,7 @@
   @author Virender Dhiman
   @year 2026
   @project VD Agent
-  @license MIT
+  @license Proprietary. See LICENSE.
 -->
 
 # Changelog
@@ -53,6 +53,13 @@ All notable changes to VD Agent are documented here.
 ### UI fixes
 - Auto-scrolling the chat no longer pushes the chat header off-screen.
 - The sidebar version is read from `package.json`.
+- External links, such as provider "Get API Key" pages, open in the system browser instead of a new app window, and the app window cannot navigate away from the app.
+
+### License and credit
+- VD Agent is now proprietary, source-available software owned by Virender Dhiman, under the new VD Agent License. It is free to download and use, including for commercial work, but credit is required and it may not be resold, redistributed, rebranded, or hosted as a service.
+- Source headers, docs, and package metadata reflect the new license. `package.json` is marked `private` and points to the correct repository.
+- The Windows installer shows the license, and packaged builds include `LICENSE.txt`.
+- Settings has an About card, and the chat welcome screen credits the author, with links to [virender.in](https://virender.in) and the GitHub repository.
 
 ## [1.0.0] - 2025-08-28
 

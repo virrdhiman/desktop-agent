@@ -2,19 +2,23 @@
   @author Virender Dhiman
   @year 2026
   @project VD Agent
-  @license MIT
+  @license Proprietary. See LICENSE.
 -->
 
 # VD Agent
 
 > A desktop AI coding agent for your local repositories. It reads and edits files, runs commands, and manages git through tool calls, and it works with free API keys by picking the strongest chat model each key can call.
 >
-> **Author:** Virender Dhiman
-> **License:** MIT
+> **Author:** [Virender Dhiman](https://virender.in)
+> **License:** [VD Agent License](./LICENSE). Free to download and use, credit required. VD Agent is the exclusive property of Virender Dhiman.
 
+[![GitHub stars](https://img.shields.io/github/stars/virrdhiman/desktop-agent?style=social)](https://github.com/virrdhiman/desktop-agent/stargazers)
+![License](https://img.shields.io/badge/license-VD%20Agent%20License-blueviolet)
 ![Electron](https://img.shields.io/badge/Electron-31-blue)
 ![React](https://img.shields.io/badge/React-18-61dafb)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)
+
+**If VD Agent is useful to you, please [star the repository](https://github.com/virrdhiman/desktop-agent) and credit [virender.in](https://virender.in) when you share it.**
 
 ---
 
@@ -92,14 +96,18 @@ The provider catalog is defined in `electron/handlers/settings.ts`, and Settings
 
 ---
 
-## Quick start
+## Download and run
+
+VD Agent is free to download and use. Get it from the official repository, either with `git clone` or **Code → Download ZIP** on GitHub, then run it:
 
 ```bash
-git clone https://github.com/virenderdhiman/vd-agent.git
-cd vd-agent
+git clone https://github.com/virrdhiman/desktop-agent.git
+cd desktop-agent
 npm install
 npm run dev
 ```
+
+To build an installer for your own machine, see [Building the desktop app](./USAGE.md#15-building-the-desktop-app). Official installers, when published, are on the [Releases](https://github.com/virrdhiman/desktop-agent/releases) page.
 
 1. Open **Settings** and pick a free provider (Groq or Gemini are good starting points).
 2. Click **Get API Key**, create a key, paste it, and click **Save**.
@@ -112,9 +120,10 @@ npm run dev
 
 ```
 electron/
-  main.ts                  Window, CSP, handler registration
+  main.ts                  Window, CSP, link handling, handler registration
   preload.ts               contextBridge API (window.api) and its types
   conversationStore.ts     Chat history on disk (pure Node, unit tested)
+  navigation.ts            External links open in the browser; the window stays on the app
   handlers/
     ai.ts                  Streaming chat, /models discovery, per-model retry, cancel
     conversations.ts       conversations:save / list / delete IPC
@@ -125,6 +134,7 @@ src/
   components/              AgentChat, SettingsPanel, SessionsPanel, editor, git, terminal, ...
   lib/modelSelect.ts       Model filtering, ranking, error classification
   lib/providers.ts         Provider categories, fallback chain, model persistence
+  lib/brand.ts             App name, version, author credit, and links
   store/index.ts           Zustand store, including session auto-save
   types/index.ts           Shared types and AGENT_TOOLS
 ```
@@ -159,10 +169,33 @@ Packaging: `Win\build.bat` or `Mac/build.sh` (see [USAGE.md](./USAGE.md#15-build
 
 ## Contributing
 
-1. Fork the repository and create a feature branch.
+Bug reports and pull requests are welcome.
+
+1. Fork the repository on GitHub and create a feature branch. Forks may only be used to send contributions back.
 2. Run `npm test`, `npm run lint`, and `npm run build`.
-3. Open a pull request.
+3. Open a pull request. By contributing you agree to section 3 of the [license](./LICENSE).
+
+## Credit
+
+If you share, review, demo, or write about VD Agent, please credit it like this:
+
+```
+VD Agent by Virender Dhiman - https://virender.in
+https://github.com/virrdhiman/desktop-agent
+```
+
+And if it saves you time, a ⭐ on [GitHub](https://github.com/virrdhiman/desktop-agent) helps other people find it.
 
 ## License
 
-MIT. Copyright (c) 2025-2026 Virender Dhiman.
+Copyright (c) 2025-2026 [Virender Dhiman](https://virender.in). All rights reserved.
+
+VD Agent is proprietary, source-available software and the exclusive property of Virender Dhiman. It is licensed under the [VD Agent License](./LICENSE). In short:
+
+| You may | You may not |
+|---------|-------------|
+| Download it from the official repository and build it | Sell, redistribute, or republish it, modified or not |
+| Use it free of charge for personal and commercial work | Remove or change the name, logo, or author credits |
+| Modify your own copy for your own use | Offer it, or a service based on it, as a hosted service |
+
+Keep the copyright notices and credit intact. The [LICENSE](./LICENSE) file is the binding text. For other permissions, contact the author through [virender.in](https://virender.in).

@@ -2,7 +2,7 @@
  * @author Virender Dhiman
  * @year 2026
  * @project VD Agent
- * @license MIT
+ * @license Proprietary. See LICENSE.
  */
 /**
  * AI Chat Streaming IPC Handler

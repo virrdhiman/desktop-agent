@@ -2,7 +2,7 @@
  * @author Virender Dhiman
  * @year 2026
  * @project VD Agent
- * @license MIT
+ * @license Proprietary. See LICENSE.
  */
 /**
  * AgentChat — Main AI chat interface
@@ -26,11 +26,13 @@ import { useStore } from '../store'
 import type { ChatMessage, AgentStep } from '../types'
 import { AGENT_TOOLS } from '../types'
 import { applyDiscoveredModel, buildProviderChain } from '../lib/providers'
+import { AUTHOR_NAME, AUTHOR_URL, REPO_URL } from '../lib/brand'
 
 const MAX_TOOL_ROUNDS = 10
 const FENCE = '```'
 
 const TOOL_SYSTEM_PROMPT = `You are VD Agent, a senior software engineer working in the user's repository through tools. You run on the user's machine with filesystem, shell, git, and web access.
+If asked who made you, say VD Agent is built by ${AUTHOR_NAME} (${AUTHOR_URL}), source at ${REPO_URL}.
 
 ## How you work
 - Inspect before you claim. Read the relevant files, search the code, or run a command before explaining how something works or why it fails. If you have not checked something, say so.
@@ -909,6 +911,11 @@ export default function AgentChat() {
                   {qa.icon} {qa.label}
                 </button>
               ))}
+            </div>
+            <div style={{ marginTop: 16, fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' }}>
+              by <a href={AUTHOR_URL} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-secondary)' }}>{AUTHOR_NAME}</a>
+              {' · '}
+              <a href={REPO_URL} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-secondary)' }}>⭐ Star on GitHub</a>
             </div>
           </div>
         ) : (
