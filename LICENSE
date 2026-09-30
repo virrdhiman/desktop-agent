@@ -67,8 +67,11 @@ relicense, and distribute it as part of the Software or otherwise.
 
 4. THIRD-PARTY COMPONENTS
 
-The Software includes open-source components that are licensed under their
-own terms. This license does not limit your rights under those licenses. AI
+The Software includes open-source components, such as Electron, React, and
+Monaco Editor, that are licensed under their own terms (many of them MIT or
+similar permissive licenses). Those terms apply to those components only;
+they do not make VD Agent itself open source. This license does not limit
+your rights under those licenses, and their notices must be kept. AI
 providers and other services you connect are governed by their own terms.
 
 

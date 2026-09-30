@@ -159,4 +159,4 @@ VD Agent is proprietary, source-available software and the exclusive property of
 | Use it free of charge for personal and commercial work | Remove or change the name, logo, or author credits |
 | Modify your own copy for your own use | Offer it, or a service based on it, as a hosted service |
 
-Credit is required when you share or showcase it. This summary is for convenience and is not legal advice; the [LICENSE](./LICENSE) file is the binding text. For permissions the license does not cover, contact the author through [virender.in](https://virender.in).
+Credit is required when you share or showcase it. VD Agent is built on open-source dependencies such as Electron, React, and Monaco Editor, which keep their own licenses (many are MIT-licensed); those licenses cover the dependencies, not VD Agent itself. This summary is for convenience and is not legal advice; the [LICENSE](./LICENSE) file is the binding text. For permissions the license does not cover, contact the author through [virender.in](https://virender.in).
