@@ -14,6 +14,7 @@ import {
   buildModelAttemptList,
   classifyModelError,
   rankModels,
+  tryModels,
   type ModelErrorKind,
 } from '../../src/lib/modelSelect'
 
@@ -209,15 +210,11 @@ export function registerAiHandlers(getMainWindow: () => BrowserWindow | null) {
         }
       }
 
-      let last: ChatError = { error: 'No model available for this provider', kind: 'retry-model' }
-      for (const model of models) {
-        if (controller.signal.aborted) return { error: 'Cancelled', kind: 'cancelled' }
-        const result = await completeOpenAI(getMainWindow, config, model, controller.signal)
-        if (!('error' in result)) return { content: result.content, model }
-        last = { ...result, error: `${model}: ${result.error}` }
-        if (result.kind !== 'retry-model') return last
-      }
-      return last
+      return await tryModels(
+        models,
+        (model) => completeOpenAI(getMainWindow, config, model, controller.signal),
+        () => controller.signal.aborted
+      )
     } catch (err: any) {
       if (isAbort(err)) return { error: 'Cancelled', kind: 'cancelled' }
       const error = redactKey(String(err?.message || err), config.apiKey)

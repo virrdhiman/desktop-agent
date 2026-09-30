@@ -5,8 +5,10 @@
  * @license Proprietary. See LICENSE.
  */
 /**
- * End-to-end smoke test: launches the real app twice against a throwaway
- * user data folder and drives it over the Chrome DevTools Protocol.
+ * End-to-end smoke test: launches the real app three times against a throwaway
+ * user data folder and drives it over the Chrome DevTools Protocol. The third
+ * launch talks to a local mock AI provider to check the agent's answer handling
+ * (filler stripping, tool-failure reporting, fallback, retries, error messages).
  *
  *   npm run smoke                                  # dev build (runs `npm run build` first)
  *   npm run smoke -- --exe "release/win-unpacked/VD Agent.exe"   # packaged app
@@ -17,6 +19,7 @@
  */
 import { spawn, execSync } from 'node:child_process'
 import fs from 'node:fs'
+import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 import { createRequire } from 'node:module'
@@ -112,7 +115,13 @@ async function launch(label) {
       await sleep(250)
       if (exited !== null) break
       if (!fs.existsSync(portFile)) continue
-      const port = fs.readFileSync(portFile, 'utf8').split(/\r?\n/)[0].trim()
+      let port
+      try {
+        port = fs.readFileSync(portFile, 'utf8').split(/\r?\n/)[0].trim()
+      } catch {
+        continue // Chromium may still be writing the file (EBUSY on Windows)
+      }
+      if (!port) continue
       try {
         const list = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()
         const page = list.find((t) => t.type === 'page' && !t.url.startsWith('devtools://'))
@@ -173,6 +182,91 @@ async function launch(label) {
   return { evaluate, screenshot, close, errors, pageCount }
 }
 
+const FENCE = '```'
+const toolBlock = (obj) => `${FENCE}tool\n${JSON.stringify(obj)}\n${FENCE}`
+const lastUser = (body) => [...(body?.messages || [])].reverse().find((m) => m.role === 'user')?.content || ''
+
+/**
+ * OpenAI-compatible mock at /<provider>/v1. "groq" is always rate limited, so every chat
+ * exercises fallback to "gemini", whose replies are scripted by the user's SMOKE-* marker.
+ */
+function mockReply(provider, body) {
+  if (provider === 'groq') return { status: 429, message: 'Rate limit reached for model mock-model. Please try again in 20s.' }
+  const last = lastUser(body)
+  if (last.startsWith('Tool results:')) {
+    return { text: "Sure! I'd be happy to help.\n\n`read_file` failed for `missing-smoke-file.txt` because it does not exist; `smoke-editor.ts` exports `SMOKE_EDITOR_MARKER`.\n\nNext steps:\n1. SMOKE-NEXT-STEP create `missing-smoke-file.txt` or give the correct path.\n\nI hope this helps! Let me know if you have any other questions." }
+  }
+  if (last.startsWith('Your previous reply was')) return { text: 'SMOKE-RECOVERED The setting is read from `settings.json`.' }
+  if (last.startsWith('Your reply says you')) return { text: 'SMOKE-HONEST Nothing was edited or run yet; the fix is to change `a - b` to `a + b` in `calc.js`.' }
+  if (last.includes('SMOKE-CLAIM')) {
+    return { text: 'SMOKE-FABRICATED Fixed.\n\n1. Edited `calc.js` to return `a + b`.\n2. Ran `node calc.test.js`.\n\nAll tests passed.' }
+  }
+  if (last.includes('SMOKE-ALLFAIL')) return { status: 503, message: 'Service unavailable' }
+  if (last.includes('SMOKE-EMPTY')) return { text: '' }
+  if (last.includes('SMOKE-TOOLS')) {
+    return {
+      text: [
+        'Certainly! Great question.',
+        toolBlock({ name: 'read_file', args: { path: 'missing-smoke-file.txt' } }),
+        toolBlock({ name: 'read_file', args: { path: 'smoke-editor.ts' } }),
+        `${FENCE}tool\n{not json}\n${FENCE}`,
+      ].join('\n\n'),
+    }
+  }
+  return { text: 'SMOKE-DEFAULT' }
+}
+
+function startMockProvider() {
+  const requests = []
+  const server = http.createServer((req, res) => {
+    const provider = req.url.split('/')[1]
+    if (req.method === 'GET' && req.url.endsWith('/models')) {
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ data: [{ id: 'mock-model' }, { id: 'mock-model-b' }] }))
+      return
+    }
+    let raw = ''
+    req.on('data', (chunk) => { raw += chunk })
+    req.on('end', () => {
+      let body = {}
+      try { body = JSON.parse(raw) } catch {}
+      requests.push({ provider, body })
+      const reply = mockReply(provider, body)
+      if (reply.status) {
+        res.writeHead(reply.status, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: { message: reply.message } }))
+        return
+      }
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' })
+      for (const piece of reply.text.match(/[\s\S]{1,40}/g) || []) {
+        res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: piece } }] })}\n\n`)
+      }
+      res.end('data: [DONE]\n\n')
+    })
+  })
+  return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve({ server, requests, url: `http://127.0.0.1:${server.address().port}` })))
+}
+
+async function sendChat(app, text) {
+  const input = `document.querySelector('textarea[placeholder^="Ask me anything"]')`
+  await app.evaluate(`(() => {
+    const ta = ${input}
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(ta, ${JSON.stringify(text)})
+    ta.dispatchEvent(new Event('input', { bubbles: true }))
+  })()`)
+  await sleep(250)
+  await app.evaluate(`${input}.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))`)
+}
+
+async function waitForText(app, marker, ms = 30_000) {
+  const expr = `document.body.innerText.includes(${JSON.stringify(marker)}) && !document.body.innerText.includes('⏹ Stop')`
+  for (let i = 0; i < ms / 250; i++) {
+    if (await app.evaluate(expr)) return true
+    await sleep(250)
+  }
+  return false
+}
+
 const realDir = realUserDataDir()
 const realBefore = stamp(realDir)
 const fakeKey = 'sk-proj-' + 'q'.repeat(24)
@@ -185,6 +279,8 @@ const smokeMessages = `[
 console.log(`VD Agent smoke test (${exe ? `packaged: ${exe}` : 'dev build'})\n`)
 let a
 let b
+let c
+let mock
 try {
   // Launch 1: fresh profile.
   a = await launch('launch-1')
@@ -267,7 +363,7 @@ try {
   await sleep(300)
   await b.evaluate(`document.querySelector('[aria-label^="Agent"]')?.click()`)
   let editorText = ''
-  for (let i = 0; i < 80 && !editorText.includes('SMOKE_EDITOR_MARKER'); i++) {
+  for (let i = 0; i < 240 && !editorText.includes('SMOKE_EDITOR_MARKER'); i++) {
     await sleep(250)
     editorText = await b.evaluate(`document.querySelector('.monaco-editor .view-lines')?.textContent ?? ''`)
   }
@@ -285,12 +381,78 @@ try {
   b = null
   check('launch 2: no renderer errors', errors2.length === 0, errors2.slice(0, 3).join(' | '))
 
+  // Launch 3: agent answer handling against the local mock provider. No network, no real keys.
+  mock = await startMockProvider()
+  const settingsFile = path.join(userData, 'settings.json')
+  const s3 = JSON.parse(fs.readFileSync(settingsFile, 'utf8'))
+  s3.activeProvider = 'groq'
+  s3.providers = s3.providers.map((p) => (p.id === 'groq' || p.id === 'gemini'
+    ? { ...p, baseUrl: `${mock.url}/${p.id}/v1`, apiKey: `smoke-mock-${p.id}-key-000000` }
+    : { ...p, apiKey: '' }))
+  fs.writeFileSync(settingsFile, JSON.stringify(s3, null, 2))
+
+  c = await launch('launch-3')
+  await c.evaluate(`document.querySelector('[aria-label^="Agent"]')?.click()`)
+  await sleep(500)
+
+  const toolsStart = mock.requests.length
+  await sendChat(c, 'SMOKE-TOOLS read missing-smoke-file.txt and smoke-editor.ts')
+  const toolsDone = await waitForText(c, 'SMOKE-NEXT-STEP')
+  const toolsReqs = mock.requests.slice(toolsStart)
+  const firstGemini = toolsReqs.findIndex((r) => r.provider === 'gemini')
+  const system = toolsReqs[firstGemini]?.body.messages?.[0]?.content || ''
+  check('agent: system prompt carries the answer-quality rules and the workspace',
+    system.includes('## When a tool fails') && system.includes('Ask only when the answer changes') && system.includes(`Workspace: ${workspace}`))
+  const followUp = lastUser(toolsReqs.find((r) => r.provider === 'gemini' && lastUser(r.body).startsWith('Tool results:'))?.body)
+  const toolFailureOk = followUp.includes('Tool read_file FAILED.') && followUp.includes(path.join(workspace, 'missing-smoke-file.txt')) && followUp.includes('Hint: The path does not exist')
+  check('agent: a failed tool call reaches the model with the error and a hint', toolFailureOk,
+    toolFailureOk ? '' : followUp ? followUp.slice(0, 400).replace(/\s+/g, ' ') : `requests: ${toolsReqs.map((r) => `${r.provider}<${lastUser(r.body).slice(0, 24).replace(/\s+/g, ' ')}>`).join(', ')}`)
+  check('agent: relative tool paths resolve against the workspace', followUp.includes('Tool read_file succeeded.') && followUp.includes('SMOKE_EDITOR_MARKER'))
+  check('agent: a malformed tool block is reported to the model, not dropped', followUp.includes('Tool block 3 is not valid JSON'))
+  check('agent: later rounds stay on the provider that answered', firstGemini > 0 && toolsReqs.slice(firstGemini).every((r) => r.provider !== 'groq'))
+  const ui1 = await c.evaluate(`document.body.innerText`)
+  check('agent: the user is told once which provider answered after a fallback', (ui1.match(/so this answer came from Google Gemini/g) || []).length === 1)
+  check('agent: filler is stripped from replies and next steps are kept',
+    toolsDone && !/Certainly|Great question|happy to help|I hope this helps|Let me know if you have/i.test(ui1) && ui1.includes('Next steps:'))
+  await c.screenshot('agent.png')
+
+  const emptyStart = mock.requests.length
+  await sendChat(c, 'SMOKE-EMPTY where is the setting read from?')
+  const recovered = await waitForText(c, 'SMOKE-RECOVERED')
+  const corrected = mock.requests.slice(emptyStart).filter((r) => lastUser(r.body).startsWith('Your previous reply was empty')).length
+  check('agent: an empty reply gets one corrective retry and recovers', recovered && corrected === 1, `corrections=${corrected}`)
+  const emptyModels = new Set(mock.requests.slice(emptyStart)
+    .filter((r) => r.provider === 'gemini' && lastUser(r.body).includes('SMOKE-EMPTY')).map((r) => r.body.model))
+  check('agent: an empty reply is retried on the next model first', emptyModels.size >= 2, [...emptyModels].join(', '))
+
+  const claimStart = mock.requests.length
+  await sendChat(c, 'SMOKE-CLAIM fix the add bug in calc.js')
+  const honest = await waitForText(c, 'SMOKE-HONEST')
+  const claimCorrections = mock.requests.slice(claimStart).filter((r) => lastUser(r.body).startsWith('Your reply says you')).length
+  const shownFabrication = await c.evaluate(`document.body.innerText.includes('SMOKE-FABRICATED')`)
+  check('agent: claimed edits or test runs without a tool call are challenged, not shown',
+    honest && claimCorrections === 1 && !shownFabrication, `corrections=${claimCorrections} shownFabrication=${shownFabrication}`)
+
+  await sendChat(c, 'SMOKE-ALLFAIL anything')
+  const failShown = await waitForText(c, 'failed on all 2 providers tried')
+  const ui3 = await c.evaluate(`document.body.innerText`)
+  const failText = ui3.slice(ui3.lastIndexOf('The request failed'))
+  check('agent: a total failure lists each provider with next steps',
+    failShown && /Groq.*rate limited/.test(failText) && /Gemini.*provider error/.test(failText) && failText.includes('Next steps:'))
+
+  const errors3 = [...c.errors]
+  await c.close()
+  c = null
+  check('launch 3: no renderer errors', errors3.length === 0, errors3.slice(0, 3).join(' | '))
+
   check('real user data folder untouched', stamp(realDir) === realBefore, realDir)
 } catch (e) {
   check('smoke run completed', false, e.message)
 } finally {
   if (a) await a.close()
   if (b) await b.close()
+  if (c) await c.close()
+  if (mock) mock.server.close()
   for (const dir of [userData, workspace]) {
     try { fs.rmSync(dir, { recursive: true, force: true }) } catch {}
   }

@@ -29,7 +29,10 @@
 
 | Message or symptom | Fix |
 |--------------------|-----|
-| "No API key configured" | Add a key for the active provider in Settings. |
+| "No API key is configured" | Add a key for the active provider in Settings. |
+| "… failed, so this answer came from …" | Informational. The active provider failed (the reason is in brackets) and another free provider answered. Fix or wait out the first provider, or make the other one active. |
+| "… returned an unusable reply" | The model's reply was empty, only pleasantries, or looping, even after one automatic retry. Send the request again, rephrase it, or pin a stronger model. |
+| "Check this reply: it says the agent …" | The reply claims edits, commands, or passing tests that no tool call in that request performed. Ask the agent to make the change and run the check, or verify it yourself. |
 | "… rejected the API key" | The key is wrong, expired, or revoked. Copy it again from the provider. VD Agent intentionally doesn't fall back to other providers on auth errors. |
 | Rate limited, or all providers failed | Wait a minute, add keys for more free providers so fallback has somewhere to go, or use a local model. |
 | It picked a weak or wrong model | Pin a model from the menu in the Agent header. Choose **Auto** to return to automatic selection. |

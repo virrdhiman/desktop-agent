@@ -70,19 +70,35 @@ electron-builder packages these into `release/` using the `build` section of `pa
 
 ```
 AgentChat.sendMessage
-  → buildProviderChain(active first, then official free providers with keys, max 4)
+  → buildSystemPrompt(rules + buildContext(workspace, open file)) + buildHistory(budgeted, tool blocks collapsed)
+  → buildProviderChain(active first, then official free providers with keys, max 4;
+                       the provider that already answered this request moves to the front)
   → for each provider: window.api.aiChat({ ..., autoSelect: !pinnedModel })
       main: listProviderModels(/models, 8 s timeout, 10 min cache)
             → buildModelAttemptList(ranked discovered models…, configured model)
             → for each model: POST /chat/completions (SSE stream → 'ai:stream' events)
                  classifyModelError:
-                   'retry-model' (404/429/503/overload/capacity/unsupported…) → next model
+                   'retry-model' (404/429/503/overload/capacity/unsupported,
+                                  per-model max_tokens cap, terms not accepted) → next model
                    'auth' (401, invalid key…)                                 → stop everything
                    'other' (400 bad request, network…)                        → next provider
-  → on success: applyDiscoveredModel persists the working model unless the user pinned one
-  → tool loop: parse ```tool blocks → window.api.toolExecute → feed results back
+                 tryModels: a blank reply also moves to the next model (kept if it is the last);
+                 when every model fails, the first real error is reported, e.g. the rate limit
+  → on success: applyDiscoveredModel persists the working model unless the user pinned one;
+                a chat notice names the fallback provider (once per request)
+  → on failure: describeAuthFailure / describeProviderFailure (every provider tried + next steps)
+  → tool loop: parseToolCalls (parse errors go back to the model)
+               → window.api.toolExecute({ name, args, workspace })
+                   main: resolveToolArgs (relative paths → workspace), formatCommandResult
+               → formatToolResult (succeeded/FAILED, args, error, hint, truncation) → followUpMessage
                (max 10 rounds; Stop sets cancelRequested and calls ai:cancel)
+  → final reply: assessResponse (empty / filler-only / repetition → one correctionMessage retry)
+                 unverifiedClaims (claims edits, commands, or passing tests with no matching
+                   tool run this request → one unverifiedClaimsMessage retry, else a notice)
+                 → cleanResponse (strips stock openers and closers outside code) → chat
 ```
+
+The reply shown and sent back to the model is the complete content returned by `ai:chat`, not the streamed copy, which can still be missing its last tokens when the IPC reply arrives.
 
 Anthropic uses the Messages API (`/v1/messages`) with the system prompt in the `system` field. There is no model discovery for it.
 
@@ -116,6 +132,9 @@ Anthropic uses the Messages API (`/v1/messages`) with the system prompt in the `
 | `electron/handlers/tools.ts` | `tool:execute` for every entry in `AGENT_TOOLS` |
 | `src/components/AgentChat.tsx` | System prompt, fallback loop, tool loop, markdown rendering |
 | `src/lib/providers.ts` | Provider categories, fallback chain, model persistence, export/import |
+| `src/lib/agent.ts` | System prompt, context, history, tool-call parsing and result formatting, response cleanup, user-facing failure messages |
+| `src/lib/highlight.ts` | Single-pass syntax highlighter for chat code blocks |
+| `electron/toolSupport.ts` | Workspace-relative tool paths, `run_command` result formatting |
 | `src/lib/brand.ts` | App name, version (from `package.json`), author, repo, and license links |
 | `src/lib/monacoEditor.ts` | Monaco setup with local workers; lazy-loaded by `CodeEditor.tsx` |
 | `scripts/smoke.mjs` | End-to-end smoke test of the built or packaged app |
@@ -144,14 +163,17 @@ Anthropic uses the Messages API (`/v1/messages`) with the system prompt in the `
 - `src/lib/*.test.ts`: model filtering and ranking, error classification, provider chain, model persistence, export/import.
 - `src/__tests__/sessions.test.ts`: auto-save debounce, stable session IDs, new chat, load, delete, startup restore.
 - `electron/__tests__/conversationStore.test.ts` (node environment): disk round-trip, in-place updates, delete, path safety, corrupt and legacy files, secret redaction.
+- `src/lib/agent.test.ts`: the prompt's answer-quality rules, context and history building, tool-call parsing, failure hints, filler stripping, junk detection, unverified-claim detection, and failure messages with next steps.
+- `src/lib/highlight.test.ts`: highlighting never leaks markup into code.
+- `electron/__tests__/toolSupport.test.ts`: workspace path resolution and command exit-code, timeout, and output handling.
 - `electron/__tests__/navigation.test.ts`: which links open externally and which navigations are allowed.
 - `electron/__tests__/tools-logic.test.ts`: file system, search, provider, and git helper logic.
 - `src/__tests__/*`: store and component tests.
-- `npm run smoke` (`scripts/smoke.mjs`): builds the app, then launches it twice with a temporary user data folder and workspace, driving it over the Chrome DevTools Protocol. It checks rendering, the preload API and sandbox, settings and conversation IPC, chat persistence across restarts, key redaction, the Monaco editor, link handling, and path-traversal rejection. It saves screenshots and never touches your real user data. Use `--exe <path>` to test a packaged build.
+- `npm run smoke` (`scripts/smoke.mjs`): builds the app, then launches it three times with a temporary user data folder and workspace, driving it over the Chrome DevTools Protocol. It checks rendering, the preload API and sandbox, settings and conversation IPC, chat persistence across restarts, key redaction, the Monaco editor, link handling, and path-traversal rejection. The third launch points two providers at a local mock server (one always rate limited) and checks the agent end to end: the prompt rules, tool failures and malformed tool calls reaching the model, workspace-relative paths, sticky fallback with a notice, filler stripping, an empty reply trying the next model and then getting one corrective retry, a reply that claims edits and passing tests with no tool call being challenged instead of shown, and the all-providers-failed message. It saves screenshots and never touches your real user data. Use `--exe <path>` to test a packaged build.
 
 ## Performance notes
 
-- Only the last 20 non-system messages are sent with each request.
+- Each request sends at most the last 20 non-system messages and about 40,000 characters of history. Old tool blocks are collapsed to one-line notes, and tool results are capped at about 12,000 characters.
 - Streaming tokens are appended to store state as they arrive.
 - `/models` results are cached for 10 minutes per provider and key.
 - Chat saves are debounced so a burst of messages produces one write.

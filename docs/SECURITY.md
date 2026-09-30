@@ -9,7 +9,7 @@
 
 ## What the agent can do
 
-VD Agent is a coding agent. When you ask it to, it can **read and write files, run shell commands, and run git commands with your user permissions**. Tools are not sandboxed. `run_command` runs through your shell with a 30-second timeout, and tools such as `delete_file` and `git_discard_changes` are destructive.
+VD Agent is a coding agent. When you ask it to, it can **read and write files, run shell commands, and run git commands with your user permissions**. Tools are not sandboxed. `run_command` runs through your shell in the open workspace with a 30-second timeout, and tools such as `delete_file` and `git_discard_changes` are destructive.
 
 The system prompt tells the agent to inspect before acting and to ask before destructive actions, but a model can still make mistakes or be misled.
 

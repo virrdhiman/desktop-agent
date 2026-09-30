@@ -20,6 +20,10 @@ The model calls a tool with a fenced block:
 ```
 ````
 
+**Paths:** relative paths resolve against the open workspace folder. Tools that take an optional folder (`list_files`, `search_code`, the git tools, and others) default to the workspace, and so does `run_command`'s `cwd`. Without an open workspace, use absolute paths.
+
+**Results:** each result reaches the model labelled as succeeded or `FAILED`, with the arguments, the error, and a hint about the likely cause when one is known. Output longer than about 12,000 characters is truncated with a note to narrow the request. A malformed tool block is reported back to the model instead of being ignored.
+
 ## File system
 
 ### `read_file`
@@ -73,9 +77,9 @@ Search file contents (grep-like).
 ## Commands
 
 ### `run_command`
-Run a shell command. It times out after 30 seconds.
+Run a shell command in the workspace, or in `cwd` if given. It is stopped after 30 seconds. Exit code 0 returns stdout and stderr. A non-zero exit or a timeout is reported as a failure that includes the exit code and both output streams.
 ```json
-{ "name": "run_command", "args": { "command": "npm test", "cwd": "." } }
+{ "name": "run_command", "args": { "command": "npm test" } }
 ```
 
 ## Project

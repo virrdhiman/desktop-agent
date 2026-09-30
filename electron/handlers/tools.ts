@@ -6,13 +6,14 @@
  */
 /**
  * Tool Execution IPC Handler
- * 33 autonomous agent tools: file ops, git ops, code search, Web3, image/video, speech
+ * Agent tools: file ops, git ops, code search, web search, Web3, image/video, speech
  */
 import { ipcMain } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import { simpleGit, SimpleGit } from 'simple-git'
 import { SETTINGS_PATH } from './settings'
+import { COMMAND_TIMEOUT_MS, formatCommandResult, resolveToolArgs } from '../toolSupport'
 
 /** Git instances cache for tool execution */
 const toolGitInstances: Map<string, SimpleGit> = new Map()
@@ -34,8 +35,9 @@ async function loadToolSettings(): Promise<any> {
 export function registerToolHandlers() {
   ipcMain.handle(
     'tool:execute',
-    async (_event, tool: { name: string; args: Record<string, any> }) => {
+    async (_event, tool: { name: string; args: Record<string, any>; workspace?: string }) => {
       try {
+        tool.args = resolveToolArgs(tool.name, tool.args, tool.workspace)
         switch (tool.name) {
           // ═══ FILE SYSTEM ═══════════════════════════════════════════════════
           case 'read_file': {
@@ -118,8 +120,8 @@ export function registerToolHandlers() {
           case 'run_command': {
             const { exec } = await import('child_process')
             return new Promise((resolve) => {
-              exec(tool.args.command, { cwd: tool.args.cwd || process.cwd(), timeout: 30000 }, (error, stdout, stderr) => {
-                resolve({ result: stdout || stderr || (error ? error.message : 'Command completed') })
+              exec(tool.args.command, { cwd: tool.args.cwd || process.cwd(), timeout: COMMAND_TIMEOUT_MS }, (error, stdout, stderr) => {
+                resolve(formatCommandResult(tool.args.command, error, String(stdout), String(stderr)))
               })
             })
           }
