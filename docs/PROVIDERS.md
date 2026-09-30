@@ -51,10 +51,10 @@ For OpenAI-compatible providers, on each request:
 1. VD Agent lists the models your key can call (`/models`, 8-second timeout, cached for 10 minutes).
 2. It drops non-chat models: embeddings, rerank, moderation, audio, speech, transcription, image, and video.
 3. It ranks the rest by coding quality, then efficiency. Previews and very small models rank lower.
-4. It tries the best model first, then the next few, and the model set in Settings last.
+4. It tries the best model first, then the next few. If `/models` returns a usable list, stale saved model IDs are dropped instead of retried.
 5. It moves to the next model on 404, 429, 503, overload, capacity, quota, model-not-found, and unsupported-model errors.
 6. On an invalid key (401 or an auth error) it **stops** and tells you, without trying other models or providers.
-7. The model that worked is saved as the provider's model, unless you pinned one.
+7. The refreshed live model list and the model that worked are saved, unless you pinned one.
 
 **Pin a model**: pick it from the model menu in the Agent header, which lists the models discovered for the active provider. Choose **Auto** to go back to automatic selection.
 

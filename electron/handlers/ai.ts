@@ -28,8 +28,8 @@ type ChatConfig = {
   autoSelect?: boolean
 }
 
-type ChatError = { error: string; kind: ModelErrorKind | 'cancelled'; status?: number }
-type ChatSuccess = { content: string }
+type ChatError = { error: string; kind: ModelErrorKind | 'cancelled'; status?: number; models?: string[] }
+type ChatSuccess = { content: string; models?: string[] }
 
 const MODELS_TIMEOUT_MS = 8000
 const CACHE_MS = 10 * 60 * 1000
@@ -201,20 +201,24 @@ export function registerAiHandlers(getMainWindow: () => BrowserWindow | null) {
         return 'error' in result ? result : { ...result, model: config.model }
       }
 
+      let discovered: string[] = []
       let models = [config.model]
       if (config.autoSelect !== false) {
         try {
-          models = buildModelAttemptList(config.model, await listProviderModels(config.baseUrl, config.apiKey))
+          discovered = await listProviderModels(config.baseUrl, config.apiKey)
+          models = buildModelAttemptList(config.model, discovered)
         } catch {
           models = [config.model]
         }
       }
 
-      return await tryModels(
+      const result = await tryModels(
         models,
         (model) => completeOpenAI(getMainWindow, config, model, controller.signal),
         () => controller.signal.aborted
       )
+      const catalog = rankModels(discovered).slice(0, 40)
+      return catalog.length > 0 ? { ...result, models: catalog } : result
     } catch (err: any) {
       if (isAbort(err)) return { error: 'Cancelled', kind: 'cancelled' }
       const error = redactKey(String(err?.message || err), config.apiKey)

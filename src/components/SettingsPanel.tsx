@@ -22,7 +22,7 @@
 import { useState, useCallback, useMemo } from 'react'
 import { useStore } from '../store'
 import type { ProviderConfig } from '../types'
-import { getProviderCategory, mergeImportedSettings, withoutApiKeys } from '../lib/providers'
+import { getProviderCategory, mergeImportedSettings, refreshProviderModelCatalog, withoutApiKeys } from '../lib/providers'
 import { APP_NAME, APP_VERSION, AUTHOR_NAME, AUTHOR_URL, COPYRIGHT, LICENSE_URL, REPO_URL } from '../lib/brand'
 
 type Category = 'all' | 'free' | 'local' | 'community' | 'image_video' | 'paid'
@@ -44,6 +44,8 @@ export default function SettingsPanel() {
   const [apiKeyInput, setApiKeyInput] = useState('')
   const [filter, setFilter] = useState<Category>('all')
   const [searchQuery, setSearchQuery] = useState('')
+  const [refreshingModels, setRefreshingModels] = useState(false)
+  const [refreshMessage, setRefreshMessage] = useState('')
 
   const openFolder = useCallback(async () => {
     try {
@@ -78,6 +80,41 @@ export default function SettingsPanel() {
       await window.api.saveSettings(newSettings)
     } catch (err) { console.error('Failed to save provider:', err) }
   }, [settings, apiKeyInput])
+
+  const refreshModels = useCallback(async () => {
+    if (!editing) return
+    const apiKey = apiKeyInput || editing.apiKey
+    if (!apiKey || !editing.baseUrl) {
+      setRefreshMessage('Add an API key and base URL before refreshing.')
+      return
+    }
+    setRefreshingModels(true)
+    setRefreshMessage('')
+    try {
+      const ids = await window.api.aiListModels({ provider: editing.id, apiKey, baseUrl: editing.baseUrl })
+      if (!Array.isArray(ids) || ids.length === 0) {
+        setRefreshMessage('No usable chat models were returned. The saved fallback model was kept.')
+        return
+      }
+      const pendingSettings = {
+        ...settings,
+        providers: settings.providers.map((p) => (
+          p.id === editing.id ? { ...editing, apiKey } : p
+        )),
+      }
+      const next = refreshProviderModelCatalog(pendingSettings, editing.id, ids)
+      const saved = next || pendingSettings
+      const updated = saved.providers.find((p) => p.id === editing.id)
+      setSettings(saved)
+      if (updated) setEditing(updated)
+      await window.api.saveSettings(saved)
+      setRefreshMessage(`Synced ${ids.length} live chat models. Using ${updated?.model || ids[0]}.`)
+    } catch (err: any) {
+      setRefreshMessage(`Refresh failed: ${err?.message || err}`)
+    } finally {
+      setRefreshingModels(false)
+    }
+  }, [editing, apiKeyInput, settings])
 
   const filteredProviders = useMemo(() => {
     return settings.providers.filter((p) => {
@@ -164,7 +201,7 @@ export default function SettingsPanel() {
               return (
                 <div
                   key={provider.id}
-                  onClick={() => { selectProvider(provider.id); setEditing(provider); setApiKeyInput(provider.apiKey) }}
+                  onClick={() => { selectProvider(provider.id); setEditing(provider); setApiKeyInput(provider.apiKey); setRefreshMessage('') }}
                   style={{
                     padding: '8px 10px',
                     borderRadius: 'var(--radius)',
@@ -192,7 +229,7 @@ export default function SettingsPanel() {
                     </div>
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                    {provider.apiKey ? `✓ Key set · ${provider.model}` :
+                    {provider.apiKey ? `✓ Key set · ${provider.model}${provider.models?.length ? ` · ${provider.models.length} live models` : ''}` :
                      provider.notes?.slice(0, 80) + (provider.notes && provider.notes.length > 80 ? '...' : '') || `Model: ${provider.model}`}
                   </div>
                 </div>
@@ -267,8 +304,35 @@ export default function SettingsPanel() {
                   onChange={(e) => setEditing({ ...editing, model: e.target.value })}
                 />
                 <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                  Fallback model. For OpenAI-compatible providers VD tries the best model the key can call first and updates this field when that works.
+                  Fallback model. Refreshing live models makes VD drop stale IDs and use the strongest chat model this key can call.
                 </div>
+              </div>
+
+              {editing.models?.length ? (
+                <div className="input-group">
+                  <label className="input-label">Live Models</label>
+                  <select
+                    className="input"
+                    value={editing.model}
+                    onChange={(e) => setEditing({ ...editing, model: e.target.value })}
+                  >
+                    {editing.models.map((id) => <option key={id} value={id}>{id}</option>)}
+                  </select>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                    Last refreshed {editing.modelsUpdatedAt ? new Date(editing.modelsUpdatedAt).toLocaleString() : 'during this session'}.
+                  </div>
+                </div>
+              ) : null}
+
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <button className="btn" onClick={refreshModels} disabled={refreshingModels || editing.id === 'anthropic'}>
+                  {refreshingModels ? 'Refreshing...' : 'Refresh Live Models'}
+                </button>
+                {refreshMessage && (
+                  <span style={{ fontSize: 11, color: refreshMessage.startsWith('Refresh failed') ? 'var(--error)' : 'var(--text-muted)' }}>
+                    {refreshMessage}
+                  </span>
+                )}
               </div>
 
               {getProviderCategory(editing) === 'community' && (

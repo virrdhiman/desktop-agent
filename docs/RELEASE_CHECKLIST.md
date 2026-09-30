@@ -43,6 +43,7 @@ Never commit certificates, passwords, or `.env` files.
 ## Build and verify
 
 - [ ] `npm test`, `npm run lint`, and `npm run build` pass
+- [ ] `npm run agent:evals` passes. It validates the golden agent-eval dataset, enforces minimum unit/smoke coverage, and runs functional, trajectory, and visual checks.
 - [ ] `npm run smoke` passes. It launches the dev build twice with a throwaway profile and checks the UI, IPC, chat persistence, key redaction, the editor, and link handling.
 - [ ] Build with the official script on each platform
 - [ ] Smoke-test the packaged app:

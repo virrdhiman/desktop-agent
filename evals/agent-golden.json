@@ -1,0 +1,163 @@
+{
+  "version": 1,
+  "name": "VD Agent local golden evals",
+  "inspiration": "Golden tasks, trace checks, and release smoke gates.",
+  "minimums": {
+    "vitestPassed": 251,
+    "smokeChecks": 33
+  },
+  "tiers": [
+    {
+      "id": 1,
+      "name": "Functional & component",
+      "goal": "Verify deterministic scaffolding: prompt shaping, parsing, model fallback classification, path resolution, persistence, and IPC helpers.",
+      "primaryCommand": "npm test"
+    },
+    {
+      "id": 2,
+      "name": "Trajectory & tool",
+      "goal": "Verify that the agent chooses and recovers through the right tool/provider sequence, reports failed tools, rejects fabricated work, and keeps provider fallback transparent.",
+      "primaryCommand": "node scripts/smoke.mjs"
+    },
+    {
+      "id": 3,
+      "name": "Visual & end-to-end",
+      "goal": "Launch the real Electron app with a throwaway profile and verify UI, IPC, window isolation, editor rendering, chat restore, and safe external-link behavior.",
+      "primaryCommand": "node scripts/smoke.mjs"
+    }
+  ],
+  "cases": [
+    {
+      "id": "component-answer-quality",
+      "tier": 1,
+      "prompt": "Pure helper coverage for system prompt, response cleanup, failed tool formatting, provider errors, and unverified claims.",
+      "checks": [
+        "Filler openers and closers are stripped outside code blocks.",
+        "Tool failure messages include args, error, and a useful hint.",
+        "Provider errors are classified into rate, network, server, model, context, or other.",
+        "Live model discovery removes stale configured IDs and stores the refreshed provider catalog.",
+        "Claims of edits, commands, or passing tests require matching tool calls."
+      ],
+      "coveredBy": [
+        "src/lib/agent.test.ts",
+        "src/lib/modelSelect.test.ts",
+        "src/lib/providers.test.ts"
+      ]
+    },
+    {
+      "id": "component-tool-support",
+      "tier": 1,
+      "prompt": "Relative filesystem and command tools resolve against the open workspace and report failures correctly.",
+      "checks": [
+        "Relative paths resolve under workspace.",
+        "Non-zero command exits are surfaced as failures.",
+        "Timeouts include a clear timeout message."
+      ],
+      "coveredBy": [
+        "electron/__tests__/toolSupport.test.ts"
+      ]
+    },
+    {
+      "id": "trajectory-tool-failure",
+      "tier": 2,
+      "prompt": "SMOKE-TOOLS read missing-smoke-file.txt and smoke-editor.ts",
+      "marker": "SMOKE-TOOLS",
+      "checks": [
+        "A missing file reaches the model as Tool read_file FAILED.",
+        "A valid relative file path resolves against the workspace.",
+        "Malformed tool JSON is reported to the model.",
+        "Later rounds stay on the provider that answered after fallback."
+      ],
+      "coveredBy": [
+        "scripts/smoke.mjs"
+      ]
+    },
+    {
+      "id": "trajectory-empty-recovery",
+      "tier": 2,
+      "prompt": "SMOKE-EMPTY where is the setting read from?",
+      "marker": "SMOKE-EMPTY",
+      "checks": [
+        "An empty model reply triggers one corrective retry.",
+        "The next model is tried before the same empty model again."
+      ],
+      "coveredBy": [
+        "scripts/smoke.mjs"
+      ]
+    },
+    {
+      "id": "trajectory-fabrication-challenge",
+      "tier": 2,
+      "prompt": "SMOKE-CLAIM fix the add bug in calc.js",
+      "marker": "SMOKE-CLAIM",
+      "checks": [
+        "A reply claiming edits or tests without tool evidence is not shown.",
+        "The model receives a correction prompt and produces an honest answer."
+      ],
+      "coveredBy": [
+        "scripts/smoke.mjs"
+      ]
+    },
+    {
+      "id": "trajectory-total-provider-failure",
+      "tier": 2,
+      "prompt": "SMOKE-ALLFAIL anything",
+      "marker": "SMOKE-ALLFAIL",
+      "checks": [
+        "All tried providers are listed.",
+        "Each failure is categorized.",
+        "The user receives concrete next steps."
+      ],
+      "coveredBy": [
+        "scripts/smoke.mjs"
+      ]
+    },
+    {
+      "id": "visual-startup-and-editor",
+      "tier": 3,
+      "prompt": "Launch the app, restore a workspace, open smoke-editor.ts, and render Monaco.",
+      "marker": "SMOKE_EDITOR_MARKER",
+      "checks": [
+        "Window title, renderer isolation, and preload API are valid.",
+        "Saved chat restores across restart.",
+        "Chat header remains visible after restore.",
+        "Bundled Monaco opens a workspace file without CDN access."
+      ],
+      "coveredBy": [
+        "scripts/smoke.mjs"
+      ]
+    },
+    {
+      "id": "trajectory-live-model-catalog",
+      "tier": 2,
+      "prompt": "Refresh the active provider's live model list before the chat request.",
+      "marker": "mock-model-b",
+      "checks": [
+        "Live `/models` discovery is saved to the provider catalog.",
+        "The strongest live model replaces a stale configured default.",
+        "Deprecated model IDs not returned by discovery are not kept in the saved catalog."
+      ],
+      "coveredBy": [
+        "scripts/smoke.mjs"
+      ]
+    }
+  ],
+  "externalOptional": [
+    {
+      "name": "Kane CLI / Testmu AI",
+      "use": "Optional AI-vision desktop UI walkthroughs over packaged builds."
+    },
+    {
+      "name": "EvalView-style snapshots",
+      "use": "Covered locally by this golden dataset and smoke assertions; can be expanded into saved trace snapshots."
+    },
+    {
+      "name": "Arize AI / AX",
+      "use": "Optional hosted trace and trajectory analysis when telemetry export is explicitly enabled for a test run."
+    },
+    {
+      "name": "LangSmith",
+      "use": "Optional LLM-as-judge scoring for prompt/tool-call datasets when API keys and consent are available."
+    }
+  ]
+}

@@ -54,6 +54,8 @@ export interface ProviderConfig {
   apiKey: string
   baseUrl: string
   model: string
+  models?: string[]
+  modelsUpdatedAt?: number
   freeTier?: boolean
   signupUrl?: string
   notes?: string

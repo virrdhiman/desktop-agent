@@ -90,10 +90,10 @@ Adding keys for more than one free provider makes rate limits less of a problem,
 For OpenAI-compatible providers, VD Agent:
 
 1. Lists the models your key can call and drops non-chat models such as embeddings, speech, image, and moderation models.
-2. Ranks the rest by coding quality, then efficiency, and tries the best one first. The model set in Settings is the last resort.
+2. Ranks the rest by coding quality, then efficiency, and tries the best one first. If a live list is available, stale saved model IDs are dropped automatically.
 3. Moves to the next model on rate limits (429), model-not-found or unsupported model errors, overload, and 503s.
 4. **Stops immediately on an invalid key**, so you can fix it instead of having the problem hidden.
-5. Saves the model that worked, unless you pinned a model in the Agent header.
+5. Saves the refreshed live model list and the model that worked, unless you pinned a model in the Agent header.
 
 If the active provider fails for any reason other than an invalid key, VD Agent tries other official free providers that have keys. Local servers and community proxies are never used automatically.
 
@@ -126,6 +126,7 @@ Your prompts and code go **only** to the AI provider you choose, plus any servic
 | [docs/PROVIDERS.md](./docs/PROVIDERS.md) | Setting up providers, local models, and how fallback works |
 | [docs/PRIVACY.md](./docs/PRIVACY.md) | What is stored, where, and what leaves your machine |
 | [docs/SECURITY.md](./docs/SECURITY.md) | Security model, safe use, and reporting vulnerabilities |
+| [docs/AI_AGENT_TESTING.md](./docs/AI_AGENT_TESTING.md) | Functional, trajectory, and visual testing for the agent |
 | [docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) | Fixes for common problems |
 | [TOOLS.md](./TOOLS.md) | Reference for every agent tool |
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | How the code is organized |

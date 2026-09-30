@@ -24,7 +24,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import DiffViewer from './DiffViewer'
 import { useStore } from '../store'
 import type { ChatMessage, AgentStep, ProviderConfig } from '../types'
-import { applyDiscoveredModel, buildProviderChain } from '../lib/providers'
+import { applyDiscoveredModel, buildProviderChain, refreshProviderModelCatalog } from '../lib/providers'
 import { highlightSyntax } from '../lib/highlight'
 import { AUTHOR_NAME, AUTHOR_URL, REPO_URL } from '../lib/brand'
 import {
@@ -330,10 +330,19 @@ export default function AgentChat() {
     Promise.resolve(window.api.aiListModels({
       provider: activeProvider.id, apiKey: activeProvider.apiKey, baseUrl: activeProvider.baseUrl,
     }))
-      .then((ids) => { if (!stale && Array.isArray(ids)) setAvailableModels(ids.slice(0, 40)) })
+      .then((ids) => {
+        if (stale || !Array.isArray(ids)) return
+        const ranked = ids.slice(0, 40)
+        setAvailableModels(ranked)
+        const next = refreshProviderModelCatalog(useStore.getState().settings, activeProvider.id, ranked)
+        if (next) {
+          setAppSettings(next)
+          void window.api.saveSettings(next)
+        }
+      })
       .catch(() => {})
     return () => { stale = true }
-  }, [activeProvider?.id, activeProvider?.apiKey, activeProvider?.baseUrl])
+  }, [activeProvider?.id, activeProvider?.apiKey, activeProvider?.baseUrl, setAppSettings])
 
   // Paste image handler
   useEffect(() => {
@@ -452,6 +461,14 @@ export default function AgentChat() {
         })
       } catch (err: any) {
         result = { error: err?.message || String(err), kind: 'other' }
+      }
+
+      if (Array.isArray(result.models) && result.models.length > 0) {
+        const catalogSettings = refreshProviderModelCatalog(useStore.getState().settings, p.id, result.models)
+        if (catalogSettings) {
+          setAppSettings(catalogSettings)
+          void window.api.saveSettings(catalogSettings)
+        }
       }
 
       if ('error' in result) {

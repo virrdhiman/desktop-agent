@@ -30,6 +30,7 @@
     "test:coverage": "vitest run --coverage",
     "lint": "tsc --noEmit",
     "smoke": "npm run build && node scripts/smoke.mjs",
+    "agent:evals": "node scripts/agent-evals.mjs",
     "checksums": "node scripts/checksums.mjs",
     "electron:dev": "vite --config vite.config.ts",
     "electron:build": "vite build && electron-builder"

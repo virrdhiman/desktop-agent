@@ -113,7 +113,13 @@ export function rankModels(ids: string[]): string[] {
 
 export const MAX_MODEL_ATTEMPTS = 6
 
-/** Strongest discovered chat models first; the configured model is kept as the final fallback. */
+/**
+ * Strongest discovered chat models first.
+ *
+ * If live discovery returns usable chat models, that catalog is treated as the source of truth:
+ * stale configured models are left out so deprecated IDs disappear automatically. If discovery
+ * fails or returns nothing usable, the configured model remains the offline fallback.
+ */
 export function buildModelAttemptList(
   preferred: string | undefined,
   discovered: string[],
@@ -127,8 +133,12 @@ export function buildModelAttemptList(
     seen.add(name)
     out.push(name)
   }
-  for (const id of rankModels(discovered).slice(0, Math.max(1, max - 1))) add(id)
-  add(preferred)
+  const ranked = rankModels(discovered)
+  if (ranked.length > 0) {
+    for (const id of ranked.slice(0, max)) add(id)
+  } else {
+    add(preferred)
+  }
   return out
 }
 

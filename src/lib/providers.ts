@@ -5,6 +5,7 @@
  * @license Proprietary. See LICENSE.
  */
 import type { ProviderConfig, Settings } from '../types'
+import { rankModels } from './modelSelect'
 
 export type ProviderCategory = 'free' | 'local' | 'community' | 'image_video' | 'paid'
 
@@ -73,5 +74,35 @@ export function applyDiscoveredModel(
   return {
     ...settings,
     providers: settings.providers.map((p) => (p.id === providerId ? { ...p, model } : p)),
+  }
+}
+
+function sameList(a: string[] = [], b: string[] = []): boolean {
+  return a.length === b.length && a.every((value, index) => value === b[index])
+}
+
+/**
+ * Persist the live chat models a key can currently call. The strongest ranked model becomes
+ * the provider's default, and stale/deprecated model IDs disappear from the stored catalog.
+ */
+export function refreshProviderModelCatalog(
+  settings: Settings,
+  providerId: string,
+  discovered: string[],
+  at = Date.now()
+): Settings | null {
+  const ranked = rankModels(discovered).slice(0, 40)
+  if (ranked.length === 0) return null
+  const provider = settings.providers.find((p) => p.id === providerId)
+  if (!provider) return null
+
+  const nextModel = ranked[0]
+  if (provider.model === nextModel && sameList(provider.models, ranked)) return null
+
+  return {
+    ...settings,
+    providers: settings.providers.map((p) => (
+      p.id === providerId ? { ...p, model: nextModel, models: ranked, modelsUpdatedAt: at } : p
+    )),
   }
 }

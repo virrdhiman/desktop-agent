@@ -12,9 +12,10 @@
  *
  *   npm run smoke                                  # dev build (runs `npm run build` first)
  *   npm run smoke -- --exe "release/win-unpacked/VD Agent.exe"   # packaged app
- *   npm run smoke -- --out ./smoke-shots           # keep screenshots somewhere specific
+ *   npm run smoke -- --screenshots --out ./smoke-shots  # capture screenshots
  *
  * Needs a desktop session (a window opens briefly). On headless Linux use xvfb-run.
+ * Screenshots are opt-in because CDP capture can perturb some Electron renderers.
  * Never touches the real VD Agent settings or chat history.
  */
 import { spawn, execSync } from 'node:child_process'
@@ -37,6 +38,7 @@ const argValue = (name) => {
 }
 const exe = argValue('--exe') || process.env.SMOKE_EXE
 const outDir = path.resolve(argValue('--out') || path.join(os.tmpdir(), 'vd-agent-smoke'))
+const captureScreenshots = process.env.SMOKE_SCREENSHOTS === '1' || process.argv.includes('--screenshots')
 fs.mkdirSync(outDir, { recursive: true })
 
 if (!exe && !fs.existsSync(path.join(repo, pkg.main))) {
@@ -149,13 +151,20 @@ async function launch(label) {
     if (msg.method === 'Runtime.consoleAPICalled' && msg.params.type === 'error') errors.push(msg.params.args.map((a) => a.value ?? a.description).join(' '))
     if (msg.method === 'Log.entryAdded' && msg.params.entry.level === 'error') errors.push(msg.params.entry.text)
   }
-  const send = (method, params = {}) => new Promise((res) => {
+  const send = (method, params = {}, timeoutMs = 15_000) => new Promise((res, rej) => {
     const id = ++seq
-    pending.set(id, res)
+    const timer = setTimeout(() => {
+      pending.delete(id)
+      rej(new Error(`CDP ${method} timed out after ${timeoutMs}ms`))
+    }, timeoutMs)
+    pending.set(id, (msg) => {
+      clearTimeout(timer)
+      res(msg)
+    })
     ws.send(JSON.stringify({ id, method, params }))
   })
   const evaluate = async (expression) => {
-    const r = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true })
+    const r = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }, 20_000)
     if (r.result?.exceptionDetails) throw new Error(r.result.exceptionDetails.exception?.description || r.result.exceptionDetails.text)
     return r.result?.result?.value
   }
@@ -172,8 +181,13 @@ async function launch(label) {
   const pageCount = async () => (await (await fetch(`http://127.0.0.1:${target.port}/json/list`)).json())
     .filter((t) => t.type === 'page' && !t.url.startsWith('devtools://')).length
   const screenshot = async (file) => {
-    const r = await send('Page.captureScreenshot', { format: 'png' })
-    fs.writeFileSync(path.join(outDir, file), Buffer.from(r.result.data, 'base64'))
+    if (!captureScreenshots) return
+    try {
+      const r = await send('Page.captureScreenshot', { format: 'png' }, 10_000)
+      fs.writeFileSync(path.join(outDir, file), Buffer.from(r.result.data, 'base64'))
+    } catch (err) {
+      console.warn(`WARN  screenshot ${file} skipped (${err.message})`)
+    }
   }
   const close = async () => {
     try { ws.close() } catch {}
@@ -399,6 +413,18 @@ try {
   await sendChat(c, 'SMOKE-TOOLS read missing-smoke-file.txt and smoke-editor.ts')
   const toolsDone = await waitForText(c, 'SMOKE-NEXT-STEP')
   const toolsReqs = mock.requests.slice(toolsStart)
+  let refreshedCatalog
+  for (let i = 0; i < 20; i++) {
+    try {
+      refreshedCatalog = JSON.parse(fs.readFileSync(settingsFile, 'utf8')).providers?.find((p) => p.id === 'groq')
+    } catch {}
+    if (refreshedCatalog?.models?.includes('mock-model-b')) break
+    await sleep(250)
+  }
+  const catalogDetail = `${refreshedCatalog?.model || 'none'} :: ${(refreshedCatalog?.models || []).join(',') || 'none'}`
+  check('agent: live model catalog is saved and stale defaults are replaced',
+    refreshedCatalog?.model === 'mock-model' && refreshedCatalog?.models?.join(',') === 'mock-model,mock-model-b',
+    catalogDetail)
   const firstGemini = toolsReqs.findIndex((r) => r.provider === 'gemini')
   const system = toolsReqs[firstGemini]?.body.messages?.[0]?.content || ''
   check('agent: system prompt carries the answer-quality rules and the workspace',
@@ -459,5 +485,6 @@ try {
 }
 
 const failed = results.filter((r) => !r.ok).length
-console.log(`\n${results.length - failed}/${results.length} checks passed. Screenshots: ${outDir}`)
+const screenshotNote = captureScreenshots ? `Screenshots: ${outDir}` : 'Screenshots disabled; set SMOKE_SCREENSHOTS=1 to capture them.'
+console.log(`\n${results.length - failed}/${results.length} checks passed. ${screenshotNote}`)
 process.exit(failed ? 1 : 0)
