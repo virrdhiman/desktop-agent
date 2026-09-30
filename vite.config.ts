@@ -33,8 +33,16 @@ export default defineConfig({
         vite: {
           build: {
             outDir: 'dist-electron',
+            // Sandboxed preloads cannot be ES modules, so opt out of the plugin's ESM lib build.
+            lib: false,
             rollupOptions: {
+              input: 'electron/preload.ts',
               external: ['electron'],
+              output: {
+                format: 'cjs',
+                entryFileNames: 'preload.cjs',
+                inlineDynamicImports: true,
+              },
             },
           },
         },

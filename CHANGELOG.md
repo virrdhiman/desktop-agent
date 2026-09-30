@@ -48,6 +48,11 @@ All notable changes to VD Agent are documented here.
 - `Win/build.bat` and `Mac/build.sh`: ASCII output (fixed garbled characters), run from the repo root, read the version from `package.json`, and stop on test failures.
 - Electron unit tests now run with `npm test`. Added tests for model ranking and filtering, error classification, provider chain, model persistence, settings export, the conversation store, and session auto-save.
 - `.gitattributes` pins line endings for the build scripts.
+- Fixed the built app failing to open a window: the ESM main process now derives `__dirname` from `import.meta.url`, and the preload is built as CommonJS (`preload.cjs`) so it loads in the sandbox.
+
+### UI fixes
+- Auto-scrolling the chat no longer pushes the chat header off-screen.
+- The sidebar version is read from `package.json`.
 
 ## [1.0.0] - 2025-08-28
 

@@ -371,7 +371,7 @@ export default function AgentChat() {
   const [mentionQuery, setMentionQuery] = useState('')
   const [mentionType, setMentionType] = useState<'file' | 'folder' | 'web'>('file')
   const [showSessions, setShowSessions] = useState(false)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesScrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -381,7 +381,11 @@ export default function AgentChat() {
   const activeProvider = settings.providers.find((p) => p.id === settings.activeProvider)
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView?.({ behavior: 'smooth' })
+    // scrollIntoView would also scroll the overflow-hidden panel ancestors and push the header off-screen.
+    const el = messagesScrollRef.current
+    if (!el) return
+    if (typeof el.scrollTo === 'function') el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+    else el.scrollTop = el.scrollHeight
   }, [messages, streamingContent])
 
   // Listen for streaming tokens; unsubscribe on unmount so tokens are never appended twice
@@ -876,7 +880,7 @@ export default function AgentChat() {
       )}
 
       {/* Messages */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 16px' }}>
+      <div ref={messagesScrollRef} style={{ flex: 1, overflowY: 'auto', padding: '16px 16px' }}>
         {messages.length === 0 ? (
           <div className="empty-state">
             <div style={{
@@ -1002,7 +1006,6 @@ export default function AgentChat() {
                 <span style={{ animation: 'blink 1s infinite' }}>🤔</span> Thinking...
               </div>
             )}
-            <div ref={messagesEndRef} />
           </div>
         )}
       </div>
