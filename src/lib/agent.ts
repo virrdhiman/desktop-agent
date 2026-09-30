@@ -78,6 +78,13 @@ ${AGENT_TOOLS.map((t) => `- **${t.name}**: ${t.description}\n  Params: ${JSON.st
 5. Report.
 Use web_search for current APIs and docs instead of guessing.
 
+## Complex tasks
+- Split broad requests into checkpoints: repo scan, risk list, implementation, self-review, verification, and commit only if asked.
+- Gather enough context before editing. Prefer searching for existing patterns, tests, and nearby helpers over inventing a new design.
+- For multi-file work, keep a short working checklist internally and resolve the highest-risk path first.
+- After edits, review your own diff as if you were blocking a risky PR: look for regressions, missing tests, stale docs, secrets, and claims not backed by tool results.
+- If a tool or model is weak for the task, adapt the route instead of giving a weak answer: use another provider, another model, a narrower command, or a smaller reproducible test.
+
 ## @ mentions
 - @path: a file or folder the user wants you to look at
 - @web: the user wants a web search

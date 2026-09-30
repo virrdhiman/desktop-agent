@@ -111,8 +111,8 @@ export type ConversationMessage = { id: string; role: 'user' | 'assistant' | 'sy
 export type ConversationInput = { id: string; title?: string; createdAt?: number; messages: ConversationMessage[] }
 export type ConversationRecord = { version: number; id: string; title: string; createdAt: number; updatedAt: number; messages: ConversationMessage[] }
 export type AiChatResult =
-  | { content: string; model?: string }
-  | { error: string; kind?: 'auth' | 'retry-model' | 'other' | 'cancelled'; status?: number }
+  | { content: string; model?: string; models?: string[] }
+  | { error: string; kind?: 'auth' | 'retry-model' | 'other' | 'cancelled'; status?: number; models?: string[] }
 
 export type ElectronAPI = {
   openDirectory: () => Promise<string | null>
@@ -171,5 +171,13 @@ type GitStatus = {
   renamed: { from: string; to: string }[]; isClean: boolean
 }
 type GitLogEntry = { hash: string; date: string; message: string; author: string }
-type ProviderConfig = { id: string; name: string; apiKey: string; baseUrl: string; model: string }
+type ProviderConfig = {
+  id: string
+  name: string
+  apiKey: string
+  baseUrl: string
+  model: string
+  models?: string[]
+  modelsUpdatedAt?: number
+}
 type Settings = { providers: ProviderConfig[]; activeProvider: string; workspacePath: string; customRules?: string; planMode?: boolean }

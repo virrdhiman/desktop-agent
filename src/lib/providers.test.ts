@@ -11,6 +11,7 @@ import {
   buildProviderChain,
   getProviderCategory,
   mergeImportedSettings,
+  refreshProviderModelCatalog,
   withoutApiKeys,
 } from './providers'
 
@@ -65,6 +66,33 @@ describe('applyDiscoveredModel', () => {
     expect(applyDiscoveredModel(base, 'groq', 'llama-3.1-8b-instant', false)).toBeNull()
     expect(applyDiscoveredModel(base, 'groq', undefined, false)).toBeNull()
     expect(applyDiscoveredModel(base, 'unknown', 'x', false)).toBeNull()
+  })
+})
+
+describe('refreshProviderModelCatalog', () => {
+  const base = settings([p('openrouter', 'k', true, 'old-free-model:free'), p('gemini', 'k2')])
+
+  it('stores the live model catalog and switches to the strongest available model', () => {
+    const next = refreshProviderModelCatalog(base, 'openrouter', [
+      'paid/huge-model',
+      'meta-llama/llama-3.3-70b-instruct:free',
+      'text-embedding-3-small',
+      'mistralai/mistral-7b-instruct:free',
+    ], 123)
+
+    const provider = next?.providers.find((x) => x.id === 'openrouter')
+    expect(provider?.model).toBe('meta-llama/llama-3.3-70b-instruct:free')
+    expect(provider?.models).toEqual([
+      'meta-llama/llama-3.3-70b-instruct:free',
+      'mistralai/mistral-7b-instruct:free',
+    ])
+    expect(provider?.modelsUpdatedAt).toBe(123)
+    expect(provider?.models).not.toContain('old-free-model:free')
+  })
+
+  it('keeps settings unchanged when discovery returns no usable chat models', () => {
+    expect(refreshProviderModelCatalog(base, 'openrouter', ['text-embedding-3-small'])).toBeNull()
+    expect(refreshProviderModelCatalog(base, 'unknown', ['llama-3.3-70b'])).toBeNull()
   })
 })
 

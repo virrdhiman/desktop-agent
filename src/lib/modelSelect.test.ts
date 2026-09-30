@@ -94,22 +94,25 @@ describe('model ranking', () => {
 })
 
 describe('buildModelAttemptList', () => {
-  it('tries the strongest discovered model first and keeps the configured model as fallback', () => {
+  it('tries the strongest discovered model first and removes stale configured models', () => {
     const list = buildModelAttemptList('gpt-4o-mini', ['llama-3.3-70b-versatile', 'gpt-4o-mini', 'llama-3.1-8b-instant'])
     expect(list[0]).toBe('llama-3.3-70b-versatile')
     expect(list).toContain('gpt-4o-mini')
     expect(new Set(list).size).toBe(list.length)
+
+    const stale = buildModelAttemptList('deprecated-model', ['llama-3.3-70b-versatile'])
+    expect(stale).toEqual(['llama-3.3-70b-versatile'])
   })
 
   it('falls back to the configured model when discovery returns nothing', () => {
     expect(buildModelAttemptList('llama-3.3-70b-versatile', [])).toEqual(['llama-3.3-70b-versatile'])
   })
 
-  it('caps attempts and always includes the configured model', () => {
+  it('caps live attempts and does not append stale configured models', () => {
     const many = Array.from({ length: 30 }, (_, i) => `vendor/model-${i}-70b-instruct`)
     const list = buildModelAttemptList('my-configured-model', many)
     expect(list.length).toBeLessThanOrEqual(MAX_MODEL_ATTEMPTS)
-    expect(list[list.length - 1]).toBe('my-configured-model')
+    expect(list).not.toContain('my-configured-model')
   })
 })
 

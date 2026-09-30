@@ -41,8 +41,9 @@ All notable changes to VD Agent are documented here.
 - Discovers `/models` for OpenAI-compatible providers (8 s timeout, 10 min cache keyed by a hash of the key).
 - Wider non-chat filtering: embeddings, rerank, moderation/guard, audio, speech, TTS, transcription, realtime, image, and video.
 - Ranks by quality tier, then efficiency. Small variants of strong families are capped, and previews and reasoning-heavy variants are penalized. On OpenRouter, only `:free` models are used when listed.
+- Treats live model discovery as the source of truth when it succeeds: new models are added to the provider's saved catalog, stale/deprecated IDs are removed, and the strongest live model becomes the default.
 - Retries the next model on model-not-found, unsupported, 402/404/429/503/529, overload, capacity, and quota errors. Auth failures stop immediately, with no model or provider retry.
-- Persists the working model to settings unless a model is pinned in the header. The header picker lists discovered models for the active provider.
+- Persists the working model to settings unless a model is pinned in the header. The header picker and Settings panel list discovered models for the active provider.
 - Provider fallback uses only official free providers with keys (up to 4 total). Local servers and community proxies are never used implicitly.
 - Provider error text has the API key redacted. Anthropic requests send the system prompt in the `system` field.
 
@@ -63,6 +64,7 @@ All notable changes to VD Agent are documented here.
 - Electron unit tests now run with `npm test`. Added tests for model ranking and filtering, error classification, provider chain, model persistence, settings export, the conversation store, and session auto-save.
 - `.gitattributes` pins line endings for the build scripts.
 - Fixed the built app failing to open a window: the ESM main process now derives `__dirname` from `import.meta.url`, and the preload is built as CommonJS (`preload.cjs`) so it loads in the sandbox.
+- Added `npm run agent:evals`: a three-tier local agent-evaluation gate with a golden dataset, minimum unit/smoke count guards, trajectory checks, and real Electron visual smoke checks.
 
 ### UI fixes
 - Auto-scrolling the chat no longer pushes the chat header off-screen.
