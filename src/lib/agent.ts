@@ -1,0 +1,474 @@
+/**
+ * @author Virender Dhiman
+ * @year 2026
+ * @project VD Agent
+ * @license Proprietary. See LICENSE.
+ */
+/**
+ * Pure helpers that shape what the model sees and what the user reads:
+ * system prompt, context, history, tool-call parsing and results, response cleanup,
+ * and user-facing failure messages. Kept free of React and Electron so they are unit-tested.
+ */
+import { AGENT_TOOLS } from '../types'
+import { AUTHOR_NAME, AUTHOR_URL, REPO_URL } from './brand'
+
+export const MAX_TOOL_ROUNDS = 10
+export const MAX_TOOL_RESULT_CHARS = 12_000
+export const MAX_CONTEXT_FILE_CHARS = 6_000
+export const MAX_HISTORY_MESSAGES = 20
+export const MAX_HISTORY_CHARS = 40_000
+const MAX_HISTORY_MESSAGE_CHARS = 8_000
+const FENCE = '```'
+const TOOL_BLOCK = /```tool[ \t]*\r?\n([\s\S]*?)\r?\n?```/g
+
+// ─── System prompt ──────────────────────────────────────────────────────────
+
+export const TOOL_SYSTEM_PROMPT = `You are VD Agent, a senior software engineer working in the user's repository through tools. You run on the user's machine with filesystem, shell, git, and web access.
+If asked who made you, say VD Agent is built by ${AUTHOR_NAME} (${AUTHOR_URL}), source at ${REPO_URL}.
+
+## How you work
+- Inspect before you claim. Read the relevant files, search the code, or run a command before explaining how something works or why it fails. If you have not checked something, say so.
+- Challenge weak requests. If an ask is ambiguous, risky, or likely to cause a regression, say what the problem is and propose a better path.
+- Prefer the smallest correct change. Never rewrite a file you have not read. Preserve the user's uncommitted work.
+- Finish the job end to end: make the change, then verify it with the project's own commands (tests, typecheck, build, or a targeted run).
+- Never say something is done, fixed, or passing unless a tool result in this conversation shows it. If you could not verify, say exactly what is unverified.
+- Never invent file contents, APIs, command output, or test results.
+- Destructive actions (deleting files, discarding changes, git reset, force push, dropping data) need the user's explicit consent first.
+- Never print, write, or commit secrets or API keys. Commit only when the user asks.
+
+## Answer quality
+- Lead with the answer or the result in the first sentence.
+- No preamble ("Sure", "Certainly", "Great question", "I'd be happy to help"), no restating the request, and no closing pleasantries ("I hope this helps", "Let me know if you have any other questions").
+- Be specific: name the files, functions, commands, and exact errors. No generic advice that ignores the actual code.
+- Be critical: point out bugs, risks, wrong assumptions, and weak evidence, including in the user's request. Disagree when warranted and say why. Be critical of ideas, never of people.
+- Match length to the question. Summarize tool output; do not paste it back.
+- When there are tradeoffs, name them and recommend one option.
+
+## Questions
+- Ask only when the answer changes what you would do and you cannot find it with tools: a product decision, missing credentials, or a choice between valid approaches.
+- Never ask permission for read-only steps such as reading files, searching, or running tests. Do them.
+- If a reasonable assumption lets you proceed, state it and proceed.
+- Ask at most two questions at a time, each with your recommended default.
+
+## When a tool fails
+- Say which tool failed, the error in one line, and the likely cause.
+- Adapt: fix the arguments, try another approach, or gather more information. Do not repeat an identical failing call.
+- Never claim success for a step whose tool call failed.
+- If you are blocked, stop and say exactly what you need from the user.
+
+## Ending a reply
+When work remains, something failed, or the user must act, end with "Next steps:" and one to three concrete actions (a command to run, a file to check, a decision to make). Skip it for a simple question you fully answered.
+
+## Tool calls
+Use EXACTLY this format, one JSON object per block:
+${FENCE}tool
+{"name": "tool_name", "args": {"arg1": "value1"}}
+${FENCE}
+You may call several tools in one reply. Results arrive in the next message; continue until the task is complete. At most ${MAX_TOOL_ROUNDS} tool rounds run per request.
+Relative paths resolve against the open workspace. run_command runs in the workspace unless you pass cwd, and stops after 30 seconds. Long tool output is truncated; narrow the request to see more.
+
+## Available tools (${AGENT_TOOLS.length})
+${AGENT_TOOLS.map((t) => `- **${t.name}**: ${t.description}\n  Params: ${JSON.stringify(t.parameters)}`).join('\n\n')}
+
+## Work method
+1. Understand: read the relevant code and the user's constraints.
+2. Plan briefly: which files change and what could break.
+3. Change: targeted edits (edit_file, multi_file_edit) over full rewrites.
+4. Verify: run the tests, typecheck, build, or the specific command that proves the change.
+5. Report.
+Use web_search for current APIs and docs instead of guessing.
+
+## @ mentions
+- @path: a file or folder the user wants you to look at
+- @web: the user wants a web search
+
+## Plan Mode
+When Plan Mode is on, change nothing. Reply with the files you will read or change, the intended change and its risks, and the order of steps. Then wait for approval.
+
+## Response format
+Markdown with language-tagged code blocks. For finished work use:
+1. Outcome: one or two sentences on what was done or found.
+2. Details: the changes or findings that matter.
+3. Verification: commands run and their results.
+4. Risks and next steps, only if there are any.`
+
+export type ContextInput = {
+  workspacePath?: string
+  selectedFile?: string | null
+  fileContent?: string
+}
+
+export function buildContext({ workspacePath, selectedFile, fileContent = '' }: ContextInput): string {
+  const parts: string[] = []
+  if (workspacePath) {
+    parts.push(`Workspace: ${workspacePath}\nRelative tool paths resolve here, and run_command runs here unless you pass cwd.`)
+  } else {
+    parts.push('No workspace folder is open. Tools need absolute paths. If the task is about a project, ask the user to open its folder (Files → Open).')
+  }
+  if (selectedFile) {
+    const shown = fileContent.slice(0, MAX_CONTEXT_FILE_CHARS)
+    const note = fileContent.length > shown.length
+      ? ` (showing the first ${shown.length} of ${fileContent.length} characters; use read_file for the rest)`
+      : ''
+    parts.push(`File open in the editor: ${selectedFile}${note}\n${FENCE}\n${shown}\n${FENCE}`)
+  }
+  return parts.join('\n\n')
+}
+
+export function buildSystemPrompt(opts: { planMode: boolean; context: string; customRules?: string }): string {
+  const modeLine = opts.planMode
+    ? 'Plan Mode is ON: propose a plan and wait for approval. Do not modify anything.'
+    : 'Plan Mode is OFF: execute the task.'
+  return [
+    TOOL_SYSTEM_PROMPT,
+    `## Session\n${modeLine}`,
+    opts.context ? `## Context\n${opts.context}` : '',
+    opts.customRules?.trim() ? `## User rules\n${opts.customRules.trim()}` : '',
+  ].filter(Boolean).join('\n\n')
+}
+
+// ─── History ────────────────────────────────────────────────────────────────
+
+type HistoryMessage = { role: string; content: string }
+
+/**
+ * Model-facing history. Tool results are not stored in chat history, so earlier tool blocks are
+ * collapsed into short "[called …]" notes instead of looking like calls that never got an answer.
+ * Keeps the newest messages that fit the budget; the latest message is always kept.
+ */
+export function buildHistory(
+  messages: HistoryMessage[],
+  maxMessages = MAX_HISTORY_MESSAGES,
+  maxChars = MAX_HISTORY_CHARS
+): { role: string; content: string }[] {
+  const prepared = messages
+    .filter((m) => m.role !== 'system')
+    .map((m) => {
+      let content = m.role === 'assistant' ? summarizeToolBlocks(m.content) : m.content
+      if (content.length > MAX_HISTORY_MESSAGE_CHARS) {
+        content = `${content.slice(0, MAX_HISTORY_MESSAGE_CHARS)}\n[... earlier message truncated]`
+      }
+      return { role: m.role, content }
+    })
+    .filter((m) => m.content.trim().length > 0)
+    .slice(-maxMessages)
+
+  const kept: { role: string; content: string }[] = []
+  let used = 0
+  for (let i = prepared.length - 1; i >= 0; i--) {
+    const size = prepared[i].content.length
+    if (kept.length > 0 && used + size > maxChars) break
+    kept.unshift(prepared[i])
+    used += size
+  }
+  return kept
+}
+
+function summarizeToolBlocks(content: string): string {
+  return content.replace(TOOL_BLOCK, (_block, body: string) => {
+    try {
+      const parsed = JSON.parse(body.trim())
+      return `[called ${parsed.name} ${shortArgs(parsed.args || {})}]`
+    } catch {
+      return '[malformed tool call]'
+    }
+  }).trim()
+}
+
+// ─── Tool calls ─────────────────────────────────────────────────────────────
+
+export type ToolCall = { name: string; args: Record<string, any> }
+
+export function hasToolBlock(content: string): boolean {
+  return content.includes(`${FENCE}tool`)
+}
+
+/** Valid calls plus a model-readable error for every block that could not be used. */
+export function parseToolCalls(content: string): { calls: ToolCall[]; errors: string[] } {
+  const calls: ToolCall[] = []
+  const errors: string[] = []
+  let index = 0
+  for (const match of content.matchAll(TOOL_BLOCK)) {
+    index++
+    try {
+      const parsed = JSON.parse(match[1].trim())
+      if (!parsed || typeof parsed.name !== 'string' || !parsed.name) {
+        errors.push(`Tool block ${index} has no "name" field.`)
+        continue
+      }
+      const args = parsed.args && typeof parsed.args === 'object' ? parsed.args : {}
+      calls.push({ name: parsed.name, args })
+    } catch (err: any) {
+      errors.push(`Tool block ${index} is not valid JSON (${String(err?.message || err).slice(0, 120)}).`)
+    }
+  }
+  if (index === 0 && hasToolBlock(content)) errors.push('A tool block was opened but not closed with ```.')
+  return {
+    calls,
+    errors: errors.map((e) => `${e} Resend it as one JSON object: {"name": "tool_name", "args": {...}}`),
+  }
+}
+
+/** Same rule the main process applies: relative paths are relative to the workspace. */
+export function resolveWorkspacePath(workspace: string | undefined, p: string): string {
+  if (!workspace || /^([a-zA-Z]:[\\/]|[\\/])/.test(p)) return p
+  const sep = workspace.includes('\\') ? '\\' : '/'
+  return `${workspace.replace(/[\\/]+$/, '')}${sep}${p.replace(/^\.[\\/]/, '')}`
+}
+
+export function shortArgs(args: Record<string, any>, maxValue = 80): string {
+  const compact = Object.fromEntries(
+    Object.entries(args).map(([k, v]) => {
+      const s = typeof v === 'string' ? v : JSON.stringify(v)
+      return [k, s && s.length > maxValue ? `${s.slice(0, maxValue)}… (${s.length} chars)` : v]
+    })
+  )
+  return JSON.stringify(compact)
+}
+
+const FAILURE_HINTS: [RegExp, string][] = [
+  [/ENOENT|no such file|cannot find the (file|path)/i, 'The path does not exist. Check it with list_files or search_files; relative paths resolve against the workspace.'],
+  [/EACCES|EPERM|permission denied|access is denied/i, 'Permission denied. The file may be read-only, locked by another program, or need elevated rights.'],
+  [/EISDIR/i, 'The path is a directory. Use list_files or read_directory_tree instead.'],
+  [/ENOTDIR/i, 'Part of the path is a file, not a folder.'],
+  [/old_string not found/i, 'The exact text was not found. Re-read the file and copy old_string exactly, including whitespace and indentation.'],
+  [/timed out/i, 'The command hit the time limit. Run a narrower command, or ask the user to run long tasks in the terminal.'],
+  [/not a git repository/i, 'This folder is not a git repository. Check the path, or run git init only if the user wants one.'],
+  [/Unknown tool/i, 'That tool does not exist. Use only tools from the Available tools list.'],
+  [/exit code/i, 'The command ran and reported failure. Read its output above for the cause.'],
+  [/ENOTFOUND|ECONNREFUSED|ECONNRESET|fetch failed|network/i, 'The network request failed. The service may be down, blocked, or offline.'],
+  [/IPC timeout/i, 'The tool did not respond in time. Try a smaller request.'],
+  [/must be of type|Received undefined|is not iterable|Cannot read propert/i, 'A required argument is missing or has the wrong type. Check the tool\'s Params.'],
+]
+
+export function toolFailureHint(error: string): string | null {
+  const hit = FAILURE_HINTS.find(([re]) => re.test(error))
+  return hit ? hit[1] : null
+}
+
+function truncate(text: string, max: number, what: string): string {
+  if (text.length <= max) return text
+  return `${text.slice(0, max)}\n[... ${text.length - max} more characters truncated. ${what}]`
+}
+
+export function formatToolResult(call: ToolCall, result: { result?: string; error?: string }): string {
+  if (typeof result.error === 'string') {
+    const hint = toolFailureHint(result.error)
+    return [
+      `Tool ${call.name} FAILED.`,
+      `Args: ${shortArgs(call.args)}`,
+      `Error: ${truncate(result.error, 4_000, 'See the start of the error.')}`,
+      hint ? `Hint: ${hint}` : '',
+    ].filter(Boolean).join('\n')
+  }
+  const output = result.result ?? ''
+  return `Tool ${call.name} succeeded.\n${truncate(output || '(no output)', MAX_TOOL_RESULT_CHARS, 'Narrow the request (a smaller file, a search, or fewer lines) to see the rest.')}`
+}
+
+export function followUpMessage(toolResults: string): string {
+  return `Tool results:\n\n${toolResults}\n\nContinue. If a tool failed, say so in one line and adapt instead of repeating the same call. Use more tools if needed; otherwise give the final answer and state what you verified.`
+}
+
+// ─── Response quality ───────────────────────────────────────────────────────
+
+const LEADING_FILLER = [
+  /^(sure|certainly|absolutely|of course|okay|ok|alright|great|awesome|perfect)\s*[!.,]+\s*/i,
+  /^(what a |that's a |this is a )?(great|good|excellent|fantastic|interesting) (question|idea|point|request)\s*[!.]*\s*/i,
+  /^I('d| would)( be)? (happy|glad|delighted) to help( you)?( with (that|this|your request))?\s*[!.]*\s*/i,
+  /^(thanks|thank you) for (asking|your question|sharing)[^.!\n]*[!.]\s*/i,
+]
+
+const TRAILING_FILLER = [
+  /\s*I hope (this|that|it) helps[^\n]*$/i,
+  /\s*Let me know if (you have|you need|you'd like|there('s| is)|anything)[^\n]*$/i,
+  /\s*Feel free to (ask|reach out|let me know)[^\n]*$/i,
+  /\s*(Is there )?anything else (I can help|you need|you'd like)[^\n]*$/i,
+  /\s*Happy coding[!.]*$/i,
+  /\s*Good luck( with your project)?[!.]*$/i,
+]
+
+function stripRepeated(text: string, patterns: RegExp[]): string {
+  let out = text
+  for (let pass = 0; pass < 6; pass++) {
+    const before = out
+    for (const re of patterns) out = out.replace(re, '')
+    if (out === before) break
+  }
+  return out
+}
+
+/** Removes stock openers and closers from the prose around code; code blocks are never touched. */
+export function cleanResponse(text: string): string {
+  const first = text.indexOf(FENCE)
+  const last = text.lastIndexOf(FENCE)
+  const fenceCount = text.split(FENCE).length - 1
+  if (first === -1) return stripRepeated(stripRepeated(text.trim(), LEADING_FILLER), TRAILING_FILLER).trim()
+
+  const head = stripRepeated(text.slice(0, first).trimStart(), LEADING_FILLER)
+  const middle = text.slice(first, last + FENCE.length)
+  const tail = fenceCount % 2 === 0 ? stripRepeated(text.slice(last + FENCE.length).trimEnd(), TRAILING_FILLER) : text.slice(last + FENCE.length)
+  return `${head}${middle}${tail}`.trim()
+}
+
+export type ResponseProblem = 'empty' | 'filler-only' | 'repetition'
+
+export function assessResponse(text: string): ResponseProblem[] {
+  if (!text.trim()) return ['empty']
+  const problems: ResponseProblem[] = []
+  if (!cleanResponse(text)) problems.push('filler-only')
+
+  const prose = text.replace(/```[\s\S]*?```/g, '')
+  const counts = new Map<string, number>()
+  for (const line of prose.split(/\r?\n/)) {
+    const key = line.trim()
+    if (key.length < 30) continue
+    counts.set(key, (counts.get(key) || 0) + 1)
+  }
+  if ([...counts.values()].some((n) => n >= 5)) problems.push('repetition')
+  return problems
+}
+
+const PROBLEM_TEXT: Record<ResponseProblem, string> = {
+  'empty': 'empty',
+  'filler-only': 'only pleasantries with no content',
+  'repetition': 'stuck repeating the same lines',
+}
+
+export function correctionMessage(problems: ResponseProblem[]): string {
+  return `Your previous reply was ${problems.map((p) => PROBLEM_TEXT[p]).join(' and ')}. Answer my last request again: lead with the answer, be specific to this code, and use tools if you need information. No preamble or closing pleasantries.`
+}
+
+export function unusableResponseNotice(problems: ResponseProblem[], providerName: string): string {
+  return [
+    `${providerName} returned an unusable reply (${problems.map((p) => PROBLEM_TEXT[p]).join(', ')}), even after one retry.`,
+    '',
+    'Next steps:',
+    '- Send the request again, or rephrase it with the file or error you mean.',
+    '- Pin a stronger model in the Agent header, or switch provider in Settings.',
+  ].join('\n')
+}
+
+// ─── Unverified claims ──────────────────────────────────────────────────────
+
+export type ToolRun = { name: string; ok: boolean }
+export type UnverifiedClaim = 'edit' | 'command' | 'passing'
+
+const FILE_CHANGE_TOOLS = new Set(['write_file', 'edit_file', 'create_file', 'delete_file', 'multi_file_edit'])
+const EDIT_CLAIM = /\b(I|I've|I have|we)\s+(edited|modified|updated|changed|fixed|patched|rewrote|replaced|created|deleted)\b|^\s*(\d+\.|[-*])\s*(Edited|Modified|Updated|Changed|Fixed|Patched|Rewrote|Replaced|Created|Deleted)\s+`/im
+const COMMAND_CLAIM = /\b(I|I've|I have|we)\s+(ran|executed|re-ran)\b|^\s*(\d+\.|[-*])\s*(Ran|Executed|Re-ran)\b/im
+const PASSING_CLAIM = /\b(tests|test suite|the build|typecheck|lint)\s+(passed|now pass(es)?|are (now )?passing|succeeded)\b/i
+
+/**
+ * Claims in a final reply that no tool call in this request backs up, e.g. "Edited `calc.js`",
+ * "Ran `npm test`", "All tests passed" with no edit or run_command behind them. Code blocks are ignored.
+ */
+export function unverifiedClaims(text: string, runs: ToolRun[]): UnverifiedClaim[] {
+  const prose = text.replace(/```[\s\S]*?```/g, '')
+  const edited = runs.some((r) => r.ok && FILE_CHANGE_TOOLS.has(r.name))
+  const ranCommand = runs.some((r) => r.name === 'run_command')
+  const commandPassed = runs.some((r) => r.ok && r.name === 'run_command')
+  const claims: UnverifiedClaim[] = []
+  if (!edited && EDIT_CLAIM.test(prose)) claims.push('edit')
+  if (!ranCommand && COMMAND_CLAIM.test(prose)) claims.push('command')
+  if (!commandPassed && PASSING_CLAIM.test(prose)) claims.push('passing')
+  return claims
+}
+
+const CLAIM_TEXT: Record<UnverifiedClaim, string> = {
+  edit: 'changed files',
+  command: 'ran commands',
+  passing: 'confirmed that tests or a build pass',
+}
+
+function claimList(claims: UnverifiedClaim[]) {
+  return claims.map((c) => CLAIM_TEXT[c]).join(' and ')
+}
+
+export function unverifiedClaimsMessage(claims: UnverifiedClaim[]): string {
+  return `Your reply says you ${claimList(claims)}, but no tool call in this request did that. Do not describe work that did not happen. Make the tool calls now to finish every part of my request. If you cannot, state plainly what was not done or verified and give next steps.`
+}
+
+export function unverifiedClaimsNotice(claims: UnverifiedClaim[]): string {
+  return [
+    `Check this reply: it says the agent ${claimList(claims)}, but no matching tool call ran in this request.`,
+    '',
+    'Next steps:',
+    '- Ask the agent to make the change and run the check, or run it yourself before relying on the result.',
+  ].join('\n')
+}
+
+// ─── Provider failures ──────────────────────────────────────────────────────
+
+export type ProviderAttempt = { name: string; error: string }
+type FailureKind = 'rate' | 'network' | 'server' | 'model' | 'context' | 'other'
+
+export function classifyProviderError(error: string): FailureKind {
+  if (/\b429\b|rate[_ ]?limit|too many requests|quota|resource[_ ]exhausted/i.test(error)) return 'rate'
+  if (/max_tokens.{0,60}(must be|less than or equal|exceeds?|too large)/i.test(error)) return 'model'
+  if (/context|too long|maximum.*tokens|token limit|reduce the length/i.test(error)) return 'context'
+  if (/fetch failed|ENOTFOUND|ECONNREFUSED|ECONNRESET|ETIMEDOUT|network|IPC timeout|timed? ?out|socket/i.test(error)) return 'network'
+  if (/\b5\d\d\b|overloaded|unavailable|internal server error|bad gateway/i.test(error)) return 'server'
+  if (/model|\b404\b|not found|unsupported/i.test(error)) return 'model'
+  return 'other'
+}
+
+const KIND_LABEL: Record<FailureKind, string> = {
+  rate: 'rate limited',
+  network: 'network error',
+  server: 'provider error',
+  model: 'model unavailable',
+  context: 'conversation too long for the model',
+  other: 'request failed',
+}
+
+const KIND_STEP: Record<FailureKind, string> = {
+  rate: 'Wait a minute and retry, or add a key for another free provider in Settings so VD Agent can fall back.',
+  network: 'Check your internet connection, proxy, or firewall. For a local model, make sure its server is running.',
+  server: 'The provider is having problems. Retry shortly or switch provider in Settings.',
+  model: 'Pick a different model in the Agent header, or choose Auto.',
+  context: 'Start a new chat (＋ New chat) or ask about a smaller part of the code.',
+  other: 'Retry. If it keeps failing, switch provider in Settings.',
+}
+
+function oneLine(text: string, max = 200): string {
+  const flat = text.replace(/\s+/g, ' ').trim()
+  return flat.length > max ? `${flat.slice(0, max)}…` : flat
+}
+
+export function describeProviderFailure(attempts: ProviderAttempt[]): string {
+  if (attempts.length === 0) return noProviderNotice()
+  const kinds = attempts.map((a) => classifyProviderError(a.error))
+  const lines = attempts.map((a, i) => `- ${a.name}: ${KIND_LABEL[kinds[i]]} (${oneLine(a.error)})`)
+  const steps = [...new Set(kinds.map((k) => KIND_STEP[k]))].slice(0, 3)
+  const head = attempts.length === 1
+    ? `The request to ${attempts[0].name} failed.`
+    : `The request failed on all ${attempts.length} providers tried.`
+  return [head, ...lines, '', 'Next steps:', ...steps.map((s) => `- ${s}`)].join('\n')
+}
+
+export function describeAuthFailure(providerName: string, error: string): string {
+  return [
+    `${providerName} rejected the API key (${oneLine(error)}).`,
+    'Other providers were not tried, so a bad key is not hidden behind a fallback.',
+    '',
+    'Next steps:',
+    `- Open Settings, select ${providerName}, paste a valid key, and click Save.`,
+  ].join('\n')
+}
+
+export function describeFallback(failed: ProviderAttempt[], usedName: string): string {
+  const what = failed.map((a) => `${a.name} (${KIND_LABEL[classifyProviderError(a.error)]})`).join(', ')
+  return `${what} failed, so this answer came from ${usedName}.`
+}
+
+export function noProviderNotice(): string {
+  return 'No AI provider is set up.\n\nNext steps:\n- Open Settings, select a provider, add its API key, and click Save.'
+}
+
+export function missingKeyNotice(providerName?: string): string {
+  return `No API key is configured${providerName ? ` for ${providerName}` : ''}.\n\nNext steps:\n- Open Settings, select a provider, add its API key, and click Save.\n- Or pick a local provider such as Ollama, which needs no key.`
+}
+
+export function maxRoundsNotice(): string {
+  return `Stopped after ${MAX_TOOL_ROUNDS} tool rounds so the agent cannot loop forever.\n\nNext steps:\n- Reply "continue" to let it keep going.\n- Or narrow the request to one file or one failing test.`
+}

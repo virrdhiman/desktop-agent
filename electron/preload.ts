@@ -17,7 +17,8 @@ import { contextBridge, ipcRenderer } from 'electron'
 
 /** Invoke with a timeout — prevents renderer from hanging if main process stalls */
 function invokeWithTimeout(channel: string, ...args: any[]): Promise<any> {
-  const ms = channel === 'ai:chat' ? 10 * 60 * 1000 : 30_000
+  // tool:execute outlives run_command's own 30 s limit so its clearer timeout message wins.
+  const ms = channel === 'ai:chat' ? 10 * 60 * 1000 : channel === 'tool:execute' ? 60_000 : 30_000
   return Promise.race([
     ipcRenderer.invoke(channel, ...args),
     new Promise((_, reject) => setTimeout(() => reject(new Error(`IPC timeout: ${channel} did not respond in ${ms / 1000}s`)), ms)),
@@ -75,7 +76,7 @@ contextBridge.exposeInMainWorld('api', {
 
   // ═══ Agent Tools ══════════════════════════════════════════════════════════════
   // Tools the agent calls autonomously (definitions in src/types AGENT_TOOLS)
-  toolExecute: (tool: { name: string; args: Record<string, any> }) => invokeWithTimeout('tool:execute', tool),
+  toolExecute: (tool: { name: string; args: Record<string, any>; workspace?: string }) => invokeWithTimeout('tool:execute', tool),
 
   // ═══ Settings ══════════════════════════════════════════════════════════════════
   // API keys, providers, workspace config
@@ -148,7 +149,7 @@ export type ElectronAPI = {
   terminalKill: (termId: string) => Promise<void>
   onTerminalData: (cb: (termId: string, data: string) => void) => void
   onTerminalExit: (cb: (termId: string, exitCode: number) => void) => void
-  toolExecute: (tool: { name: string; args: Record<string, any> }) => Promise<{ result?: string; error?: string }>
+  toolExecute: (tool: { name: string; args: Record<string, any>; workspace?: string }) => Promise<{ result?: string; error?: string }>
   loadSettings: () => Promise<Settings>
   saveSettings: (settings: Settings) => Promise<{ success: boolean } | { error: string }>
   aiChat: (config: { provider: string; apiKey: string; baseUrl: string; model: string; messages: any[]; stream?: boolean; autoSelect?: boolean }) =>

@@ -62,7 +62,7 @@ For OpenAI-compatible providers, on each request:
 
 ## Provider fallback
 
-If the active provider fails for a reason other than an invalid key, VD Agent tries up to three other **Free Official** providers that have keys, in catalog order. Fallback happens automatically. If every provider fails, the chat shows the last error. Local servers, community proxies, image/video services, and paid providers are only used when you make them the active provider.
+If the active provider fails for a reason other than an invalid key, VD Agent tries up to three other **Free Official** providers that have keys, in catalog order. When another provider answers, the chat says which one, and the rest of that request stays on it. If every provider fails, the chat lists each provider's error with next steps. Local servers, community proxies, image/video services, and paid providers are only used when you make them the active provider.
 
 ## Community proxies
 

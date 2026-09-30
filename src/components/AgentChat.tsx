@@ -23,93 +23,21 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import DiffViewer from './DiffViewer'
 import { useStore } from '../store'
-import type { ChatMessage, AgentStep } from '../types'
-import { AGENT_TOOLS } from '../types'
+import type { ChatMessage, AgentStep, ProviderConfig } from '../types'
 import { applyDiscoveredModel, buildProviderChain } from '../lib/providers'
+import { highlightSyntax } from '../lib/highlight'
 import { AUTHOR_NAME, AUTHOR_URL, REPO_URL } from '../lib/brand'
+import {
+  MAX_TOOL_ROUNDS, assessResponse, buildContext, buildHistory, buildSystemPrompt, cleanResponse,
+  correctionMessage, describeAuthFailure, describeFallback, describeProviderFailure, followUpMessage,
+  formatToolResult, hasToolBlock, maxRoundsNotice, missingKeyNotice, noProviderNotice, parseToolCalls,
+  resolveWorkspacePath, unusableResponseNotice, unverifiedClaims, unverifiedClaimsMessage, unverifiedClaimsNotice,
+  type ProviderAttempt, type ToolRun,
+} from '../lib/agent'
 
-const MAX_TOOL_ROUNDS = 10
-const FENCE = '```'
-
-const TOOL_SYSTEM_PROMPT = `You are VD Agent, a senior software engineer working in the user's repository through tools. You run on the user's machine with filesystem, shell, git, and web access.
-If asked who made you, say VD Agent is built by ${AUTHOR_NAME} (${AUTHOR_URL}), source at ${REPO_URL}.
-
-## How you work
-- Inspect before you claim. Read the relevant files, search the code, or run a command before explaining how something works or why it fails. If you have not checked something, say so.
-- Challenge weak requests. If an ask is ambiguous, risky, or likely to cause a regression, say what the problem is and propose a better path. Ask one focused question only when you are genuinely blocked; otherwise state your assumption and proceed.
-- Prefer the smallest correct change. Never rewrite a file you have not read. Preserve the user's uncommitted work.
-- Finish the job end to end: make the change, then verify it with the project's own commands (tests, typecheck, build, or a targeted run).
-- Never say something is done, fixed, or passing unless a tool result in this conversation shows it. If you could not verify, say exactly what is unverified.
-- Destructive actions (deleting files, discarding changes, git reset, force push, dropping data) need the user's explicit consent first.
-- Never print, write, or commit secrets or API keys. Commit only when the user asks.
-
-## Tone
-Professional, direct, concise. Lead with the answer or the result. No hype, filler, or flattery. Be critical of ideas, never of people. When there are tradeoffs, name them and recommend one option.
-
-## Tool calls
-Use EXACTLY this format, one JSON object per block:
-${FENCE}tool
-{"name": "tool_name", "args": {"arg1": "value1"}}
-${FENCE}
-You may call several tools in one reply. Results arrive in the next message; continue until the task is complete. At most ${MAX_TOOL_ROUNDS} tool rounds run per request.
-
-## Available tools (${AGENT_TOOLS.length})
-${AGENT_TOOLS.map((t) => `- **${t.name}**: ${t.description}\n  Params: ${JSON.stringify(t.parameters)}`).join('\n\n')}
-
-## Work method
-1. Understand: read the relevant code and the user's constraints.
-2. Plan briefly: which files change and what could break.
-3. Change: targeted edits (edit_file, multi_file_edit) over full rewrites.
-4. Verify: run the tests, typecheck, build, or the specific command that proves the change.
-5. Report.
-Use web_search for current APIs and docs instead of guessing.
-
-## @ mentions
-- @path: a file or folder the user wants you to look at
-- @web: the user wants a web search
-
-## Plan Mode
-When Plan Mode is on, change nothing. Reply with the files you will read or change, the intended change and its risks, and the order of steps. Then wait for approval.
-
-## Response format
-Markdown with language-tagged code blocks. For finished work use:
-1. Outcome: one or two sentences on what was done or found.
-2. Details: the changes or findings that matter.
-3. Verification: commands run and their results.
-4. Risks and open items, only if there are any.`
-
-// Simple syntax highlighter (uses RegExp constructor to avoid // comment parsing issues)
-function highlightSyntax(code: string, lang?: string): string {
-  let escaped = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-
-  const jsKW = 'const|let|var|function|return|if|else|for|while|do|switch|case|break|continue|new|this|class|extends|import|export|from|default|async|await|try|catch|throw|typeof|instanceof|in|of|true|false|null|undefined|void|delete|yield|static|super|with|debugger'
-  const pyKW = 'def|class|if|elif|else|for|while|return|import|from|as|try|except|finally|raise|with|yield|lambda|pass|break|continue|True|False|None|and|or|not|in|is|global|nonlocal|assert|del|print|self'
-  const goKW = 'func|package|import|var|const|type|struct|interface|return|if|else|for|range|switch|case|default|break|continue|go|defer|chan|map|make|new|true|false|nil'
-  const rsKW = 'fn|let|mut|const|struct|enum|impl|trait|pub|use|mod|crate|return|if|else|for|while|loop|match|break|continue|true|false|as|in|ref|move|async|await'
-
-  let kwStr = jsKW
-  if (lang === 'python' || lang === 'py') kwStr = pyKW
-  else if (lang === 'go') kwStr = goKW
-  else if (lang === 'rust' || lang === 'rs') kwStr = rsKW
-
-  // Keywords
-  escaped = escaped.replace(new RegExp('\\b(' + kwStr + ')\\b', 'g'), '<span style="color:#c678dd">$1</span>')
-
-  // Strings
-  escaped = escaped.replace(/('[^']*')/g, '<span style="color:#98c379">$1</span>')
-  escaped = escaped.replace(/("[^"]*")/g, '<span style="color:#98c379">$1</span>')
-
-  // Numbers
-  escaped = escaped.replace(new RegExp('\\b(\\d+\\.?\\d*)\\b', 'g'), '<span style="color:#d19a66">$1</span>')
-
-  // Hash comments
-  escaped = escaped.replace(/(#[^\n]*)/g, '<span style="color:#5c6370;font-style:italic">$1</span>')
-
-  // Capitalized types
-  escaped = escaped.replace(new RegExp('\\b([A-Z][a-zA-Z0-9]+)\\b', 'g'), '<span style="color:#e5c07b">$1</span>')
-
-  return escaped
-}
+type ChatOutcome =
+  | { content: string; provider: ProviderConfig; failed: ProviderAttempt[] }
+  | { error: string; cancelled?: boolean }
 
 
 // Simple markdown renderer component
@@ -437,26 +365,22 @@ export default function AgentChat() {
       timestamp: Date.now(),
     })
     try {
-      return await window.api.toolExecute({ name: toolName, args })
+      const workspace = useStore.getState().workspacePath || undefined
+      return await window.api.toolExecute({ name: toolName, args, workspace })
     } catch (err: any) {
-      return { error: `Tool execution failed: ${err.message}` }
+      return { error: `Tool execution failed: ${err?.message || err}` }
     }
   }, [])
 
-  const processToolCalls = useCallback(async (content: string, taskId: string) => {
-    const toolRegex = /```tool[ \t]*\r?\n([\s\S]*?)\r?\n?```/g
-    let match
-    const toolCalls: { name: string; args: Record<string, any> }[] = []
+  /** Runs every tool block in the reply and records each run. Returns null when the reply has no tool blocks at all. */
+  const processToolCalls = useCallback(async (content: string, taskId: string, runs: ToolRun[]) => {
+    if (!hasToolBlock(content)) return null
+    const { calls: toolCalls, errors: parseErrors } = parseToolCalls(content)
 
-    while ((match = toolRegex.exec(content)) !== null) {
-      try {
-        const parsed = JSON.parse(match[1].trim())
-        if (parsed && typeof parsed.name === 'string') toolCalls.push({ name: parsed.name, args: parsed.args || {} })
-      } catch { /* malformed tool block; the model sees no result for it */ }
+    const results: string[] = parseErrors.map((e) => `Tool call FAILED before running. ${e}`)
+    for (const e of parseErrors) {
+      addStepToTask(taskId, { id: `${Date.now()}-parse`, type: 'error', content: e, timestamp: Date.now() })
     }
-    if (toolCalls.length === 0) return null
-
-    const results: string[] = []
     for (const toolCall of toolCalls) {
       if (useStore.getState().cancelRequested) break
       addStepToTask(taskId, {
@@ -469,39 +393,46 @@ export default function AgentChat() {
 
       const result = await executeTool(toolCall.name, toolCall.args)
       addToolExecution(settings.activeProvider)
+      runs.push({ name: toolCall.name, ok: !!result && typeof result.error !== 'string' })
 
-      if ('error' in result) {
+      if (typeof result?.error === 'string') {
         addStepToTask(taskId, {
           id: (Date.now() + 1).toString(),
           type: 'error',
-          content: `Error: ${result.error}`,
+          content: `${toolCall.name} failed: ${result.error.slice(0, 800)}`,
           timestamp: Date.now(),
         })
-        results.push(`Tool ${toolCall.name} failed: ${result.error}`)
       } else {
         addStepToTask(taskId, {
           id: (Date.now() + 1).toString(),
           type: 'observation',
-          content: (result.result || 'Done').slice(0, 800),
+          content: (result?.result || 'Done').slice(0, 800),
           timestamp: Date.now(),
         })
-        results.push(`Tool ${toolCall.name} result:\n${result.result}`)
-        if (toolCall.name === 'read_file' && toolCall.args.path) {
-          addOpenFile(toolCall.args.path)
-          setSelectedFile(toolCall.args.path)
+        if (toolCall.name === 'read_file' && typeof toolCall.args.path === 'string') {
+          const opened = resolveWorkspacePath(useStore.getState().workspacePath || undefined, toolCall.args.path)
+          addOpenFile(opened)
+          setSelectedFile(opened)
         }
       }
+      results.push(formatToolResult(toolCall, result || { error: 'The tool returned nothing.' }))
     }
     return results.join('\n\n')
   }, [executeTool, addTerminalEntry, addStepToTask, addOpenFile, setSelectedFile])
 
-  // Active provider first, then official free providers with keys. Auth failures stop the chain.
-  const callWithFallback = useCallback(async (apiMessages: any[]): Promise<{ content: string } | { error: string; cancelled?: boolean }> => {
+  /**
+   * Active provider first, then official free providers with keys. Auth failures stop the chain.
+   * `preferredId` moves the provider that already answered this request to the front, so later
+   * tool rounds don't keep hitting a provider that is rate limited.
+   */
+  const callWithFallback = useCallback(async (apiMessages: any[], preferredId?: string): Promise<ChatOutcome> => {
     const current = useStore.getState().settings
-    const chain = buildProviderChain(current.providers, current.activeProvider)
-    if (chain.length === 0) return { error: 'No provider configured' }
+    const base = buildProviderChain(current.providers, current.activeProvider)
+    const preferred = base.find((p) => p.id === preferredId)
+    const chain = preferred ? [preferred, ...base.filter((p) => p !== preferred)] : base
+    if (chain.length === 0) return { error: noProviderNotice() }
 
-    let lastError = 'All providers failed'
+    const failed: ProviderAttempt[] = []
     for (let i = 0; i < chain.length; i++) {
       const p = chain[i]
       if (useStore.getState().cancelRequested) return { error: 'Cancelled', cancelled: true }
@@ -525,10 +456,8 @@ export default function AgentChat() {
 
       if ('error' in result) {
         if (result.kind === 'cancelled' || useStore.getState().cancelRequested) return { error: 'Cancelled', cancelled: true }
-        if (result.kind === 'auth') {
-          return { error: `${p.name} rejected the API key: ${result.error}\n\nFix the key in Settings. Other providers were not tried, so the auth problem is not hidden.` }
-        }
-        lastError = `${p.name}: ${result.error}`
+        if (result.kind === 'auth') return { error: describeAuthFailure(p.name, result.error) }
+        failed.push({ name: p.name, error: result.error })
         if (i < chain.length - 1) {
           addTerminalEntry({
             id: Date.now().toString(),
@@ -556,9 +485,10 @@ export default function AgentChat() {
         })
       }
 
-      return { content: useStore.getState().streamingContent || result.content }
+      // The main process returns the complete reply; the streamed copy can still be missing its last tokens.
+      return { content: result.content || useStore.getState().streamingContent, provider: p, failed }
     }
-    return { error: lastError }
+    return { error: describeProviderFailure(failed) }
   }, [modelOverride, addTerminalEntry, setAppSettings, setStreamingContent])
 
   const sendMessage = useCallback(async () => {
@@ -570,34 +500,24 @@ export default function AgentChat() {
       addMessage({
         id: Date.now().toString(),
         role: 'system',
-        content: 'No API key configured. Open Settings, select a provider, and add its API key.',
+        content: missingKeyNotice(provider?.name),
         timestamp: Date.now(),
       })
       return
     }
     setCancelRequested(false)
 
-    // Build user content with optional images
+    // Image contents are not sent yet; the model is told which files were attached.
     let userContent = text
     if (pendingImages.length > 0) {
-      // For multimodal: include image descriptions
       userContent = text + '\n\n[Attached images: ' + pendingImages.map(img => img.name).join(', ') + ']'
     }
 
-    // Build context
-    const contextParts: string[] = []
-    if (workspacePath) contextParts.push(`Workspace: ${workspacePath}`)
-    if (selectedFile) contextParts.push(`Current file: ${selectedFile}\n\`\`\`\n${fileContent.slice(0, 5000)}\n\`\`\``)
-
-    const modeLine = planMode
-      ? 'Plan Mode is ON: propose a plan and wait for approval. Do not modify anything.'
-      : 'Plan Mode is OFF: execute the task.'
-    const systemPrompt = [
-      TOOL_SYSTEM_PROMPT,
-      `## Session\n${modeLine}`,
-      contextParts.length > 0 ? `## Context\n${contextParts.join('\n')}` : '',
-      appSettings.customRules ? `## User rules\n${appSettings.customRules}` : '',
-    ].filter(Boolean).join('\n\n')
+    const systemPrompt = buildSystemPrompt({
+      planMode,
+      context: buildContext({ workspacePath, selectedFile, fileContent }),
+      customRules: appSettings.customRules,
+    })
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -620,11 +540,10 @@ export default function AgentChat() {
       createdAt: Date.now(),
     })
 
-    // Build messages for API. System notices shown in the UI are not part of the model's history.
+    // System notices shown in the UI are not part of the model's history.
     let apiMessages = [
       { role: 'system', content: systemPrompt },
-      ...messages.filter((m) => m.role !== 'system').slice(-20).map((m) => ({ role: m.role, content: m.content })),
-      { role: 'user', content: userContent },
+      ...buildHistory([...messages, { role: 'user', content: userContent }]),
     ]
 
     const finish = (status: 'done' | 'error', notice?: string) => {
@@ -634,49 +553,74 @@ export default function AgentChat() {
       setChatLoading(false)
     }
 
-    const result = await callWithFallback(apiMessages)
-    if ('error' in result) {
-      finish('error', result.cancelled ? 'Generation stopped.' : `Error: ${result.error}`)
-      return
+    let answeredBy: string | undefined
+    let fallbackNoticeShown = false
+    const call = async (): Promise<Extract<ChatOutcome, { content: string }> | null> => {
+      const outcome = await callWithFallback(apiMessages, answeredBy)
+      if ('error' in outcome) {
+        finish('error', outcome.cancelled ? 'Generation stopped.' : outcome.error)
+        return null
+      }
+      if (outcome.failed.length > 0 && !fallbackNoticeShown) {
+        fallbackNoticeShown = true
+        addMessage({ id: `${Date.now()}-fallback`, role: 'system', content: describeFallback(outcome.failed, outcome.provider.name), timestamp: Date.now() })
+      }
+      answeredBy = outcome.provider.id
+      return outcome
     }
 
-    let responseContent = result.content
-    addTokens(Math.ceil((userContent.length + systemPrompt.length) / 4), Math.ceil(responseContent.length / 4))
-    addMessage({ id: `${Date.now()}-a0`, role: 'assistant', content: responseContent, timestamp: Date.now() })
-    setStreamingContent('')
+    let outcome = await call()
+    if (!outcome) return
+    addTokens(Math.ceil((userContent.length + systemPrompt.length) / 4), Math.ceil(outcome.content.length / 4))
 
     let round = 0
-    while (responseContent.includes('```tool')) {
-      if (useStore.getState().cancelRequested) { finish('done', 'Generation stopped.'); return }
-      if (round >= MAX_TOOL_ROUNDS) {
-        finish('done', `Stopped after ${MAX_TOOL_ROUNDS} tool rounds. Reply "continue" to let the agent keep going.`)
+    let retried = false
+    const toolRuns: ToolRun[] = []
+    while (true) {
+      const responseContent = outcome.content
+      setStreamingContent('')
+
+      if (!hasToolBlock(responseContent)) {
+        const problems = assessResponse(responseContent)
+        const claims = problems.length === 0 ? unverifiedClaims(responseContent, toolRuns) : []
+        if ((problems.length > 0 || claims.length > 0) && !retried) {
+          retried = true
+          apiMessages = [
+            ...apiMessages,
+            ...(responseContent.trim() ? [{ role: 'assistant', content: responseContent }] : []),
+            { role: 'user', content: problems.length > 0 ? correctionMessage(problems) : unverifiedClaimsMessage(claims) },
+          ]
+          outcome = await call()
+          if (!outcome) return
+          addTokens(0, Math.ceil(outcome.content.length / 4))
+          continue
+        }
+        const cleaned = cleanResponse(responseContent)
+        if (cleaned) addMessage({ id: `${Date.now()}-a${round}`, role: 'assistant', content: cleaned, timestamp: Date.now() })
+        finish('done', problems.length > 0
+          ? unusableResponseNotice(problems, outcome.provider.name)
+          : claims.length > 0 ? unverifiedClaimsNotice(claims) : undefined)
         return
       }
+
+      addMessage({ id: `${Date.now()}-a${round}`, role: 'assistant', content: cleanResponse(responseContent), timestamp: Date.now() })
+      if (useStore.getState().cancelRequested) { finish('done', 'Generation stopped.'); return }
+      if (round >= MAX_TOOL_ROUNDS) { finish('done', maxRoundsNotice()); return }
       round++
       addStepToTask(taskId, { id: `${Date.now()}-t${round}`, type: 'thought', content: `Tool round ${round}`, timestamp: Date.now() })
 
-      const toolResult = await processToolCalls(responseContent, taskId)
-      if (!toolResult) break
+      const toolResult = await processToolCalls(responseContent, taskId, toolRuns)
       if (useStore.getState().cancelRequested) { finish('done', 'Generation stopped.'); return }
 
       apiMessages = [
         ...apiMessages,
         { role: 'assistant', content: responseContent },
-        { role: 'user', content: `Tool execution results:\n${toolResult}\n\nAnalyze the results. Continue the task with more tools if needed; otherwise give the final answer with verification.` },
+        { role: 'user', content: followUpMessage(toolResult || 'No tool call could be read from your reply.') },
       ]
-
-      const followUp = await callWithFallback(apiMessages)
-      if ('error' in followUp) {
-        finish('error', followUp.cancelled ? 'Generation stopped.' : `Error in follow-up: ${followUp.error}`)
-        return
-      }
-      responseContent = followUp.content
-      addTokens(0, Math.ceil(responseContent.length / 4))
-      addMessage({ id: `${Date.now()}-a${round}`, role: 'assistant', content: responseContent, timestamp: Date.now() })
-      setStreamingContent('')
+      outcome = await call()
+      if (!outcome) return
+      addTokens(0, Math.ceil(outcome.content.length / 4))
     }
-
-    finish('done')
   }, [input, chatLoading, messages, getActiveProvider, workspacePath, selectedFile, fileContent, pendingImages, planMode, appSettings.customRules, callWithFallback, processToolCalls, setCancelRequested])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

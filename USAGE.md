@@ -131,7 +131,16 @@ To pin a specific model, choose it in the **model picker** in the Agent header. 
 
 ### Provider fallback
 
-If the active provider fails for a non-auth reason, VD tries up to three other **official free** providers that have keys, in catalog order. This happens automatically; if every provider fails, the chat shows the last error. Local servers and community proxies are never used as fallbacks.
+If the active provider fails for a non-auth reason, VD tries up to three other **official free** providers that have keys, in catalog order. When another provider answers, the chat says which one. The rest of that request stays on the provider that answered, so a rate-limited provider isn't retried on every tool round. If every provider fails, the chat lists each provider's error and suggests next steps. Local servers and community proxies are never used as fallbacks.
+
+### Answer quality
+
+The agent is instructed to lead with the answer, skip filler, ask questions only when the answer changes what it would do, explain failed tool calls, and end with concrete next steps when work remains. VD Agent also enforces a few of these itself:
+
+- Stock openers and closers ("Certainly!", "I hope this helps!") are removed from replies. Code blocks are never changed.
+- If a model returns an empty reply, the next model is tried. If a reply is still empty, only pleasantries, or stuck repeating itself, the agent is asked once to answer again. If that also fails, the chat says so and suggests what to try.
+- If a reply says files were changed, commands were run, or tests passed, but no tool call in that request did so, the agent is asked once to do the work or say what was not done. If the claim remains, the chat adds a "Check this reply" notice.
+- Failed tools, failed commands (with exit code and output), and malformed tool calls are reported to the model so it can adapt instead of guessing.
 
 ### What the agent can do
 
@@ -217,7 +226,7 @@ Commands include panel navigation, toggling the terminal, **New Chat**, and **Go
 - Click a chat to open it. **＋ New chat** starts a fresh conversation, and the previous one stays in history.
 - Deleting a chat asks for confirmation, then removes its file from disk.
 - Configured API keys and common key formats are redacted before saving. Corrupt files are skipped, and files from older versions still load.
-- Chats that contain only system notices (for example "No API key configured") are not saved.
+- Chats that contain only system notices (for example "No API key is configured") are not saved.
 - Use **📤 Export** in the Agent header to download the current chat as Markdown.
 
 ---
@@ -303,7 +312,7 @@ The most common fixes:
 
 | Problem | Solution |
 |---------|----------|
-| "No API key configured" | Settings → add a key for the active provider |
+| "No API key is configured" | Settings → add a key for the active provider |
 | "rejected the API key" | The key is invalid or revoked. Re-copy it from the provider. VD does not fall back on auth errors on purpose. |
 | Can't see the file you opened | The editor appears beside the 🤖 Agent panel |
 | Blank screen | Open DevTools (`Ctrl+Shift+I`) and check the console |

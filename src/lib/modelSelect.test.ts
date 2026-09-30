@@ -14,6 +14,8 @@ import {
   MAX_MODEL_ATTEMPTS,
   rankModels,
   scoreModel,
+  tryModels,
+  type ModelAttemptResult,
 } from './modelSelect'
 
 describe('model filtering', () => {
@@ -23,6 +25,7 @@ describe('model filtering', () => {
     'whisper-large-v3',
     'distil-whisper-large-v3-en',
     'playai-tts',
+    'canopylabs/orpheus-arabic-saudi',
     'tts-1-hd',
     'gpt-4o-mini-transcribe',
     'gpt-4o-audio-preview',
@@ -144,8 +147,69 @@ describe('error classification', () => {
     expect(classifyModelError('API error (401): invalid api key; rate limit headers attached')).toBe('auth')
   })
 
+  it('moves on when a model caps max_tokens below the request', () => {
+    const groq = 'API error (400): {"error":{"message":"`max_tokens` must be less than or equal to `4096`, the maximum value for `max_tokens` is less than the `context_window` for this model"}}'
+    expect(classifyModelError(groq)).toBe('retry-model')
+  })
+
+  it('moves on when a model needs its terms accepted first', () => {
+    const groq = 'API error (400): {"error":{"message":"The model `x/y` requires terms acceptance. Please have the org admin accept the terms at https://console.groq.com"}}'
+    expect(classifyModelError(groq)).toBe('retry-model')
+  })
+
   it('does not retry models for request-level errors', () => {
     expect(classifyModelError('API error (400): context length exceeded')).toBe('other')
     expect(classifyModelError('fetch failed')).toBe('other')
+  })
+})
+
+describe('tryModels', () => {
+  const scripted = (replies: Record<string, ModelAttemptResult>) => {
+    const tried: string[] = []
+    const attempt = async (model: string) => {
+      tried.push(model)
+      return replies[model]
+    }
+    return { tried, attempt }
+  }
+
+  it('moves past a model that returns a blank reply', async () => {
+    const { tried, attempt } = scripted({ 'gpt-oss-120b': { content: '  \n' }, 'llama-3.3-70b': { content: 'Answer.' } })
+    expect(await tryModels(['gpt-oss-120b', 'llama-3.3-70b'], attempt)).toEqual({ content: 'Answer.', model: 'llama-3.3-70b' })
+    expect(tried).toEqual(['gpt-oss-120b', 'llama-3.3-70b'])
+  })
+
+  it('returns a blank reply from the last model so the caller can correct it', async () => {
+    const { attempt } = scripted({ a: { content: '' }, b: { content: '' } })
+    expect(await tryModels(['a', 'b'], attempt)).toEqual({ content: '', model: 'b' })
+  })
+
+  it('reports the first real error, not the weakest fallback model', async () => {
+    const { tried, attempt } = scripted({
+      big: { error: 'API error (429): Rate limit reached (TPM)', kind: 'retry-model' },
+      mid: { content: '' },
+      small: { error: 'API error (400): `max_tokens` must be less than or equal to `4096`', kind: 'retry-model' },
+    })
+    expect(await tryModels(['big', 'mid', 'small'], attempt)).toEqual({
+      error: 'big: API error (429): Rate limit reached (TPM) (3 models tried)',
+      kind: 'retry-model',
+    })
+    expect(tried).toEqual(['big', 'mid', 'small'])
+  })
+
+  it('reports no model when the list is empty', async () => {
+    expect(await tryModels([], async () => ({ content: 'x' }))).toMatchObject({ kind: 'retry-model' })
+  })
+
+  it('stops at the first non-retryable error', async () => {
+    const { tried, attempt } = scripted({ a: { error: 'API error (401): invalid api key', kind: 'auth' }, b: { content: 'x' } })
+    expect(await tryModels(['a', 'b'], attempt)).toMatchObject({ error: 'a: API error (401): invalid api key', kind: 'auth' })
+    expect(tried).toEqual(['a'])
+  })
+
+  it('stops when cancelled', async () => {
+    const { tried, attempt } = scripted({ a: { content: 'x' } })
+    expect(await tryModels(['a'], attempt, () => true)).toEqual({ error: 'Cancelled', kind: 'cancelled' })
+    expect(tried).toEqual([])
   })
 })

@@ -23,6 +23,20 @@ All notable changes to VD Agent are documented here.
 - System notices (errors, missing key) are no longer sent to the model as user messages.
 - Tool descriptions for speech, video, and image analysis now match what the tools actually do.
 
+### Answer quality
+- The system prompt now sets explicit rules: no filler openers or closers, specific and critical answers, questions only when they change the work (at most two, each with a default), a clear report for every failed tool, and "Next steps:" when work remains.
+- Tool paths now resolve against the open workspace, and `run_command` runs there by default. Previously they resolved against the app's own folder.
+- `run_command` reports non-zero exits and timeouts as failures with the exit code, stdout, and stderr. Previously a failing command looked like a success, and stderr was dropped when there was stdout.
+- Failed tool results reach the model labelled `FAILED`, with the arguments and a hint about the likely cause. Malformed tool blocks are reported back instead of silently ignored. Large results are truncated with a note.
+- History sent to the model has a size budget, collapses earlier tool calls into short notes, and notes when the editor file in context was truncated.
+- Replies are cleaned of stock openers and closers, outside code blocks only. An empty, filler-only, or looping reply gets one automatic retry, then a clear notice.
+- A model that returns an empty reply (seen with reasoning models such as `gpt-oss-120b` on Groq) no longer ends the request; the next model is tried.
+- A reply that claims edits, commands, or passing tests with no matching tool call in that request is challenged once, then flagged with a "Check this reply" notice.
+- When every model on a provider fails, the first real error (usually the rate limit) is reported instead of the last fallback model's. Per-model `max_tokens` caps and models that need their terms accepted move on to the next model, and Orpheus text-to-speech models are no longer tried for chat.
+- Fallback tells you which provider answered and stays on it for the rest of the request. When everything fails, the chat lists each provider's error with next steps. Missing-key, auth, and tool-round-limit messages also end with next steps.
+- Fixed replies occasionally being cut off at the end, because the streamed copy was used instead of the complete reply.
+- Fixed chat code blocks, including tool calls, showing stray highlighter markup such as `#98c379">`.
+
 ### Free API key model selection
 - Discovers `/models` for OpenAI-compatible providers (8 s timeout, 10 min cache keyed by a hash of the key).
 - Wider non-chat filtering: embeddings, rerank, moderation/guard, audio, speech, TTS, transcription, realtime, image, and video.

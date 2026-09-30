@@ -20,6 +20,7 @@ const NON_CHAT_PATTERNS: RegExp[] = [
   /whisper/,
   /(^|[/\-_.])tts([\-_.]|$)/,
   /text-to-speech/,
+  /orpheus/,
   /speech/,
   /transcri/,
   /audio/,
@@ -139,6 +140,12 @@ const AUTH_TEXT =
 const RETRY_TEXT =
   /model[_ ]?not[_ ]?found|does not exist|unknown model|invalid model|no such model|model .{0,60}not (found|available|supported)|not a valid model|decommissioned|deprecated|no longer (available|supported)|unsupported model|model is not supported|no endpoints found|rate[_ ]?limit|too many requests|quota|resource[_ ]exhausted|capacity|overloaded|temporarily unavailable|service unavailable|insufficient credits|payment required/
 
+/**
+ * Per-model limits, not request problems: an output cap ("`max_tokens` must be less than or equal
+ * to 4096") or a model that needs its terms accepted in the provider console first.
+ */
+const MODEL_LIMIT_TEXT = /max_tokens.{0,60}(must be|less than or equal|exceeds?|too large)|maximum value for .?max_tokens|requires terms acceptance|accept the terms/
+
 export function extractStatus(message: string): number | undefined {
   const m = message.match(/\((\d{3})\)/) || message.match(/\b(401|402|403|404|408|429|500|502|503|504|529)\b/)
   return m ? Number(m[1]) : undefined
@@ -156,7 +163,7 @@ export function classifyModelError(message: string, status?: number): ModelError
   if (code === 401 || AUTH_TEXT.test(t)) return 'auth'
   if (code === 403) return /model/.test(t) ? 'retry-model' : 'auth'
   if (code !== undefined && [402, 404, 408, 429, 502, 503, 504, 529].includes(code)) return 'retry-model'
-  if (RETRY_TEXT.test(t)) return 'retry-model'
+  if (RETRY_TEXT.test(t) || MODEL_LIMIT_TEXT.test(t)) return 'retry-model'
   return 'other'
 }
 
@@ -166,4 +173,44 @@ export function isRetryableModelError(message: string, status?: number): boolean
 
 export function isAuthError(message: string, status?: number): boolean {
   return classifyModelError(message, status) === 'auth'
+}
+
+export type ModelAttemptResult =
+  | { content: string }
+  | { error: string; kind: ModelErrorKind | 'cancelled'; status?: number }
+
+export type ModelOutcome =
+  | { content: string; model: string }
+  | { error: string; kind: ModelErrorKind | 'cancelled'; status?: number }
+
+/**
+ * Try models in order. A retryable error or a blank reply moves on to the next model; some
+ * reasoning models (e.g. gpt-oss) can finish with no answer text at all. A blank reply from the
+ * last model is returned as-is so the caller can still ask for a corrected one.
+ *
+ * When every model fails, the first real error is reported: it comes from the strongest model
+ * and is usually the actionable one (a rate limit), unlike a weak fallback's parameter limits.
+ */
+export async function tryModels(
+  models: string[],
+  attempt: (model: string) => Promise<ModelAttemptResult>,
+  isCancelled: () => boolean = () => false
+): Promise<ModelOutcome> {
+  let first: Extract<ModelOutcome, { error: string }> | undefined
+  let tried = 0
+  for (let i = 0; i < models.length; i++) {
+    const model = models[i]
+    if (isCancelled()) return { error: 'Cancelled', kind: 'cancelled' }
+    const result = await attempt(model)
+    tried++
+    if ('error' in result) {
+      const failure = { ...result, error: `${model}: ${result.error}` }
+      if (result.kind !== 'retry-model') return failure
+      first ??= failure
+      continue
+    }
+    if (result.content.trim() || i === models.length - 1) return { content: result.content, model }
+  }
+  if (!first) return { error: 'No model available for this provider', kind: 'retry-model' }
+  return tried > 1 ? { ...first, error: `${first.error} (${tried} models tried)` } : first
 }
