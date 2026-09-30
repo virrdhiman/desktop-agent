@@ -41,10 +41,10 @@ export default function Sidebar() {
           width: 32, height: 32, borderRadius: 8, display: 'flex',
           alignItems: 'center', justifyContent: 'center',
           background: 'linear-gradient(135deg, var(--accent), #a855f7)',
-          fontSize: 16, fontWeight: 700, color: 'white', marginBottom: 8,
+          fontSize: 11, fontWeight: 700, color: 'white', marginBottom: 8,
         }}
       >
-        F
+        VD
       </div>
 
       {/* Search / command palette */}

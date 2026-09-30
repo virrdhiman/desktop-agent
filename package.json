@@ -1,15 +1,16 @@
 {
   "name": "vd-agent",
-  "version": "1.0.0",
+  "productName": "VD Agent",
+  "version": "1.0.1",
   "type": "module",
-  "description": "Desktop AI agent with local file access, git operations, and multi-provider API support",
+  "description": "VD Agent: desktop AI coding agent with free API key model selection, git, terminal, and local chat history",
   "author": "Virender Dhiman <virenderdhiman@gmail.com>",
-  "homepage": "https://github.com/virrdhiman/desktop-agent",
+  "homepage": "https://github.com/virenderdhiman/vd-agent",
   "repository": {
     "type": "git",
-    "url": "https://github.com/virrdhiman/desktop-agent"
+    "url": "https://github.com/virenderdhiman/vd-agent"
   },
-  "keywords": ["ai", "agent", "desktop", "electron", "cursor", "code", "git", "llm", "openai", "free", "virender-dhiman"],
+  "keywords": ["ai", "agent", "coding-agent", "desktop", "electron", "code", "git", "llm", "openai-compatible", "vd-agent", "virender-dhiman"],
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
@@ -61,7 +62,7 @@
     "forceCodeSigning": false,
     "appId": "com.vd.agent",
     "productName": "VD Agent",
-    "copyright": "Copyright © 2025 Virender Dhiman",
+    "copyright": "Copyright © 2026 Virender Dhiman / VD",
     "directories": {
       "output": "release",
       "buildResources": "build"

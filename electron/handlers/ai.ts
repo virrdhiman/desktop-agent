@@ -1,134 +1,243 @@
 /**
  * @author Virender Dhiman
- * @year 2025
+ * @year 2026
  * @project VD Agent
  * @license MIT
  */
 /**
  * AI Chat Streaming IPC Handler
- * Supports OpenAI-compatible + Anthropic protocols with streaming
+ * OpenAI-compatible + Anthropic, with per-key model discovery and per-model fallback.
  */
 import { ipcMain, BrowserWindow } from 'electron'
+import { createHash } from 'crypto'
+import {
+  buildModelAttemptList,
+  classifyModelError,
+  rankModels,
+  type ModelErrorKind,
+} from '../../src/lib/modelSelect'
+
+type ChatConfig = {
+  provider: string
+  apiKey: string
+  baseUrl: string
+  model: string
+  messages: any[]
+  stream: boolean
+  autoSelect?: boolean
+}
+
+type ChatError = { error: string; kind: ModelErrorKind | 'cancelled'; status?: number }
+type ChatSuccess = { content: string }
+
+const MODELS_TIMEOUT_MS = 8000
+const CACHE_MS = 10 * 60 * 1000
+const modelCache = new Map<string, { ids: string[]; at: number }>()
+
+let activeController: AbortController | null = null
+
+function trimBase(baseUrl: string) {
+  return baseUrl.replace(/\/+$/, '')
+}
+
+/** Cache key never contains the raw key. */
+function cacheKey(baseUrl: string, apiKey: string) {
+  const digest = createHash('sha256').update(apiKey).digest('hex').slice(0, 16)
+  return `${trimBase(baseUrl)}::${digest}`
+}
+
+function redactKey(text: string, apiKey: string) {
+  return apiKey && apiKey.length >= 8 ? text.split(apiKey).join('[redacted]') : text
+}
+
+function isAbort(err: any) {
+  return err?.name === 'AbortError' || activeController?.signal.aborted
+}
+
+async function toError(response: Response, apiKey: string): Promise<ChatError> {
+  const body = redactKey(await response.text().catch(() => ''), apiKey)
+  const error = `API error (${response.status}): ${body.slice(0, 300)}`
+  return { error, status: response.status, kind: classifyModelError(error, response.status) }
+}
+
+async function listProviderModels(baseUrl: string, apiKey: string): Promise<string[]> {
+  const key = cacheKey(baseUrl, apiKey)
+  const hit = modelCache.get(key)
+  if (hit && Date.now() - hit.at < CACHE_MS) return hit.ids
+
+  const response = await fetch(`${trimBase(baseUrl)}/models`, {
+    headers: { Authorization: `Bearer ${apiKey}` },
+    signal: AbortSignal.timeout(MODELS_TIMEOUT_MS),
+  })
+  if (!response.ok) return []
+  const data: any = await response.json()
+  const raw = Array.isArray(data) ? data : data.data || data.models || []
+  const ids: string[] = raw
+    .map((m: any) => (typeof m === 'string' ? m : m?.id || m?.name))
+    .filter((id: unknown): id is string => typeof id === 'string' && id.length > 0)
+  modelCache.set(key, { ids, at: Date.now() })
+  return ids
+}
+
+async function readSse(
+  body: ReadableStream<Uint8Array>,
+  getMainWindow: () => BrowserWindow | null,
+  extract: (parsed: any) => string | undefined
+): Promise<string> {
+  const reader = body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let full = ''
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() || ''
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue
+      const data = line.slice(6).trim()
+      if (data === '[DONE]') continue
+      try {
+        const token = extract(JSON.parse(data))
+        if (token) {
+          full += token
+          getMainWindow()?.webContents.send('ai:stream', token)
+        }
+      } catch { /* partial SSE chunk */ }
+    }
+  }
+  return full
+}
+
+async function completeAnthropic(
+  getMainWindow: () => BrowserWindow | null,
+  config: ChatConfig,
+  signal: AbortSignal
+): Promise<ChatSuccess | ChatError> {
+  const system = config.messages.filter((m: any) => m.role === 'system').map((m: any) => m.content).join('\n\n')
+  const response = await fetch(`${trimBase(config.baseUrl)}/v1/messages`, {
+    method: 'POST',
+    signal,
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': config.apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: config.model,
+      max_tokens: 8192,
+      stream: !!config.stream,
+      ...(system ? { system } : {}),
+      messages: config.messages
+        .filter((m: any) => m.role !== 'system')
+        .map((m: any) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content })),
+    }),
+  })
+
+  if (!response.ok) return toError(response, config.apiKey)
+
+  if (config.stream && response.body) {
+    const content = await readSse(response.body, getMainWindow, (p) =>
+      p.type === 'content_block_delta' ? p.delta?.text : undefined
+    )
+    return { content }
+  }
+
+  const data = await response.json()
+  if (data.error) {
+    const error = redactKey(String(data.error.message || JSON.stringify(data.error)), config.apiKey)
+    return { error, kind: classifyModelError(error) }
+  }
+  return { content: data.content?.[0]?.text || '' }
+}
+
+async function completeOpenAI(
+  getMainWindow: () => BrowserWindow | null,
+  config: ChatConfig,
+  model: string,
+  signal: AbortSignal
+): Promise<ChatSuccess | ChatError> {
+  const response = await fetch(`${trimBase(config.baseUrl)}/chat/completions`, {
+    method: 'POST',
+    signal,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${config.apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages: config.messages,
+      max_tokens: 8192,
+      stream: !!config.stream,
+    }),
+  })
+
+  if (!response.ok) return toError(response, config.apiKey)
+
+  if (config.stream && response.body) {
+    const content = await readSse(response.body, getMainWindow, (p) => p.choices?.[0]?.delta?.content)
+    return { content }
+  }
+
+  const data = await response.json()
+  if (data.error) {
+    const error = redactKey(String(data.error.message || JSON.stringify(data.error)), config.apiKey)
+    return { error, kind: classifyModelError(error) }
+  }
+  return { content: data.choices?.[0]?.message?.content || '' }
+}
 
 export function registerAiHandlers(getMainWindow: () => BrowserWindow | null) {
-  ipcMain.handle(
-    'ai:chat',
-    async (_event, config: { provider: string; apiKey: string; baseUrl: string; model: string; messages: any[]; stream: boolean }) => {
-      try {
-        // Anthropic protocol
-        if (config.provider === 'anthropic') {
-          const response = await fetch(`${config.baseUrl}/v1/messages`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-api-key': config.apiKey,
-              'anthropic-version': '2023-06-01',
-            },
-            body: JSON.stringify({
-              model: config.model,
-              max_tokens: 8192,
-              stream: !!config.stream,
-              messages: config.messages.map((m: any) => ({
-                role: m.role === 'assistant' ? 'assistant' : 'user',
-                content: typeof m.content === 'string' ? m.content : m.content,
-              })),
-            }),
-          })
+  ipcMain.handle('ai:chat', async (_event, config: ChatConfig) => {
+    activeController?.abort()
+    const controller = new AbortController()
+    activeController = controller
 
-          if (config.stream && response.body) {
-            const reader = response.body.getReader()
-            const decoder = new TextDecoder()
-            let buffer = ''
-            let fullContent = ''
-
-            while (true) {
-              const { done, value } = await reader.read()
-              if (done) break
-              buffer += decoder.decode(value, { stream: true })
-
-              const lines = buffer.split('\n')
-              buffer = lines.pop() || ''
-
-              for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                  const data = line.slice(6).trim()
-                  if (data === '[DONE]') break
-                  try {
-                    const parsed = JSON.parse(data)
-                    if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
-                      fullContent += parsed.delta.text
-                      getMainWindow()?.webContents.send('ai:stream', parsed.delta.text)
-                    }
-                  } catch {}
-                }
-              }
-            }
-            return { content: fullContent }
-          }
-
-          const data = await response.json()
-          if (data.error) throw new Error(data.error.message)
-          return { content: data.content?.[0]?.text || '' }
-        }
-
-        // OpenAI-compatible (works for most providers)
-        const response = await fetch(`${config.baseUrl}/chat/completions`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${config.apiKey}`,
-          },
-          body: JSON.stringify({
-            model: config.model,
-            messages: config.messages,
-            max_tokens: 8192,
-            stream: !!config.stream,
-          }),
-        })
-
-        if (!response.ok) {
-          const errorBody = await response.text()
-          throw new Error(`API error (${response.status}): ${errorBody.slice(0, 200)}`)
-        }
-
-        if (config.stream && response.body) {
-          const reader = response.body.getReader()
-          const decoder = new TextDecoder()
-          let buffer = ''
-          let fullContent = ''
-
-          while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
-            buffer += decoder.decode(value, { stream: true })
-
-            const lines = buffer.split('\n')
-            buffer = lines.pop() || ''
-
-            for (const line of lines) {
-              if (line.startsWith('data: ')) {
-                const data = line.slice(6).trim()
-                if (data === '[DONE]') break
-                try {
-                  const parsed = JSON.parse(data)
-                  const token = parsed.choices?.[0]?.delta?.content
-                  if (token) {
-                    fullContent += token
-                    getMainWindow()?.webContents.send('ai:stream', token)
-                  }
-                } catch {}
-              }
-            }
-          }
-          return { content: fullContent }
-        }
-
-        const data = await response.json()
-        if (data.error) throw new Error(data.error.message || JSON.stringify(data.error))
-        return { content: data.choices?.[0]?.message?.content || '' }
-      } catch (err: any) {
-        return { error: err.message }
+    try {
+      if (config.provider === 'anthropic') {
+        const result = await completeAnthropic(getMainWindow, config, controller.signal)
+        return 'error' in result ? result : { ...result, model: config.model }
       }
+
+      let models = [config.model]
+      if (config.autoSelect !== false) {
+        try {
+          models = buildModelAttemptList(config.model, await listProviderModels(config.baseUrl, config.apiKey))
+        } catch {
+          models = [config.model]
+        }
+      }
+
+      let last: ChatError = { error: 'No model available for this provider', kind: 'retry-model' }
+      for (const model of models) {
+        if (controller.signal.aborted) return { error: 'Cancelled', kind: 'cancelled' }
+        const result = await completeOpenAI(getMainWindow, config, model, controller.signal)
+        if (!('error' in result)) return { content: result.content, model }
+        last = { ...result, error: `${model}: ${result.error}` }
+        if (result.kind !== 'retry-model') return last
+      }
+      return last
+    } catch (err: any) {
+      if (isAbort(err)) return { error: 'Cancelled', kind: 'cancelled' }
+      const error = redactKey(String(err?.message || err), config.apiKey)
+      return { error, kind: classifyModelError(error) }
+    } finally {
+      if (activeController === controller) activeController = null
     }
-  )
+  })
+
+  ipcMain.handle('ai:cancel', async () => {
+    activeController?.abort()
+    return { success: true }
+  })
+
+  ipcMain.handle('ai:listModels', async (_event, config: { provider: string; apiKey: string; baseUrl: string }) => {
+    if (config.provider === 'anthropic' || !config.apiKey || !config.baseUrl) return []
+    try {
+      return rankModels(await listProviderModels(config.baseUrl, config.apiKey))
+    } catch {
+      return []
+    }
+  })
 }

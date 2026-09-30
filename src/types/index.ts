@@ -77,6 +77,14 @@ export interface ChatMessage {
   streaming?: boolean
 }
 
+export interface ChatSession {
+  id: string
+  title: string
+  createdAt: number
+  updatedAt: number
+  messages: ChatMessage[]
+}
+
 export interface ToolCall {
   id: string
   name: string
@@ -256,8 +264,8 @@ export const AGENT_TOOLS = [
   },
   {
     name: 'generate_video',
-    description: 'Get video generation instructions for Wan, Runway, or Kling',
-    parameters: { provider: 'string — wan|runway|kling', prompt: 'string (optional)' },
+    description: 'Get a Pollinations video URL or setup instructions for Runway/Kling (does not render video locally)',
+    parameters: { provider: 'string — pollinations|wan|runway|kling', prompt: 'string (optional)' },
   },
   {
     name: 'comfyui_workflow',
@@ -266,17 +274,17 @@ export const AGENT_TOOLS = [
   },
   {
     name: 'speech_to_text',
-    description: 'Transcribe audio/speech to text using browser Web Speech API (free, local)',
-    parameters: { audio_path: 'string (optional — path to audio file)' },
+    description: 'Transcribe an audio file with Whisper via the configured Groq or Hugging Face key',
+    parameters: { audio_path: 'string — path to audio file', language: 'string (optional, default en)' },
   },
   {
     name: 'text_to_speech',
-    description: 'Convert text to spoken audio using browser SpeechSynthesis API (free, local)',
+    description: 'Return a Pollinations text-to-speech audio URL for the given text',
     parameters: { text: 'string — text to speak', voice: 'string (optional — voice name)', rate: 'number (optional, 0.1-10, default 1)' },
   },
   {
     name: 'image_analysis',
-    description: 'Analyze an image using a multimodal AI model (describe contents, read text, etc.)',
+    description: 'Analyze an image with Gemini (requires a Gemini key): describe contents, read text, etc.',
     parameters: { image_url: 'string — URL or local path of image', question: 'string (optional — specific question about the image)' },
   },
   {

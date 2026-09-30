@@ -11,9 +11,10 @@
  * - handlers/fs.ts     — File system operations
  * - handlers/git.ts    — Git operations
  * - handlers/terminal.ts — Terminal PTY management
- * - handlers/tools.ts  — Agent tool execution (33 tools)
- * - handlers/settings.ts — Provider configs, API keys, conversations
- * - handlers/ai.ts     — AI chat with streaming
+ * - handlers/tools.ts  — Agent tool execution
+ * - handlers/settings.ts — Provider configs and encrypted API keys
+ * - handlers/conversations.ts — Chat history in userData/conversations
+ * - handlers/ai.ts     — AI chat with streaming, model discovery, cancel
  * - handlers/shell.ts  — OS shell operations
  */
 import { app, BrowserWindow, session } from 'electron'
@@ -25,6 +26,7 @@ import { registerGitHandlers } from './handlers/git'
 import { registerTerminalHandlers } from './handlers/terminal'
 import { registerToolHandlers } from './handlers/tools'
 import { registerSettingsHandlers } from './handlers/settings'
+import { registerConversationHandlers } from './handlers/conversations'
 import { registerAiHandlers } from './handlers/ai'
 import { registerShellHandlers } from './handlers/shell'
 
@@ -87,6 +89,7 @@ app.whenReady().then(() => {
   registerTerminalHandlers(getMainWindow)
   registerToolHandlers()
   registerSettingsHandlers()
+  registerConversationHandlers()
   registerAiHandlers(getMainWindow)
   registerShellHandlers()
 

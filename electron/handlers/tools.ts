@@ -257,7 +257,7 @@ export function registerToolHandlers() {
           }
           case 'web3_ipfs': {
             if (tool.args.action === 'upload' && tool.args.content) {
-              const resp = await fetch('https://api.web3.storage/upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: tool.args.name || 'vd-agent-upload', content: tool.args.content }) })
+              const resp = await fetch('https://api.web3.storage/upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: tool.args.name || 'vd-upload', content: tool.args.content }) })
               if (resp.ok) { const data = await resp.json(); return { result: `Uploaded to IPFS:\nCID: ${data.cid}\nURL: https://ipfs.io/ipfs/${data.cid}` } }
               return { result: 'IPFS Upload: Use https://app.pinata.cloud (free tier) or https://web3.storage (free tier)' }
             }
@@ -306,7 +306,7 @@ export function registerToolHandlers() {
               const resp = await fetch('https://api-inference.huggingface.co/models/openai/whisper-large-v3', { method: 'POST', headers: { 'Authorization': 'Bearer ' + hfKey }, body: formData })
               if (resp.ok) { const data = await resp.json() as any; return { result: `Transcription (Whisper via HuggingFace):\n\n${data.text || JSON.stringify(data)}` } }
             }
-            return { result: 'Speech-to-Text requires:\n1. A Groq API key (free) — Settings → Groq\n2. An audio file path\n\nGroq Whisper: 14,400 min/day, 99 languages.' }
+            return { result: 'Speech-to-Text requires:\n1. A Groq or Hugging Face API key (Settings)\n2. An audio file path (audio_path)' }
           }
           case 'text_to_speech': {
             const text = tool.args.text || 'Hello world'

@@ -25,9 +25,33 @@
  */
 import { create } from 'zustand'
 import type {
-  FileEntry, GitStatus, GitLogEntry, GitBranchInfo, ChatMessage, TerminalEntry, TerminalTab,
+  FileEntry, GitStatus, GitLogEntry, GitBranchInfo, ChatMessage, ChatSession, TerminalEntry, TerminalTab,
   Settings, ProviderConfig, Panel, AgentTask,
 } from '../types'
+
+export const AUTOSAVE_DELAY_MS = 800
+export const MAX_SESSIONS_IN_MEMORY = 100
+
+let autosaveTimer: ReturnType<typeof setTimeout> | null = null
+
+function newSessionId() {
+  return `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+export function sessionTitle(messages: ChatMessage[]): string {
+  const first = messages.find((m) => m.role === 'user')?.content.trim() || ''
+  const line = first.split('\n')[0].trim()
+  return line ? line.slice(0, 80) : 'Untitled chat'
+}
+
+/** Only conversations with at least one user message are worth keeping. */
+function isPersistable(messages: ChatMessage[]) {
+  return messages.some((m) => m.role === 'user')
+}
+
+function toStoredMessages(messages: ChatMessage[]) {
+  return messages.map(({ id, role, content, timestamp }) => ({ id, role, content, timestamp }))
+}
 
 interface AppState {
   // Workspace
@@ -123,16 +147,20 @@ interface AppState {
   setPlanMode: (mode: boolean) => void
 
   // Stop Generation
-  abortController: AbortController | null
-  setAbortController: (ac: AbortController | null) => void
+  cancelRequested: boolean
+  setCancelRequested: (value: boolean) => void
   stopGeneration: () => void
 
-  // Sessions
-  sessions: { id: string; title: string; timestamp: number; messages: ChatMessage[] }[]
-  saveSession: () => void
-  loadSession: (id: string) => void
-  deleteSession: (id: string) => void
+  // Sessions (persisted to userData/conversations by the main process)
+  sessions: ChatSession[]
   currentSessionId: string | null
+  saveSession: () => Promise<void>
+  scheduleSessionSave: () => void
+  flushSessionSave: () => Promise<void>
+  loadSession: (id: string) => Promise<void>
+  deleteSession: (id: string) => Promise<void>
+  newChat: () => Promise<void>
+  hydrateSessions: (records: unknown[], options?: { restoreLatest?: boolean }) => void
 
   // Settings
   settings: Settings
@@ -218,12 +246,21 @@ export const useStore = create<AppState>((set, get) => ({
 
   // Chat
   messages: [],
-  addMessage: (msg) => set((s) => ({ messages: [...s.messages, msg] })),
-  updateMessage: (id, updates) =>
+  addMessage: (msg) => {
+    set((s) => ({
+      messages: [...s.messages, msg],
+      currentSessionId: s.currentSessionId || newSessionId(),
+    }))
+    get().scheduleSessionSave()
+  },
+  updateMessage: (id, updates) => {
     set((s) => ({
       messages: s.messages.map((m) => (m.id === id ? { ...m, ...updates } : m)),
-    })),
-  clearMessages: () => set({ messages: [] }),
+    }))
+    get().scheduleSessionSave()
+  },
+  /** Starts a fresh chat. The previous conversation stays in history. */
+  clearMessages: () => { void get().newChat() },
   chatLoading: false,
   setChatLoading: (loading) => set({ chatLoading: loading }),
   streamingContent: '',
@@ -279,39 +316,106 @@ export const useStore = create<AppState>((set, get) => ({
   setPlanMode: (mode) => set({ planMode: mode }),
 
   // Stop Generation
-  abortController: null,
-  setAbortController: (ac) => set({ abortController: ac }),
+  cancelRequested: false,
+  setCancelRequested: (value) => set({ cancelRequested: value }),
   stopGeneration: () => {
-    const { abortController } = get()
-    if (abortController) abortController.abort()
-    set({ abortController: null, chatLoading: false, streamingContent: '' })
+    set({ cancelRequested: true, chatLoading: false, streamingContent: '' })
+    Promise.resolve()
+      .then(() => window.api.aiCancel())
+      .catch(() => {})
   },
 
   // Sessions
   sessions: [],
   currentSessionId: null,
-  saveSession: () => {
-    const { messages, sessions, currentSessionId } = get()
-    if (messages.length === 0) return
-    const id = currentSessionId || `session-${Date.now()}`
-    const title = messages.find(m => m.role === 'user')?.content.slice(0, 60) || 'Untitled'
-    const session = { id, title, timestamp: Date.now(), messages }
-    const updated = sessions.filter(s => s.id !== id)
-    updated.unshift(session)
-    set({ sessions: updated.slice(0, 50), currentSessionId: id })
-    // Save to disk
-    window.api.saveConversations({ messages, taskId: id }).catch(() => {})
-  },
-  loadSession: (id) => {
-    const { sessions } = get()
-    const session = sessions.find(s => s.id === id)
-    if (session) {
-      set({ messages: session.messages, currentSessionId: id })
+  saveSession: async () => {
+    if (autosaveTimer) { clearTimeout(autosaveTimer); autosaveTimer = null }
+    const { messages, sessions } = get()
+    if (!isPersistable(messages)) return
+    const id = get().currentSessionId || newSessionId()
+    const existing = sessions.find((s) => s.id === id)
+    const now = Date.now()
+    const session: ChatSession = {
+      id,
+      title: sessionTitle(messages),
+      createdAt: existing?.createdAt ?? messages[0]?.timestamp ?? now,
+      updatedAt: now,
+      messages,
+    }
+    set({
+      sessions: [session, ...sessions.filter((s) => s.id !== id)].slice(0, MAX_SESSIONS_IN_MEMORY),
+      currentSessionId: id,
+    })
+    try {
+      const result = await window.api.saveConversation({
+        id,
+        title: session.title,
+        createdAt: session.createdAt,
+        messages: toStoredMessages(messages),
+      })
+      if (result && 'error' in result) console.warn(`Failed to save chat history: ${result.error}`)
+    } catch (err: any) {
+      console.warn(`Failed to save chat history: ${err?.message || err}`)
     }
   },
-  deleteSession: (id) => {
-    const { sessions } = get()
-    set({ sessions: sessions.filter(s => s.id !== id) })
+  scheduleSessionSave: () => {
+    if (autosaveTimer) clearTimeout(autosaveTimer)
+    autosaveTimer = setTimeout(() => {
+      autosaveTimer = null
+      void get().saveSession()
+    }, AUTOSAVE_DELAY_MS)
+  },
+  flushSessionSave: async () => {
+    if (!autosaveTimer) return
+    await get().saveSession()
+  },
+  loadSession: async (id) => {
+    if (get().chatLoading) get().stopGeneration()
+    await get().flushSessionSave()
+    const session = get().sessions.find((s) => s.id === id)
+    if (session) set({ messages: session.messages, currentSessionId: id, streamingContent: '' })
+  },
+  deleteSession: async (id) => {
+    const wasCurrent = get().currentSessionId === id
+    if (wasCurrent && get().chatLoading) get().stopGeneration()
+    if (wasCurrent && autosaveTimer) { clearTimeout(autosaveTimer); autosaveTimer = null }
+    set((s) => ({
+      sessions: s.sessions.filter((x) => x.id !== id),
+      ...(wasCurrent ? { messages: [], currentSessionId: null, streamingContent: '' } : {}),
+    }))
+    try {
+      const result = await window.api.deleteConversation(id)
+      if (result && 'error' in result) console.warn(`Failed to delete chat history: ${result.error}`)
+    } catch (err: any) {
+      console.warn(`Failed to delete chat history: ${err?.message || err}`)
+    }
+  },
+  newChat: async () => {
+    if (get().chatLoading) get().stopGeneration()
+    await get().flushSessionSave()
+    set({ messages: [], currentSessionId: null, streamingContent: '' })
+  },
+  hydrateSessions: (records, options) => {
+    const sessions: ChatSession[] = []
+    for (const r of Array.isArray(records) ? records : []) {
+      const rec = r as Partial<ChatSession> | null
+      if (!rec || typeof rec.id !== 'string' || !Array.isArray(rec.messages) || rec.messages.length === 0) continue
+      const updatedAt = typeof rec.updatedAt === 'number' ? rec.updatedAt : Date.now()
+      sessions.push({
+        id: rec.id,
+        title: typeof rec.title === 'string' && rec.title ? rec.title : sessionTitle(rec.messages),
+        createdAt: typeof rec.createdAt === 'number' ? rec.createdAt : updatedAt,
+        updatedAt,
+        messages: rec.messages,
+      })
+    }
+    sessions.sort((a, b) => b.updatedAt - a.updatedAt)
+    const { messages } = get()
+    const restore = options?.restoreLatest && messages.length === 0 ? sessions[0] : undefined
+    set({
+      sessions: sessions.slice(0, MAX_SESSIONS_IN_MEMORY),
+      ...(restore ? { messages: restore.messages, currentSessionId: restore.id } : {}),
+    })
   },
 
   // Settings

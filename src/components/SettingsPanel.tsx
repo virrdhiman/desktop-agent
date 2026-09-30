@@ -8,18 +8,20 @@
  * SettingsPanel — AI provider configuration
  *
  * Features:
- * - 37 AI providers across 4 categories (free, local, community, paid)
+ * - Provider catalog grouped by category (free, local, community, image/video, paid)
  * - Category filter tabs with counts
  * - Provider search
- * - API key input with security note
+ * - API key input (encrypted at rest when the OS keychain is available)
  * - Base URL and model configuration
  * - Sign-up links for each provider
- * - Custom Rules editor (custom system prompts)
+ * - Custom Rules editor (appended to the system prompt)
  * - Plan Mode toggle
+ * - Settings import/export (export never includes API keys)
  */
 import { useState, useCallback, useMemo } from 'react'
 import { useStore } from '../store'
 import type { ProviderConfig } from '../types'
+import { getProviderCategory, mergeImportedSettings, withoutApiKeys } from '../lib/providers'
 
 type Category = 'all' | 'free' | 'local' | 'community' | 'image_video' | 'paid'
 
@@ -32,17 +34,7 @@ const CATEGORY_LABELS: Record<Category, { label: string; icon: string; color: st
   paid: { label: 'Paid', icon: '💰', color: '#fbbf24' },
 }
 
-const COMMUNITY_IDS = ['g4f', 'chatgpt2api', 'zukijourney', 'electronhub', 'voidai', 'nagaai', 'navyapi', 'mnn', 'webraftai', 'voltai', 'hcap', 'zanityai', 'kimetsu', 'pollinations']
-const LOCAL_IDS = ['ollama', 'lmstudio', 'llamacpp']
-const IMAGE_VIDEO_IDS = ['flux', 'pollinations_img', 'runway', 'kling', 'replicate', 'stability']
-
-function getProviderCategory(p: ProviderConfig): 'free' | 'local' | 'community' | 'image_video' | 'paid' {
-  if (LOCAL_IDS.includes(p.id)) return 'local'
-  if (IMAGE_VIDEO_IDS.includes(p.id)) return 'image_video'
-  if (COMMUNITY_IDS.includes(p.id)) return 'community'
-  if (p.freeTier) return 'free'
-  return 'paid'
-}
+const stripEmoji = (name: string) => name.replace(/[^\p{L}\p{N}\s().&-]/gu, '').trim()
 
 export default function SettingsPanel() {
   const { settings, setSettings, workspacePath, setWorkspacePath, setCurrentDirectory } = useStore()
@@ -132,6 +124,10 @@ export default function SettingsPanel() {
           </div>
 
           <div className="divider" />
+
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: 10 }}>
+            Paste a free API key. VD lists the models that key can call, uses the strongest chat model, and saves it as the provider's model. Pick a specific model in the Agent header to pin it instead.
+          </div>
 
           {/* Search */}
           <div style={{ margin: '10px 0 8px' }}>
@@ -247,7 +243,7 @@ export default function SettingsPanel() {
                     placeholder="Enter your API key..."
                   />
                   <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                    🔒 Key is stored locally and only sent to the AI provider.
+                    🔒 Stored on this machine, encrypted with the OS keychain when available, and sent only to this provider's base URL.
                   </div>
                 </div>
               )}
@@ -268,7 +264,20 @@ export default function SettingsPanel() {
                   value={editing.model}
                   onChange={(e) => setEditing({ ...editing, model: e.target.value })}
                 />
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  Fallback model. For OpenAI-compatible providers VD tries the best model the key can call first and updates this field when that works.
+                </div>
               </div>
+
+              {getProviderCategory(editing) === 'community' && (
+                <div style={{
+                  padding: '10px 12px', borderRadius: 'var(--radius)', fontSize: 12, lineHeight: 1.6,
+                  background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', color: 'var(--text-secondary)',
+                }}>
+                  ⚠️ Community endpoints are unofficial third-party proxies. They receive your prompts and code, and may be unreliable.
+                  VD never uses them as automatic fallbacks. Do not send sensitive code through them.
+                </div>
+              )}
 
               {editing.signupUrl && (
                 <a
@@ -298,48 +307,39 @@ export default function SettingsPanel() {
               AI Provider Settings
             </div>
             <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.7, marginBottom: 20 }}>
-              Configure API keys for <strong style={{ color: 'var(--text-primary)' }}>{settings.providers.length} AI providers</strong>.
-              You can use the agent at <strong style={{ color: '#4ade80' }}>zero cost</strong> with free official providers,
-              local models, or community APIs.
+              Configure API keys for <strong style={{ color: 'var(--text-primary)' }}>{settings.providers.length} providers</strong>.
+              Free tiers from official providers or a local model are enough to use the agent; free-tier limits are set by each provider and change often.
+              If the active provider fails with a rate limit or unavailable model, VD tries other official free providers that have keys.
+              An invalid key stops the request so you can fix it.
             </div>
 
             {/* Category summaries */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
-              <div style={{ padding: 12, borderRadius: 'var(--radius)', background: 'rgba(34,197,94,0.05)', border: '1px solid rgba(34,197,94,0.2)' }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#4ade80', marginBottom: 4 }}>🆓 Free Official ({counts.free})</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                  Groq, Cerebras, SambaNova, HuggingFace, DeepSeek, Gemini, GitHub, OpenRouter, Mistral, Together, Fireworks, DeepInfra, SiliconFlow, xAI, Novita, MiMo
+              {([
+                { cat: 'free', title: '🆓 Free Official', color: '#4ade80', rgb: '34,197,94', note: 'Used for automatic fallback when they have a key.' },
+                { cat: 'local', title: '🏠 Local', color: '#60a5fa', rgb: '96,165,250', note: 'Runs on your machine; prompts stay local.' },
+                { cat: 'community', title: '🏴‍☠️ Community', color: '#c084fc', rgb: '168,85,247', note: 'Unofficial proxies. Never used automatically.' },
+                { cat: 'paid', title: '💰 Paid', color: '#fbbf24', rgb: '245,158,11', note: 'Billed by the provider.' },
+              ] as const).map(({ cat, title, color, rgb, note }) => (
+                <div key={cat} style={{ padding: 12, borderRadius: 'var(--radius)', background: `rgba(${rgb},0.05)`, border: `1px solid rgba(${rgb},0.2)` }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color, marginBottom: 4 }}>{title} ({counts[cat]})</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                    {settings.providers.filter((p) => getProviderCategory(p) === cat).map((p) => stripEmoji(p.name)).join(', ')}
+                    <div style={{ marginTop: 4 }}>{note}</div>
+                  </div>
                 </div>
-              </div>
-              <div style={{ padding: 12, borderRadius: 'var(--radius)', background: 'rgba(96,165,250,0.05)', border: '1px solid rgba(96,165,250,0.2)' }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#60a5fa', marginBottom: 4 }}>🏠 Local ({counts.local})</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                  Ollama, LM Studio, llama.cpp — 100% free & private, runs on your machine
-                </div>
-              </div>
-              <div style={{ padding: 12, borderRadius: 'var(--radius)', background: 'rgba(168,85,247,0.05)', border: '1px solid rgba(168,85,247,0.2)' }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#c084fc', marginBottom: 4 }}>🏴‍☠️ Community ({counts.community})</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                  g4f, Pollinations, Zukijourney, ElectronHub, VoidAI, NagaAI, HelixMind, NavyAPI, MNN, WebraftAI, VoltAI, HCAP, ZanityAI, Kimetsu
-                </div>
-              </div>
-              <div style={{ padding: 12, borderRadius: 'var(--radius)', background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.2)' }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#fbbf24', marginBottom: 4 }}>💰 Paid ({counts.paid})</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                  OpenAI, Anthropic, Cohere, Perplexity — industry leaders
-                </div>
-              </div>
+              ))}
             </div>
 
             {/* Quick start */}
             <div className="card" style={{ marginBottom: 16, padding: 16 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>🚀 Quick Start (Zero Cost)</div>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>🚀 Quick Start</div>
               <ol style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 2, paddingLeft: 20 }}>
-                <li>Click a provider above (try <strong>Groq</strong> for fastest free inference)</li>
+                <li>Select a provider (Groq or Gemini are good free starting points)</li>
                 <li>Click "Get API Key" to open the provider's website</li>
-                <li>Create a free account and copy your API key</li>
+                <li>Create an account and copy the key</li>
                 <li>Paste it in the API Key field and click Save</li>
-                <li>Head to the <strong>🤖 Agent</strong> panel and start chatting!</li>
+                <li>Open the <strong>🤖 Agent</strong> panel and send a message</li>
               </ol>
             </div>
 
@@ -360,7 +360,7 @@ export default function SettingsPanel() {
             <div style={{ marginTop: 24 }}>
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>📝 Custom Rules</div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10, lineHeight: 1.6 }}>
-                Custom instructions that are prepended to every system prompt.
+                Custom instructions appended to every system prompt.
                 Use this to tell the agent how to behave — coding style, conventions, preferences.
               </div>
               <textarea
@@ -406,11 +406,11 @@ export default function SettingsPanel() {
                 <button
                   className="btn btn-sm"
                   onClick={() => {
-                    const blob = new Blob([JSON.stringify(settings, null, 2)], { type: 'application/json' })
+                    const blob = new Blob([JSON.stringify(withoutApiKeys(settings), null, 2)], { type: 'application/json' })
                     const url = URL.createObjectURL(blob)
                     const a = document.createElement('a')
                     a.href = url
-                    a.download = 'vd-agent-settings.json'
+                    a.download = 'vd-settings.json'
                     a.click()
                     URL.revokeObjectURL(url)
                   }}
@@ -429,8 +429,10 @@ export default function SettingsPanel() {
                       const text = await file.text()
                       try {
                         const imported = JSON.parse(text)
-                        setSettings(imported)
-                        await window.api.saveSettings(imported)
+                        if (!imported || !Array.isArray(imported.providers)) throw new Error('missing providers')
+                        const merged = mergeImportedSettings(settings, imported)
+                        setSettings(merged)
+                        await window.api.saveSettings(merged)
                       } catch {
                         alert('Invalid settings file')
                       }
@@ -442,7 +444,7 @@ export default function SettingsPanel() {
                 </button>
               </div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
-                Export saves all provider configs, keys, and preferences. Import restores them.
+                Export saves provider configs and preferences without API keys. Import keeps the keys already stored on this machine.
               </div>
             </div>
           </div>

@@ -18,7 +18,6 @@
  */
 import { useEffect } from 'react'
 import { useStore } from './store'
-import type { ChatMessage } from './types'
 import Sidebar from './components/Sidebar'
 import AgentChat from './components/AgentChat'
 import FileBrowser from './components/FileBrowser'
@@ -60,18 +59,17 @@ export default function App() {
         })
       }
     })
-    // Load saved conversations
-    window.api.loadConversations().then((convs: any) => {
-      if (Array.isArray(convs)) {
-        const sessions = convs.map((c: any) => ({
-          id: c.id || `session-${Date.now()}`,
-          title: c.messages?.[0]?.content?.slice(0, 60) || 'Untitled',
-          timestamp: parseInt(c.id) || Date.now(),
-          messages: (c.messages || []) as ChatMessage[],
-        })).slice(0, 50)
-        useStore.setState({ sessions })
-      }
-    })
+    // Restore chat history saved in userData/conversations
+    window.api.listConversations()
+      .then((records) => {
+        if (Array.isArray(records)) useStore.getState().hydrateSessions(records, { restoreLatest: true })
+        else console.warn(`Failed to load chat history: ${records.error}`)
+      })
+      .catch((err) => console.warn(`Failed to load chat history: ${err?.message || err}`))
+
+    const flush = () => { void useStore.getState().flushSessionSave() }
+    window.addEventListener('beforeunload', flush)
+    return () => window.removeEventListener('beforeunload', flush)
   }, [])
 
   // Global keyboard shortcuts

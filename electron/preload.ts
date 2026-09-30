@@ -1,6 +1,6 @@
 /**
  * @author Virender Dhiman
- * @year 2025
+ * @year 2026
  * @project VD Agent
  * @license MIT
  */
@@ -17,9 +17,10 @@ import { contextBridge, ipcRenderer } from 'electron'
 
 /** Invoke with a timeout — prevents renderer from hanging if main process stalls */
 function invokeWithTimeout(channel: string, ...args: any[]): Promise<any> {
+  const ms = channel === 'ai:chat' ? 10 * 60 * 1000 : 30_000
   return Promise.race([
-    invokeWithTimeout(channel, ...args),
-    new Promise((_, reject) => setTimeout(() => reject(new Error(`IPC timeout: ${channel} did not respond in 30s`)), 30000)),
+    ipcRenderer.invoke(channel, ...args),
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`IPC timeout: ${channel} did not respond in ${ms / 1000}s`)), ms)),
   ])
 }
 
@@ -73,7 +74,7 @@ contextBridge.exposeInMainWorld('api', {
   },
 
   // ═══ Agent Tools ══════════════════════════════════════════════════════════════
-  // Autonomous agent tool execution (26 tools) (agent can call these autonomously)
+  // Tools the agent calls autonomously (definitions in src/types AGENT_TOOLS)
   toolExecute: (tool: { name: string; args: Record<string, any> }) => invokeWithTimeout('tool:execute', tool),
 
   // ═══ Settings ══════════════════════════════════════════════════════════════════
@@ -82,11 +83,15 @@ contextBridge.exposeInMainWorld('api', {
   saveSettings: (settings: any) => invokeWithTimeout('settings:save', settings),
 
   // ═══ AI ════════════════════════════════════════════════════════════════════════
-  // Chat completions with streaming support (with streaming support)
-  aiChat: (config: { provider: string; apiKey: string; baseUrl: string; model: string; messages: any[]; stream?: boolean }) =>
+  // Streaming chat completions, per-key model discovery, cancellation
+  aiChat: (config: { provider: string; apiKey: string; baseUrl: string; model: string; messages: any[]; stream?: boolean; autoSelect?: boolean }) =>
     invokeWithTimeout('ai:chat', config),
+  aiCancel: () => invokeWithTimeout('ai:cancel'),
+  aiListModels: (config: { provider: string; apiKey: string; baseUrl: string }) => invokeWithTimeout('ai:listModels', config),
   onAIStream: (cb: (token: string) => void) => {
-    ipcRenderer.on('ai:stream', (_e, token) => cb(token))
+    const listener = (_e: unknown, token: string) => cb(token)
+    ipcRenderer.on('ai:stream', listener)
+    return () => { ipcRenderer.removeListener('ai:stream', listener) }
   },
 
   // ═══ OS Shell ══════════════════════════════════════════════════════════════════
@@ -95,10 +100,18 @@ contextBridge.exposeInMainWorld('api', {
   showItemInFolder: (targetPath: string) => invokeWithTimeout('shell:showItemInFolder', targetPath),
 
   // ═══ Conversations ═════════════════════════════════════════════════════════════
-  // Save/load chat history across sessions
-  saveConversations: (data: { messages: any[]; taskId: string }) => invokeWithTimeout('conversations:save', data),
-  loadConversations: () => invokeWithTimeout('conversations:load'),
+  // Chat history stored locally in userData/conversations (one file per session)
+  saveConversation: (session: ConversationInput) => invokeWithTimeout('conversations:save', session),
+  listConversations: () => invokeWithTimeout('conversations:list'),
+  deleteConversation: (id: string) => invokeWithTimeout('conversations:delete', id),
 })
+
+export type ConversationMessage = { id: string; role: 'user' | 'assistant' | 'system'; content: string; timestamp: number }
+export type ConversationInput = { id: string; title?: string; createdAt?: number; messages: ConversationMessage[] }
+export type ConversationRecord = { version: number; id: string; title: string; createdAt: number; updatedAt: number; messages: ConversationMessage[] }
+export type AiChatResult =
+  | { content: string; model?: string }
+  | { error: string; kind?: 'auth' | 'retry-model' | 'other' | 'cancelled'; status?: number }
 
 export type ElectronAPI = {
   openDirectory: () => Promise<string | null>
@@ -138,13 +151,16 @@ export type ElectronAPI = {
   toolExecute: (tool: { name: string; args: Record<string, any> }) => Promise<{ result?: string; error?: string }>
   loadSettings: () => Promise<Settings>
   saveSettings: (settings: Settings) => Promise<{ success: boolean } | { error: string }>
-  aiChat: (config: { provider: string; apiKey: string; baseUrl: string; model: string; messages: any[]; stream?: boolean }) =>
-    Promise<{ content: string } | { error: string }>
-  onAIStream: (cb: (token: string) => void) => void
+  aiChat: (config: { provider: string; apiKey: string; baseUrl: string; model: string; messages: any[]; stream?: boolean; autoSelect?: boolean }) =>
+    Promise<AiChatResult>
+  aiCancel: () => Promise<{ success: boolean }>
+  aiListModels: (config: { provider: string; apiKey: string; baseUrl: string }) => Promise<string[]>
+  onAIStream: (cb: (token: string) => void) => () => void
   openPath: (targetPath: string) => Promise<void>
   showItemInFolder: (targetPath: string) => Promise<void>
-  saveConversations: (data: { messages: any[]; taskId: string }) => Promise<{ success: boolean } | { error: string }>
-  loadConversations: () => Promise<any[] | { error: string }>
+  saveConversation: (session: ConversationInput) => Promise<{ success: boolean; id: string; updatedAt: number } | { error: string }>
+  listConversations: () => Promise<ConversationRecord[] | { error: string }>
+  deleteConversation: (id: string) => Promise<{ success: boolean } | { error: string }>
 }
 
 type FileEntry = { name: string; isDirectory: boolean; path: string }
