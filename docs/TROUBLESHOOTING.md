@@ -22,7 +22,7 @@
 | Problem | Fix |
 |---------|-----|
 | `npm install` fails on `node-pty` | Install native build tools: Visual Studio Build Tools with "Desktop development with C++" and Python 3 on Windows, Xcode Command Line Tools on macOS, or `build-essential` and `python3` on Linux. Then run `npm install` again. |
-| `npm test` fails to start | Use Node.js 20 or newer. |
+| `npm test` fails to start | Use Node.js 20.19 or newer. |
 | Port 5173 is in use | Stop the other dev server, or close the other VD Agent dev instance. |
 
 ## The agent
@@ -53,8 +53,10 @@
 
 | Problem | Fix |
 |---------|-----|
-| A chat is missing after restart | A chat is saved once you've sent at least one message. Click **🕘 History** in the Agent header. Files are in `<user data>/conversations/`. |
-| A chat file is corrupt | It is skipped when the list loads. Remove the bad file from `conversations/`. |
+| A chat is missing after restart | A chat is saved once you've sent at least one message. Open **Sessions**, clear the search, and check pinned items. Files are in `<user data>/conversations/`. |
+| A chat file is corrupt | VD tries the last-known-good `.bak` automatically. Keep both files for diagnosis; import an exported copy or remove the bad pair only if recovery fails. |
+| I need to undo an agent edit | Open **Sessions** and use **Restore** on the chat's latest checkpoint. Command and Git side effects may require Git or a manual rollback. |
+| An update is never found | Development builds do not update. A private GitHub repository also cannot serve anonymous client updates; use a public release feed or install the new version manually. |
 
 ## Building
 

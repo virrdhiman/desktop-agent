@@ -4,7 +4,7 @@
  * @project VD Agent
  * @license Proprietary. See LICENSE.
  */
-import type { ProviderConfig, Settings } from '../types'
+import type { AgentTaskKind, ProviderConfig, Settings } from '../types'
 import { rankModels } from './modelSelect'
 
 export type ProviderCategory = 'free' | 'local' | 'community' | 'image_video' | 'paid'
@@ -34,13 +34,86 @@ export const MAX_PROVIDER_ATTEMPTS = 4
 export function buildProviderChain(
   providers: ProviderConfig[],
   activeId: string,
-  max = MAX_PROVIDER_ATTEMPTS
+  max = MAX_PROVIDER_ATTEMPTS,
+  taskKind: AgentTaskKind = 'analysis',
+  now = Date.now()
 ): ProviderConfig[] {
   const active = providers.find((p) => p.id === activeId)
   const fallbacks = providers.filter(
     (p) => p.id !== activeId && !!p.apiKey?.trim() && getProviderCategory(p) === 'free'
-  )
+  ).sort((a, b) => providerScore(b, taskKind, now) - providerScore(a, taskKind, now))
   return [...(active ? [active] : []), ...fallbacks].slice(0, max)
+}
+
+function providerScore(provider: ProviderConfig, taskKind: AgentTaskKind, now: number): number {
+  const stats = provider.performance
+  if (!stats) return 50
+  if ((stats.cooldownUntil || 0) > now) return -100
+  const total = stats.successes + stats.failures
+  const reliability = ((stats.successes + 2) / (total + 4)) * 100
+  const latency = stats.avgLatencyMs > 0 ? Math.max(-20, 15 - stats.avgLatencyMs / 1000) : 0
+  const taskBonus = stats.taskSuccesses?.[taskKind] ? Math.min(12, stats.taskSuccesses[taskKind]! * 2) : 0
+  return reliability + latency + taskBonus - (stats.consecutiveFailures || 0) * 8
+}
+
+export function classifyAgentTask(text: string): AgentTaskKind {
+  const value = text.toLowerCase()
+  if (/\b(readme|documentation|docs|changelog|explain|guide)\b/.test(value)) return 'documentation'
+  if (/\b(fix|implement|build|code|refactor|test|bug|repo|file|function|class)\b/.test(value)) return 'coding'
+  if (text.length < 180 && !/\b(analy[sz]e|review|compare|research|architecture)\b/.test(value)) return 'quick'
+  return 'analysis'
+}
+
+export function recordProviderOutcome(
+  settings: Settings,
+  providerId: string,
+  model: string,
+  ok: boolean,
+  latencyMs: number,
+  taskKind: AgentTaskKind,
+  now = Date.now()
+): Settings {
+  return {
+    ...settings,
+    providers: settings.providers.map((provider) => {
+      if (provider.id !== providerId) return provider
+      const previous = provider.performance || { successes: 0, failures: 0, avgLatencyMs: 0, lastUsedAt: 0 }
+      const attempts = previous.successes + previous.failures
+      const average = attempts === 0 ? latencyMs : Math.round((previous.avgLatencyMs * attempts + latencyMs) / (attempts + 1))
+      const previousModel = previous.models?.[model] || { successes: 0, failures: 0, avgLatencyMs: 0, lastUsedAt: 0 }
+      const modelAttempts = previousModel.successes + previousModel.failures
+      const modelAverage = modelAttempts === 0 ? latencyMs : Math.round((previousModel.avgLatencyMs * modelAttempts + latencyMs) / (modelAttempts + 1))
+      const consecutiveFailures = ok ? 0 : (previous.consecutiveFailures || 0) + 1
+      return {
+        ...provider,
+        performance: {
+          ...previous,
+          successes: previous.successes + (ok ? 1 : 0),
+          failures: previous.failures + (ok ? 0 : 1),
+          avgLatencyMs: average,
+          lastUsedAt: now,
+          consecutiveFailures,
+          cooldownUntil: consecutiveFailures >= 3 ? now + 2 * 60_000 : undefined,
+          taskSuccesses: ok
+            ? { ...previous.taskSuccesses, [taskKind]: (previous.taskSuccesses?.[taskKind] || 0) + 1 }
+            : previous.taskSuccesses,
+          models: {
+            ...previous.models,
+            [model]: {
+              ...previousModel,
+              successes: previousModel.successes + (ok ? 1 : 0),
+              failures: previousModel.failures + (ok ? 0 : 1),
+              avgLatencyMs: modelAverage,
+              lastUsedAt: now,
+              taskSuccesses: ok
+                ? { ...previousModel.taskSuccesses, [taskKind]: (previousModel.taskSuccesses?.[taskKind] || 0) + 1 }
+                : previousModel.taskSuccesses,
+            },
+          },
+        },
+      }
+    }),
+  }
 }
 
 /** Settings as they may be written to an export file: every API key removed. */

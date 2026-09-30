@@ -17,7 +17,7 @@ Bug reports, fixes, and improvements are welcome.
 
 ## Setup
 
-Requirements: Node.js 20 or newer, git, and native build tools for `node-pty` (see [INSTALL.md](./INSTALL.md#run-from-source)).
+Requirements: Node.js 20.19 or newer, git, and native build tools for `node-pty` (see [INSTALL.md](./INSTALL.md#run-from-source)).
 
 ```bash
 git clone https://github.com/<you>/desktop-agent.git
@@ -33,7 +33,7 @@ npm run dev
 | `npm test` | Vitest unit tests for the renderer, `src/lib`, and the Electron main-process logic |
 | `npm run lint` | TypeScript typecheck (`tsc --noEmit`) |
 | `npm run build` | Production build of the renderer and the Electron main process and preload |
-| `npm run smoke` | Builds, then launches the real app twice with a throwaway profile and checks it end to end. Needs a desktop session. |
+| `npm run smoke` | Builds, then launches the real app three times with a throwaway profile and checks UI, restart recovery, native PTY, and agent trajectories end to end. Needs a desktop session. |
 
 Run `npm test`, `npm run lint`, and `npm run build` before every pull request. Also run `npm run smoke` if you changed anything in `electron/`, the build config, or app startup.
 

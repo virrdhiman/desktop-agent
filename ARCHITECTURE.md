@@ -24,7 +24,8 @@ VD Agent is an **Electron + React + TypeScript + Vite** desktop app built on Ele
 │  handlers/ai.ts: streaming chat, model discovery, cancel  │
 │  handlers/conversations.ts + conversationStore.ts         │
 │  handlers/settings.ts: provider catalog, encrypted keys   │
-│  handlers/tools.ts: agent tool implementations            │
+│  handlers/tools.ts: agent tools + enforced permission gate │
+│  checkpointStore.ts, projectMemoryStore.ts, updates.ts     │
 │  handlers/fs.ts, git.ts, terminal.ts (node-pty), shell.ts │
 └────────────────────────┬─────────────────────────────────┘
                          │ ipcMain.handle / ipcRenderer.invoke
@@ -57,6 +58,8 @@ VD Agent is an **Electron + React + TypeScript + Vite** desktop app built on Ele
 
 electron-builder packages these into `release/` using the `build` section of `package.json`. `LICENSE` is shown by the NSIS installer and copied next to the app as `LICENSE.txt`. The platform scripts (`Win/build.bat`, `Mac/build.sh`, `Linux/build.sh`) wrap the whole flow; see [docs/RELEASE_CHECKLIST.md](./docs/RELEASE_CHECKLIST.md).
 
+electron-builder does not rebuild native dependencies a second time. `node-pty` ships Windows/macOS Node-API prebuilds and its npm install step builds the Linux binary; the real Electron smoke gate creates a PTY so a missing or incompatible native module fails before release.
+
 ## Security model
 
 - `contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`. The renderer only reaches Node through `window.api`.
@@ -65,13 +68,17 @@ electron-builder packages these into `release/` using the `build` section of `pa
 - API keys live in `<userData>/settings.json`, encrypted with `safeStorage` when available. The renderer holds decrypted keys in memory so it can pass them to `ai:chat`.
 - Keys never appear in chat history. `conversationStore.redactSecrets` removes configured keys and common key formats before writing. Settings exports strip keys (`withoutApiKeys`).
 - The `/models` cache is keyed by a SHA-256 digest of the key, not the key itself. Provider error bodies have the key redacted before they reach the UI.
+- File writes and deletes must resolve inside the open workspace. `toolPolicy.ts` classifies tool risk in the main process and obtains native confirmation according to the saved permission mode.
+- File mutations create a bounded pre-edit checkpoint before execution. This does not make shell or Git side effects reversible.
+- Renderer permission requests are denied by default. Packaged update checks use electron-updater's HTTPS and SHA-512 integrity path and can be disabled; certificate-backed package signing is configured separately at release time.
 
 ## Chat request flow
 
 ```
 AgentChat.sendMessage
-  → buildSystemPrompt(rules + buildContext(workspace, open file)) + buildHistory(budgeted, tool blocks collapsed)
-  → buildProviderChain(active first, then official free providers with keys, max 4;
+  → buildSystemPrompt(rules + buildContext(workspace, open file, project memory, resume state))
+      + buildHistory(budgeted, tool blocks collapsed)
+  → buildProviderChain(active first, then locally ranked official free providers with keys, max 4;
                        the provider that already answered this request moves to the front)
   → for each provider: window.api.aiChat({ ..., autoSelect: !pinnedModel })
       main: listProviderModels(/models, 8 s timeout, 10 min cache)
@@ -88,8 +95,10 @@ AgentChat.sendMessage
                 a chat notice names the fallback provider (once per request)
   → on failure: describeAuthFailure / describeProviderFailure (every provider tried + next steps)
   → tool loop: parseToolCalls (parse errors go back to the model)
-               → window.api.toolExecute({ name, args, workspace })
-                   main: resolveToolArgs (relative paths → workspace), formatCommandResult
+               → window.api.toolExecute({ name, args, workspace, sessionId, taskId })
+                   main: assessToolPolicy → native approval when required
+                         → createCheckpoint for file mutations
+                         → resolveToolArgs (relative paths → workspace), formatCommandResult
                → formatToolResult (succeeded/FAILED, args, error, hint, truncation) → followUpMessage
                (max 10 rounds; Stop sets cancelRequested and calls ai:cancel)
   → final reply: assessResponse (empty / filler-only / repetition → one correctionMessage retry)
@@ -107,16 +116,17 @@ Anthropic uses the Messages API (`/v1/messages`) with the system prompt in the `
 1. `isUsableChatModel` drops embeddings, rerank, moderation/guard, audio, speech, TTS, transcription, realtime, image, and video models, plus legacy completion-only IDs.
 2. `scoreModel` assigns a quality tier by known model family. It falls back to parameter count (for example `70b`), caps small variants of strong families, and adjusts for efficiency: bonuses for coder/instruct/flash/turbo, penalties for preview/experimental, reasoning-heavy, and nano variants.
 3. `rankModels` keeps only `:free` IDs when a provider lists them (OpenRouter free keys).
-4. `buildModelAttemptList` returns up to 6 attempts, with the configured model last.
+4. `rankModelsWithPerformance` uses local success, latency, and task-type history to break close quality choices without allowing weak models to overtake substantially stronger ones.
+5. `buildModelAttemptList` returns up to 6 attempts, with the configured model last.
 
 ## Chat history persistence
 
-- **Renderer** (`src/store/index.ts`): `addMessage`/`updateMessage` assign a stable `currentSessionId` and schedule a debounced save (`AUTOSAVE_DELAY_MS`). `newChat`, `loadSession`, and `beforeunload` flush pending saves. `deleteSession` removes the chat from memory and calls `conversations:delete`. `hydrateSessions` runs on startup and restores the latest chat.
-- **Main** (`electron/conversationStore.ts`): one file per session at `<userData>/conversations/<id>.json`, with `{ version, id, title, createdAt, updatedAt, messages }`.
+- **Renderer** (`src/store/index.ts`): `addMessage`/`updateMessage` assign a stable `currentSessionId` and schedule a debounced save (`AUTOSAVE_DELAY_MS`). A periodic flush and visibility handler reduce loss on abnormal shutdown. `newChat`, `loadSession`, and `beforeunload` flush pending saves. `hydrateSessions` runs on startup and restores the latest chat's complete resume state.
+- **Main** (`electron/conversationStore.ts`): schema v2 stores one file per session at `<userData>/conversations/<id>.json`, with messages, title/pin/summary metadata, and a sanitized `resume` object containing workspace, file, task, terminal, tool, model, project-memory, checkpoint, verification, and Git state.
   - IDs are validated (`[A-Za-z0-9_-]`) so they can't escape the folder.
-  - Writes are atomic: write to a temp file, then rename.
-  - Only `id`, `role`, `content`, and `timestamp` are stored for each message.
-  - Legacy `{ messages, taskId }` files are normalized. Corrupt files are skipped.
+  - Writes are atomic: write to a temp file, preserve the prior valid file as `.bak`, then rename.
+  - Keys and common key patterns are redacted from messages and nested resume state.
+  - Legacy `{ messages, taskId }` and v1 files are normalized. A corrupt primary file falls back to `.bak`.
 
 ## Main modules
 
@@ -126,10 +136,15 @@ Anthropic uses the Messages API (`/v1/messages`) with the system prompt in the `
 | `electron/navigation.ts` | `isExternalWebUrl`, `isSameAppPage` |
 | `electron/preload.ts` | `window.api` bridge and `ElectronAPI` types |
 | `electron/handlers/ai.ts` | `ai:chat`, `ai:listModels`, `ai:cancel` |
-| `electron/handlers/conversations.ts` | `conversations:save/list/delete` |
+| `electron/handlers/conversations.ts` | Save/list/update/delete/import/export conversation IPC |
 | `electron/conversationStore.ts` | Disk format, validation, redaction |
 | `electron/handlers/settings.ts` | Provider catalog, `settings:load/save`, key encryption |
 | `electron/handlers/tools.ts` | `tool:execute` for every entry in `AGENT_TOOLS` |
+| `electron/toolPolicy.ts` | Workspace boundaries, tool risk classification, approval details |
+| `electron/checkpointStore.ts` | Bounded pre-edit snapshots and restore |
+| `electron/projectMemoryStore.ts` | Deterministic local repository summary and fingerprint |
+| `electron/handlers/workspaceState.ts` | Project-memory and checkpoint IPC |
+| `electron/handlers/updates.ts` | Packaged update check, download, install, and status events |
 | `src/components/AgentChat.tsx` | System prompt, fallback loop, tool loop, markdown rendering |
 | `src/lib/providers.ts` | Provider categories, fallback chain, model persistence, export/import |
 | `src/lib/agent.ts` | System prompt, context, history, tool-call parsing and result formatting, response cleanup, user-facing failure messages |
@@ -161,15 +176,18 @@ Anthropic uses the Messages API (`/v1/messages`) with the system prompt in the `
 ## Testing
 
 - `src/lib/*.test.ts`: model filtering and ranking, error classification, provider chain, model persistence, export/import.
-- `src/__tests__/sessions.test.ts`: auto-save debounce, stable session IDs, new chat, load, delete, startup restore.
-- `electron/__tests__/conversationStore.test.ts` (node environment): disk round-trip, in-place updates, delete, path safety, corrupt and legacy files, secret redaction.
+- `src/__tests__/sessions.test.ts`: auto-save debounce, stable session IDs, new chat, load, delete, startup restore, and resume state.
+- `electron/__tests__/conversationStore.test.ts` (node environment): v2 disk round-trip, in-place updates, backup recovery, delete, path safety, corrupt and legacy files, and nested secret redaction.
+- `electron/__tests__/toolPolicy.test.ts`: permission modes, destructive tools, and workspace boundaries.
+- `electron/__tests__/checkpointStore.test.ts`: snapshot limits, restore, and new-file removal.
+- `electron/__tests__/projectMemoryStore.test.ts`: deterministic project summaries and refresh fingerprints.
 - `src/lib/agent.test.ts`: the prompt's answer-quality rules, context and history building, tool-call parsing, failure hints, filler stripping, junk detection, unverified-claim detection, and failure messages with next steps.
 - `src/lib/highlight.test.ts`: highlighting never leaks markup into code.
 - `electron/__tests__/toolSupport.test.ts`: workspace path resolution and command exit-code, timeout, and output handling.
 - `electron/__tests__/navigation.test.ts`: which links open externally and which navigations are allowed.
 - `electron/__tests__/tools-logic.test.ts`: file system, search, provider, and git helper logic.
 - `src/__tests__/*`: store and component tests.
-- `npm run smoke` (`scripts/smoke.mjs`): builds the app, then launches it three times with a temporary user data folder and workspace, driving it over the Chrome DevTools Protocol. It checks rendering, the preload API and sandbox, settings and conversation IPC, chat persistence across restarts, key redaction, the Monaco editor, link handling, and path-traversal rejection. The third launch points two providers at a local mock server (one always rate limited) and checks the agent end to end: the prompt rules, tool failures and malformed tool calls reaching the model, workspace-relative paths, sticky fallback with a notice, filler stripping, an empty reply trying the next model and then getting one corrective retry, a reply that claims edits and passing tests with no tool call being challenged instead of shown, and the all-providers-failed message. It saves screenshots and never touches your real user data. Use `--exe <path>` to test a packaged build.
+- `npm run smoke` (`scripts/smoke.mjs`): builds the app, then launches it three times with a temporary user data folder and workspace, driving it over the Chrome DevTools Protocol. It checks rendering and viewport geometry, the preload API and sandbox, native PTY startup, updater IPC, project memory, pre-edit checkpoint restore/deletion, rich restart state, key redaction, Monaco, link handling, and path-traversal rejection. The third launch points two providers at a local mock server (one always rate limited) and checks the agent end to end: prompt rules, tool failures and malformed calls, workspace-relative paths, sticky fallback, filler stripping, empty-response recovery, unverified-claim challenges, and total-provider-failure guidance. It never touches real user data; screenshots are opt-in. Use `--exe <path>` to test a packaged build.
 
 ## Performance notes
 

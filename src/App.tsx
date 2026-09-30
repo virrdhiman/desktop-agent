@@ -33,43 +33,64 @@ import CommandPalette from './components/CommandPalette'
 
 export default function App() {
   const {
-    setSettings, workspacePath, setWorkspacePath,
+    setSettings, workspacePath, setWorkspacePath, setProjectMemory,
     selectedFile, showTerminal, activePanel,
     setIsRepo, setGitStatus, setAllFiles, setActivePanel, toggleCommandPalette,
     showCommandPalette, setShowCommandPalette,
   } = useStore()
 
   useEffect(() => {
-    window.api.loadSettings().then((s) => {
-      setSettings(s)
-      if (s.workspacePath) {
-        setWorkspacePath(s.workspacePath)
-        // Check git status
-        window.api.gitIsRepo(s.workspacePath).then((isRepo) => {
+    const initialize = async () => {
+      try {
+        const settings = await window.api.loadSettings()
+        setSettings(settings)
+
+        try {
+          const records = await window.api.listConversations()
+          if (Array.isArray(records)) useStore.getState().hydrateSessions(records, { restoreLatest: true })
+          else console.warn(`Failed to load chat history: ${records.error}`)
+        } catch (err: any) {
+          console.warn(`Failed to load chat history: ${err?.message || err}`)
+        }
+
+        const restoredState = useStore.getState()
+        const activeWorkspace = restoredState.workspacePath || settings.workspacePath
+        if (!activeWorkspace) return
+        if (!restoredState.workspacePath) setWorkspacePath(activeWorkspace)
+        window.api.projectMemoryLoad(activeWorkspace)
+          .then((memory) => { if (!('error' in memory)) setProjectMemory(memory.content) })
+          .catch(() => {})
+        window.api.gitIsRepo(activeWorkspace).then((isRepo) => {
           setIsRepo(isRepo)
           if (isRepo) {
-            window.api.gitStatus(s.workspacePath).then((status) => {
+            window.api.gitStatus(activeWorkspace).then((status) => {
               if (!('error' in status)) setGitStatus(status as any)
             })
           }
         })
-        // Index files for search
-        window.api.walkDirectory(s.workspacePath).then((files) => {
+        window.api.walkDirectory(activeWorkspace).then((files) => {
           setAllFiles(files)
         })
+      } catch (err: any) {
+        console.warn(`Failed to initialize VD Agent: ${err?.message || err}`)
       }
-    })
-    // Restore chat history saved in userData/conversations
-    window.api.listConversations()
-      .then((records) => {
-        if (Array.isArray(records)) useStore.getState().hydrateSessions(records, { restoreLatest: true })
-        else console.warn(`Failed to load chat history: ${records.error}`)
-      })
-      .catch((err) => console.warn(`Failed to load chat history: ${err?.message || err}`))
+    }
+    void initialize()
 
     const flush = () => { void useStore.getState().flushSessionSave() }
+    const checkpointCleanup = window.api.onCheckpointCreated((checkpoint) => {
+      useStore.getState().setLatestCheckpoint(checkpoint)
+    })
+    const autosaveInterval = window.setInterval(flush, 5_000)
+    const onVisibility = () => { if (document.visibilityState === 'hidden') flush() }
     window.addEventListener('beforeunload', flush)
-    return () => window.removeEventListener('beforeunload', flush)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.removeEventListener('beforeunload', flush)
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.clearInterval(autosaveInterval)
+      checkpointCleanup()
+    }
   }, [])
 
   // Global keyboard shortcuts

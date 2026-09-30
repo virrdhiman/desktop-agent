@@ -11,7 +11,7 @@
 import fs from 'fs'
 import path from 'path'
 
-export const CONVERSATION_VERSION = 1
+export const CONVERSATION_VERSION = 2
 export const MAX_STORED_MESSAGES = 1000
 export const DEFAULT_LIST_LIMIT = 100
 
@@ -31,6 +31,9 @@ export interface StoredConversation {
   createdAt: number
   updatedAt: number
   messages: StoredMessage[]
+  pinned?: boolean
+  summary?: string
+  resume?: Record<string, unknown>
 }
 
 const SESSION_ID = /^[A-Za-z0-9_-]{1,100}$/
@@ -106,6 +109,11 @@ export function normalizeConversation(raw: unknown, id: string, fallbackTime: nu
     createdAt,
     updatedAt,
     messages: messages.slice(-MAX_STORED_MESSAGES),
+    pinned: data.pinned === true,
+    summary: typeof data.summary === 'string' ? data.summary.slice(0, 12_000) : undefined,
+    resume: data.resume && typeof data.resume === 'object' && !Array.isArray(data.resume)
+      ? data.resume as Record<string, unknown>
+      : undefined,
   }
 }
 
@@ -115,7 +123,15 @@ function fileFor(dir: string, id: string) {
 
 export async function saveConversation(
   dir: string,
-  input: { id: string; title?: string; createdAt?: number; messages: unknown[] },
+  input: {
+    id: string
+    title?: string
+    createdAt?: number
+    messages: unknown[]
+    pinned?: boolean
+    summary?: string
+    resume?: Record<string, unknown>
+  },
   secrets: string[] = []
 ): Promise<StoredConversation> {
   if (!isValidSessionId(input?.id)) throw new Error('Invalid session id')
@@ -131,14 +147,19 @@ export async function saveConversation(
     ...normalized,
     title: redactSecrets(normalized.title, secrets),
     messages: normalized.messages.map((m) => ({ ...m, content: redactSecrets(m.content, secrets) })),
+    pinned: input.pinned === true,
+    summary: input.summary ? redactSecrets(input.summary.slice(0, 12_000), secrets) : undefined,
+    resume: sanitizeResume(input.resume, secrets),
   }
 
   await fs.promises.mkdir(dir, { recursive: true })
   const target = fileFor(dir, record.id)
   const tmp = `${target}.${process.pid}.tmp`
+  const backup = `${target}.bak`
   const json = JSON.stringify(record, null, 2)
   await fs.promises.writeFile(tmp, json, 'utf-8')
   try {
+    try { await fs.promises.copyFile(target, backup) } catch {}
     await fs.promises.rename(tmp, target)
   } catch {
     // Windows can refuse the rename while another process holds the target open.
@@ -146,6 +167,17 @@ export async function saveConversation(
     await fs.promises.rm(tmp, { force: true })
   }
   return record
+}
+
+function sanitizeResume(value: unknown, secrets: string[]): Record<string, unknown> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  try {
+    const json = JSON.stringify(value)
+    if (json.length > 300_000) return { recoveryNote: 'Resume state exceeded the local storage limit.' }
+    return JSON.parse(redactSecrets(json, secrets))
+  } catch {
+    return undefined
+  }
 }
 
 export async function listConversations(dir: string, limit = DEFAULT_LIST_LIMIT): Promise<StoredConversation[]> {
@@ -168,20 +200,49 @@ export async function listConversations(dir: string, limit = DEFAULT_LIST_LIMIT)
       const conv = normalizeConversation(JSON.parse(text), id, legacyTime)
       if (conv) results.push(conv)
     } catch {
-      console.warn(`Skipping unreadable conversation file: ${name}`)
+      try {
+        const backup = JSON.parse(await fs.promises.readFile(`${file}.bak`, 'utf-8'))
+        const conv = normalizeConversation(backup, id, Date.now())
+        if (conv) results.push(conv)
+      } catch {
+        console.warn(`Skipping unreadable conversation file: ${name}`)
+      }
     }
   }
 
   return results.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, limit)
 }
 
+export async function readConversation(dir: string, id: string): Promise<StoredConversation | null> {
+  if (!isValidSessionId(id)) throw new Error('Invalid session id')
+  const file = fileFor(dir, id)
+  try {
+    const [text, stat] = await Promise.all([fs.promises.readFile(file, 'utf-8'), fs.promises.stat(file)])
+    return normalizeConversation(JSON.parse(text), id, stat.mtimeMs)
+  } catch {
+    try {
+      return normalizeConversation(JSON.parse(await fs.promises.readFile(`${file}.bak`, 'utf-8')), id, Date.now())
+    } catch {
+      return null
+    }
+  }
+}
+
 export async function deleteConversation(dir: string, id: string): Promise<boolean> {
   if (!isValidSessionId(id)) throw new Error('Invalid session id')
+  const target = fileFor(dir, id)
+  let deleted = false
   try {
-    await fs.promises.unlink(fileFor(dir, id))
-    return true
+    await fs.promises.unlink(target)
+    deleted = true
   } catch (err: any) {
-    if (err?.code === 'ENOENT') return false
-    throw err
+    if (err?.code !== 'ENOENT') throw err
   }
+  try {
+    await fs.promises.unlink(`${target}.bak`)
+    deleted = true
+  } catch (err: any) {
+    if (err?.code !== 'ENOENT') throw err
+  }
+  return deleted
 }

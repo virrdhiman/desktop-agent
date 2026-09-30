@@ -26,7 +26,7 @@
 import { create } from 'zustand'
 import type {
   FileEntry, GitStatus, GitLogEntry, GitBranchInfo, ChatMessage, ChatSession, TerminalEntry, TerminalTab,
-  Settings, ProviderConfig, Panel, AgentTask,
+  Settings, ProviderConfig, Panel, AgentTask, CheckpointSummary, ToolExecutionSummary, VerificationSummary,
 } from '../types'
 
 export const AUTOSAVE_DELAY_MS = 800
@@ -51,6 +51,16 @@ function isPersistable(messages: ChatMessage[]) {
 
 function toStoredMessages(messages: ChatMessage[]) {
   return messages.map(({ id, role, content, timestamp }) => ({ id, role, content, timestamp }))
+}
+
+export function buildConversationSummary(messages: ChatMessage[], keepRecent = 20): string {
+  const older = messages.filter((m) => m.role !== 'system').slice(0, Math.max(0, messages.length - keepRecent))
+  if (older.length === 0) return ''
+  const lines = older.slice(-24).map((message) => {
+    const content = message.content.replace(/```tool[\s\S]*?```/g, '[tool call]').replace(/\s+/g, ' ').trim()
+    return `${message.role}: ${content.slice(0, 320)}`
+  })
+  return `Earlier conversation (${older.length} messages summarized locally):\n${lines.join('\n')}`.slice(0, 8_000)
 }
 
 interface AppState {
@@ -125,6 +135,14 @@ interface AppState {
   // Tool calls
   toolResults: Map<string, string>
   setToolResult: (id: string, result: string) => void
+  toolExecutions: ToolExecutionSummary[]
+  recordToolExecution: (run: ToolExecutionSummary) => void
+  latestCheckpoint: CheckpointSummary | undefined
+  setLatestCheckpoint: (checkpoint: CheckpointSummary | undefined) => void
+  lastVerification: VerificationSummary | undefined
+  setLastVerification: (verification: VerificationSummary | undefined) => void
+  projectMemory: string
+  setProjectMemory: (memory: string) => void
 
   // Tasks
   tasks: AgentTask[]
@@ -161,6 +179,9 @@ interface AppState {
   deleteSession: (id: string) => Promise<void>
   newChat: () => Promise<void>
   hydrateSessions: (records: unknown[], options?: { restoreLatest?: boolean }) => void
+  renameSession: (id: string, title: string) => Promise<void>
+  toggleSessionPin: (id: string) => Promise<void>
+  reloadSessions: () => Promise<void>
 
   // Settings
   settings: Settings
@@ -181,7 +202,7 @@ interface AppState {
 export const useStore = create<AppState>((set, get) => ({
   // Workspace
   workspacePath: '',
-  setWorkspacePath: (path) => set({ workspacePath: path, currentDirectory: path }),
+  setWorkspacePath: (path) => set({ workspacePath: path, currentDirectory: path, projectMemory: '' }),
 
   // Navigation
   activePanel: 'chat',
@@ -204,12 +225,16 @@ export const useStore = create<AppState>((set, get) => ({
   files: [],
   setFiles: (files) => set({ files }),
   selectedFile: null,
-  setSelectedFile: (path) => set({ selectedFile: path }),
+  setSelectedFile: (path) => { set({ selectedFile: path }); get().scheduleSessionSave() },
   openFiles: [],
-  addOpenFile: (path) =>
-    set((s) => ({ openFiles: s.openFiles.includes(path) ? s.openFiles : [...s.openFiles, path] })),
-  closeOpenFile: (path) =>
-    set((s) => ({ openFiles: s.openFiles.filter((f) => f !== path) })),
+  addOpenFile: (path) => {
+    set((s) => ({ openFiles: s.openFiles.includes(path) ? s.openFiles : [...s.openFiles, path] }))
+    get().scheduleSessionSave()
+  },
+  closeOpenFile: (path) => {
+    set((s) => ({ openFiles: s.openFiles.filter((f) => f !== path) }))
+    get().scheduleSessionSave()
+  },
   fileContent: '',
   setFileContent: (content) => set({ fileContent: content, fileDirty: false }),
   fileDirty: false,
@@ -276,39 +301,60 @@ export const useStore = create<AppState>((set, get) => ({
       next.set(id, result)
       return { toolResults: next }
     }),
+  toolExecutions: [],
+  recordToolExecution: (run) => {
+    set((s) => ({ toolExecutions: [...s.toolExecutions, run].slice(-100) }))
+    get().scheduleSessionSave()
+  },
+  latestCheckpoint: undefined,
+  setLatestCheckpoint: (checkpoint) => { set({ latestCheckpoint: checkpoint }); get().scheduleSessionSave() },
+  lastVerification: undefined,
+  setLastVerification: (verification) => { set({ lastVerification: verification }); get().scheduleSessionSave() },
+  projectMemory: '',
+  setProjectMemory: (memory) => { set({ projectMemory: memory }); get().scheduleSessionSave() },
 
   // Tasks
   tasks: [],
-  addTask: (task) => set((s) => ({ tasks: [...s.tasks, task] })),
-  updateTask: (id, updates) =>
-    set((s) => ({ tasks: s.tasks.map((t) => (t.id === id ? { ...t, ...updates } : t)) })),
-  addStepToTask: (taskId, step) =>
+  addTask: (task) => { set((s) => ({ tasks: [...s.tasks, task] })); get().scheduleSessionSave() },
+  updateTask: (id, updates) => {
+    set((s) => ({ tasks: s.tasks.map((t) => (t.id === id ? { ...t, ...updates } : t)) }))
+    get().scheduleSessionSave()
+  },
+  addStepToTask: (taskId, step) => {
     set((s) => ({
       tasks: s.tasks.map((t) =>
         t.id === taskId ? { ...t, steps: [...t.steps, step] } : t
       ),
-    })),
+    }))
+    get().scheduleSessionSave()
+  },
 
   // Terminal
   terminalTabs: [{ id: 'term-1', name: 'Terminal 1', cwd: '' }],
-  addTerminalTab: (tab) => set((s) => ({
-    terminalTabs: [...s.terminalTabs, tab],
-    activeTerminalTab: tab.id,
-  })),
-  removeTerminalTab: (id) => set((s) => {
-    const remaining = s.terminalTabs.filter((t) => t.id !== id)
-    return {
-      terminalTabs: remaining,
-      activeTerminalTab: remaining.length > 0
-        ? (s.activeTerminalTab === id ? remaining[0].id : s.activeTerminalTab)
-        : null,
-    }
-  }),
+  addTerminalTab: (tab) => {
+    set((s) => ({ terminalTabs: [...s.terminalTabs, tab], activeTerminalTab: tab.id }))
+    get().scheduleSessionSave()
+  },
+  removeTerminalTab: (id) => {
+    set((s) => {
+      const remaining = s.terminalTabs.filter((t) => t.id !== id)
+      return {
+        terminalTabs: remaining,
+        activeTerminalTab: remaining.length > 0
+          ? (s.activeTerminalTab === id ? remaining[0].id : s.activeTerminalTab)
+          : null,
+      }
+    })
+    get().scheduleSessionSave()
+  },
   activeTerminalTab: 'term-1',
   setActiveTerminalTab: (id) => set({ activeTerminalTab: id }),
 
   terminalEntries: [],
-  addTerminalEntry: (entry) => set((s) => ({ terminalEntries: [...s.terminalEntries, entry] })),
+  addTerminalEntry: (entry) => {
+    set((s) => ({ terminalEntries: [...s.terminalEntries, entry].slice(-200) }))
+    get().scheduleSessionSave()
+  },
   clearTerminal: () => set({ terminalEntries: [] }),
 
   // Plan Mode
@@ -330,20 +376,46 @@ export const useStore = create<AppState>((set, get) => ({
   currentSessionId: null,
   saveSession: async () => {
     if (autosaveTimer) { clearTimeout(autosaveTimer); autosaveTimer = null }
-    const { messages, sessions } = get()
+    const state = get()
+    const { messages, sessions } = state
     if (!isPersistable(messages)) return
-    const id = get().currentSessionId || newSessionId()
+    const id = state.currentSessionId || newSessionId()
     const existing = sessions.find((s) => s.id === id)
     const now = Date.now()
+    const activeProvider = state.settings.providers.find((provider) => provider.id === state.settings.activeProvider)
+    const summary = buildConversationSummary(messages)
     const session: ChatSession = {
       id,
-      title: sessionTitle(messages),
+      title: existing?.title || sessionTitle(messages),
       createdAt: existing?.createdAt ?? messages[0]?.timestamp ?? now,
       updatedAt: now,
       messages,
+      pinned: existing?.pinned,
+      summary,
+      resume: {
+        workspacePath: state.workspacePath || undefined,
+        selectedFile: state.selectedFile,
+        openFiles: state.openFiles.slice(-30),
+        tasks: state.tasks.slice(-20).map((task) => ({ ...task, steps: task.steps.slice(-60) })),
+        terminalTabs: state.terminalTabs.slice(-10),
+        terminalEntries: state.terminalEntries.slice(-100),
+        toolExecutions: state.toolExecutions.slice(-100),
+        providerId: state.settings.activeProvider,
+        model: activeProvider?.model,
+        projectMemory: state.projectMemory.slice(0, 12_000),
+        conversationSummary: summary,
+        checkpoint: state.latestCheckpoint,
+        lastVerification: state.lastVerification,
+        git: state.gitStatus ? {
+          branch: state.gitStatus.branch,
+          dirty: !state.gitStatus.isClean,
+        } : undefined,
+      },
     }
     set({
-      sessions: [session, ...sessions.filter((s) => s.id !== id)].slice(0, MAX_SESSIONS_IN_MEMORY),
+      sessions: [session, ...sessions.filter((s) => s.id !== id)]
+        .sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned) || b.updatedAt - a.updatedAt)
+        .slice(0, MAX_SESSIONS_IN_MEMORY),
       currentSessionId: id,
     })
     try {
@@ -352,6 +424,9 @@ export const useStore = create<AppState>((set, get) => ({
         title: session.title,
         createdAt: session.createdAt,
         messages: toStoredMessages(messages),
+        pinned: session.pinned,
+        summary: session.summary,
+        resume: session.resume as unknown as Record<string, unknown>,
       })
       if (result && 'error' in result) console.warn(`Failed to save chat history: ${result.error}`)
     } catch (err: any) {
@@ -373,7 +448,39 @@ export const useStore = create<AppState>((set, get) => ({
     if (get().chatLoading) get().stopGeneration()
     await get().flushSessionSave()
     const session = get().sessions.find((s) => s.id === id)
-    if (session) set({ messages: session.messages, currentSessionId: id, streamingContent: '' })
+    if (session) {
+      const resume = session.resume
+      set({
+        messages: session.messages,
+        currentSessionId: id,
+        streamingContent: '',
+        ...(resume?.workspacePath ? { workspacePath: resume.workspacePath, currentDirectory: resume.workspacePath } : {}),
+        selectedFile: resume?.selectedFile ?? null,
+        openFiles: resume?.openFiles || [],
+        tasks: resume?.tasks || [],
+        terminalTabs: resume?.terminalTabs?.length ? resume.terminalTabs : [{ id: 'term-1', name: 'Terminal 1', cwd: resume?.workspacePath || '' }],
+        activeTerminalTab: resume?.terminalTabs?.[0]?.id || 'term-1',
+        terminalEntries: resume?.terminalEntries || [],
+        toolExecutions: resume?.toolExecutions || [],
+        projectMemory: resume?.projectMemory || '',
+        latestCheckpoint: resume?.checkpoint,
+        lastVerification: resume?.lastVerification,
+      })
+      if (resume?.workspacePath || resume?.providerId) {
+        const currentSettings = get().settings
+        const nextSettings = {
+          ...currentSettings,
+          workspacePath: resume.workspacePath || currentSettings.workspacePath,
+          ...(resume.providerId ? { activeProvider: resume.providerId } : {}),
+          providers: currentSettings.providers.map((provider) => (
+            provider.id === resume.providerId && resume.model ? { ...provider, model: resume.model } : provider
+          )),
+        }
+        set({ settings: nextSettings })
+        void window.api.saveSettings(nextSettings)
+        if (resume.workspacePath) void window.api.walkDirectory(resume.workspacePath).then((files) => set({ allFiles: files }))
+      }
+    }
   },
   deleteSession: async (id) => {
     const wasCurrent = get().currentSessionId === id
@@ -393,7 +500,10 @@ export const useStore = create<AppState>((set, get) => ({
   newChat: async () => {
     if (get().chatLoading) get().stopGeneration()
     await get().flushSessionSave()
-    set({ messages: [], currentSessionId: null, streamingContent: '' })
+    set({
+      messages: [], currentSessionId: null, streamingContent: '', tasks: [], toolExecutions: [],
+      latestCheckpoint: undefined, lastVerification: undefined,
+    })
   },
   hydrateSessions: (records, options) => {
     const sessions: ChatSession[] = []
@@ -407,15 +517,69 @@ export const useStore = create<AppState>((set, get) => ({
         createdAt: typeof rec.createdAt === 'number' ? rec.createdAt : updatedAt,
         updatedAt,
         messages: rec.messages,
+        pinned: rec.pinned === true,
+        summary: typeof rec.summary === 'string' ? rec.summary : undefined,
+        resume: rec.resume && typeof rec.resume === 'object' ? rec.resume : undefined,
       })
     }
-    sessions.sort((a, b) => b.updatedAt - a.updatedAt)
+    sessions.sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned) || b.updatedAt - a.updatedAt)
     const { messages } = get()
     const restore = options?.restoreLatest && messages.length === 0 ? sessions[0] : undefined
+    const resume = restore?.resume
+    const currentSettings = get().settings
+    const restoredSettings = resume && (resume.workspacePath || resume.providerId) ? {
+      ...currentSettings,
+      workspacePath: resume.workspacePath || currentSettings.workspacePath,
+      ...(resume.providerId ? { activeProvider: resume.providerId } : {}),
+      providers: currentSettings.providers.map((provider) => (
+        provider.id === resume.providerId && resume.model ? { ...provider, model: resume.model } : provider
+      )),
+    } : currentSettings
     set({
       sessions: sessions.slice(0, MAX_SESSIONS_IN_MEMORY),
-      ...(restore ? { messages: restore.messages, currentSessionId: restore.id } : {}),
+      ...(restore ? {
+        messages: restore.messages,
+        currentSessionId: restore.id,
+        ...(resume?.workspacePath ? { workspacePath: resume.workspacePath, currentDirectory: resume.workspacePath } : {}),
+        tasks: resume?.tasks || [],
+        terminalTabs: resume?.terminalTabs?.length ? resume.terminalTabs : [{ id: 'term-1', name: 'Terminal 1', cwd: resume?.workspacePath || '' }],
+        activeTerminalTab: resume?.terminalTabs?.[0]?.id || 'term-1',
+        terminalEntries: resume?.terminalEntries || [],
+        toolExecutions: resume?.toolExecutions || [],
+        selectedFile: resume?.selectedFile ?? null,
+        openFiles: resume?.openFiles || [],
+        projectMemory: resume?.projectMemory || '',
+        latestCheckpoint: resume?.checkpoint,
+        lastVerification: resume?.lastVerification,
+        settings: restoredSettings,
+      } : {}),
     })
+    if (restore && resume && (resume.workspacePath || resume.providerId)) {
+      void window.api.saveSettings(restoredSettings)
+      if (resume.workspacePath) void window.api.walkDirectory(resume.workspacePath).then((files) => set({ allFiles: files }))
+    }
+  },
+  renameSession: async (id, title) => {
+    const clean = title.trim().slice(0, 80)
+    if (!clean) return
+    set((s) => ({ sessions: s.sessions.map((session) => session.id === id ? { ...session, title: clean } : session) }))
+    const result = await window.api.updateConversation(id, { title: clean })
+    if (result && 'error' in result) console.warn(`Failed to rename chat: ${result.error}`)
+  },
+  toggleSessionPin: async (id) => {
+    const session = get().sessions.find((candidate) => candidate.id === id)
+    if (!session) return
+    const pinned = !session.pinned
+    set((s) => ({
+      sessions: s.sessions.map((candidate) => candidate.id === id ? { ...candidate, pinned } : candidate)
+        .sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned) || b.updatedAt - a.updatedAt),
+    }))
+    const result = await window.api.updateConversation(id, { pinned })
+    if (result && 'error' in result) console.warn(`Failed to pin chat: ${result.error}`)
+  },
+  reloadSessions: async () => {
+    const records = await window.api.listConversations()
+    if (Array.isArray(records)) get().hydrateSessions(records)
   },
 
   // Settings

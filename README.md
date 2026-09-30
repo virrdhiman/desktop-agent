@@ -34,7 +34,9 @@ Your chats, settings, and keys stay on your machine. There is no account and no 
 - **Tools.** Files, code search, shell commands, git, web search, and some media and Web3 helpers. See [TOOLS.md](./TOOLS.md).
 - **Plan Mode.** The agent proposes a plan and waits for your approval before it changes files.
 - **Automatic model selection.** Discovers and ranks the models your key can call, and falls back between models and providers. See [How model selection works](#how-model-selection-works).
-- **Chat history.** Every chat is saved locally, restored on restart, and can be reopened or deleted.
+- **Durable resume and recovery.** Chats, tasks, workspace state, recent tool outcomes, terminal context, and verification state survive restarts. Agent file edits get pre-change recovery checkpoints.
+- **Searchable chat history.** Reopen, rename, pin, search, export, import, restore, or delete local sessions.
+- **Technical safety controls.** Electron-native approval prompts protect commands and destructive Git/file actions; writes outside the open workspace are blocked.
 - **Built-in tools for developers.** Monaco code editor, multi-tab terminal, git status, diff, commit, branches, and a command palette (`Ctrl+P`).
 - **Custom Rules.** Your own conventions added to every request.
 
@@ -59,7 +61,7 @@ If no release is listed yet, [run from source](#run-from-source). Full instructi
 
 ## Run from source
 
-You need **Node.js 20 or newer**, **git**, and native build tools for the terminal (`node-pty`). See [prerequisites](./docs/INSTALL.md#run-from-source).
+You need **Node.js 20.19 or newer**, **git**, and native build tools for the terminal (`node-pty`). See [prerequisites](./docs/INSTALL.md#run-from-source).
 
 ```bash
 git clone https://github.com/virrdhiman/desktop-agent.git
@@ -90,7 +92,7 @@ Adding keys for more than one free provider makes rate limits less of a problem,
 For OpenAI-compatible providers, VD Agent:
 
 1. Lists the models your key can call and drops non-chat models such as embeddings, speech, image, and moderation models.
-2. Ranks the rest by coding quality, then efficiency, and tries the best one first. If a live list is available, stale saved model IDs are dropped automatically.
+2. Ranks the rest by coding quality and efficiency, then learns from local success, failure, and latency history. If a live list is available, stale saved model IDs are dropped automatically.
 3. Moves to the next model on rate limits (429), model-not-found or unsupported model errors, overload, and 503s.
 4. **Stops immediately on an invalid key**, so you can fix it instead of having the problem hidden.
 5. Saves the refreshed live model list and the model that worked, unless you pinned a model in the Agent header.
@@ -110,6 +112,8 @@ VD Agent has no server, account, telemetry, or analytics. Everything it stores s
 | Linux | `~/.config/VD Agent` |
 
 - **Chats**: `conversations/<id>.json`, one file per chat. API keys are redacted before a chat is written.
+- **Recovery checkpoints**: `checkpoints/<session-id>/`, bounded pre-edit copies of files changed by agent file tools.
+- **Project memory**: `project-memory/`, a deterministic local summary used to resume work with repository context.
 - **Settings**: `settings.json`, with provider configuration, custom rules, and preferences.
 - **API keys**: stored in `settings.json` and encrypted with your OS keychain (Electron `safeStorage`) when one is available. On Linux without a keyring they are stored unencrypted. Keys are never included in settings exports.
 
@@ -127,6 +131,7 @@ Your prompts and code go **only** to the AI provider you choose, plus any servic
 | [docs/PRIVACY.md](./docs/PRIVACY.md) | What is stored, where, and what leaves your machine |
 | [docs/SECURITY.md](./docs/SECURITY.md) | Security model, safe use, and reporting vulnerabilities |
 | [docs/AI_AGENT_TESTING.md](./docs/AI_AGENT_TESTING.md) | Functional, trajectory, and visual testing for the agent |
+| [docs/RESUME_AND_RECOVERY.md](./docs/RESUME_AND_RECOVERY.md) | Restart resume state, local project memory, checkpoints, and rollback limits |
 | [docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) | Fixes for common problems |
 | [TOOLS.md](./TOOLS.md) | Reference for every agent tool |
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | How the code is organized |

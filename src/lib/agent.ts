@@ -103,9 +103,14 @@ export type ContextInput = {
   workspacePath?: string
   selectedFile?: string | null
   fileContent?: string
+  projectMemory?: string
+  conversationSummary?: string
+  resumeNote?: string
 }
 
-export function buildContext({ workspacePath, selectedFile, fileContent = '' }: ContextInput): string {
+export function buildContext({
+  workspacePath, selectedFile, fileContent = '', projectMemory = '', conversationSummary = '', resumeNote = '',
+}: ContextInput): string {
   const parts: string[] = []
   if (workspacePath) {
     parts.push(`Workspace: ${workspacePath}\nRelative tool paths resolve here, and run_command runs here unless you pass cwd.`)
@@ -119,6 +124,9 @@ export function buildContext({ workspacePath, selectedFile, fileContent = '' }: 
       : ''
     parts.push(`File open in the editor: ${selectedFile}${note}\n${FENCE}\n${shown}\n${FENCE}`)
   }
+  if (projectMemory.trim()) parts.push(`Local project memory (refresh if files disagree):\n${projectMemory.slice(0, 12_000)}`)
+  if (conversationSummary.trim()) parts.push(conversationSummary.slice(0, 8_000))
+  if (resumeNote.trim()) parts.push(`Recovered session state:\n${resumeNote.slice(0, 4_000)}`)
   return parts.join('\n\n')
 }
 

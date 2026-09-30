@@ -38,12 +38,12 @@ Each release includes `SHA256SUMS.txt`. Compare the SHA-256 hash of your file wi
 
 ```powershell
 # Windows (PowerShell)
-Get-FileHash ".\VD Agent Setup 1.0.1.exe" -Algorithm SHA256
+Get-FileHash ".\VD Agent Setup 1.1.0.exe" -Algorithm SHA256
 ```
 
 ```bash
 # macOS
-shasum -a 256 "VD Agent-1.0.1.dmg"
+shasum -a 256 "VD Agent-1.1.0.dmg"
 
 # Linux: checks every file listed in SHA256SUMS.txt that is in the current folder
 sha256sum -c SHA256SUMS.txt --ignore-missing
@@ -80,7 +80,9 @@ Follow [Free API key setup](../README.md#free-api-key-setup) to add a key and se
 
 ## Update
 
-Download the newer release and install it over the old one. Your chats, settings, and keys are kept because they live in the user data folder, not the install folder. VD Agent does not update itself or check for updates.
+Installed builds check release metadata over HTTPS, verify artifact integrity, and download an available update in the background when automatic updates are enabled in Settings. Official release packages should also be code-signed. VD asks before restarting to install. Your chats, settings, checkpoints, and keys are kept because they live in the user data folder, not the install folder.
+
+Automatic GitHub updates require anonymously accessible release files. While the official repository is private, automatic checks default to off; use a public release feed or download a newer release manually and install it over the old one. Update checks can be enabled or disabled in Settings.
 
 If you run from source: `git pull`, `npm install`, then `npm run dev`.
 
@@ -96,7 +98,7 @@ Uninstalling leaves your user data in place. To remove chats, settings, and stor
 
 ### Prerequisites
 
-- **Node.js 20 or newer** (the test runner requires it) and npm
+- **Node.js 20.19 or newer** (required by the build and test toolchain) and npm
 - **git**
 - Native build tools for `node-pty`, which powers the terminal:
   - Windows: Visual Studio Build Tools with the "Desktop development with C++" workload, and Python 3

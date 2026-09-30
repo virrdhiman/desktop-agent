@@ -59,6 +59,23 @@ export interface ProviderConfig {
   freeTier?: boolean
   signupUrl?: string
   notes?: string
+  performance?: ProviderPerformance
+}
+
+export type AgentTaskKind = 'coding' | 'analysis' | 'documentation' | 'quick'
+
+export interface ModelPerformance {
+  successes: number
+  failures: number
+  avgLatencyMs: number
+  lastUsedAt: number
+  taskSuccesses?: Partial<Record<AgentTaskKind, number>>
+}
+
+export interface ProviderPerformance extends ModelPerformance {
+  models?: Record<string, ModelPerformance>
+  consecutiveFailures?: number
+  cooldownUntil?: number
 }
 
 export interface Settings {
@@ -67,6 +84,8 @@ export interface Settings {
   workspacePath: string
   customRules?: string
   planMode?: boolean
+  permissionMode?: 'ask-risky' | 'ask-all-writes' | 'trusted'
+  autoUpdate?: boolean
 }
 
 export interface ChatMessage {
@@ -85,6 +104,49 @@ export interface ChatSession {
   createdAt: number
   updatedAt: number
   messages: ChatMessage[]
+  pinned?: boolean
+  summary?: string
+  resume?: SessionResumeState
+}
+
+export interface CheckpointSummary {
+  id: string
+  sessionId: string
+  createdAt: number
+  label: string
+  files: string[]
+}
+
+export interface ToolExecutionSummary {
+  name: string
+  ok: boolean
+  timestamp: number
+  argsSummary: string
+  resultSummary: string
+}
+
+export interface VerificationSummary {
+  command: string
+  ok: boolean
+  timestamp: number
+  summary: string
+}
+
+export interface SessionResumeState {
+  workspacePath?: string
+  selectedFile?: string | null
+  openFiles?: string[]
+  tasks?: AgentTask[]
+  terminalTabs?: TerminalTab[]
+  terminalEntries?: TerminalEntry[]
+  toolExecutions?: ToolExecutionSummary[]
+  providerId?: string
+  model?: string
+  projectMemory?: string
+  conversationSummary?: string
+  checkpoint?: CheckpointSummary
+  lastVerification?: VerificationSummary
+  git?: { branch?: string; head?: string; dirty?: boolean }
 }
 
 export interface ToolCall {

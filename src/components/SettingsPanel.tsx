@@ -19,7 +19,7 @@
  * - Settings import/export (export never includes API keys)
  * - About card with author credit, license, and repository links
  */
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useStore } from '../store'
 import type { ProviderConfig } from '../types'
 import { getProviderCategory, mergeImportedSettings, refreshProviderModelCatalog, withoutApiKeys } from '../lib/providers'
@@ -39,13 +39,19 @@ const CATEGORY_LABELS: Record<Category, { label: string; icon: string; color: st
 const stripEmoji = (name: string) => name.replace(/[^\p{L}\p{N}\s().&-]/gu, '').trim()
 
 export default function SettingsPanel() {
-  const { settings, setSettings, workspacePath, setWorkspacePath, setCurrentDirectory } = useStore()
+  const { settings, setSettings, workspacePath, setWorkspacePath, setCurrentDirectory, projectMemory, setProjectMemory } = useStore()
   const [editing, setEditing] = useState<ProviderConfig | null>(null)
   const [apiKeyInput, setApiKeyInput] = useState('')
   const [filter, setFilter] = useState<Category>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [refreshingModels, setRefreshingModels] = useState(false)
   const [refreshMessage, setRefreshMessage] = useState('')
+  const [updateStatus, setUpdateStatus] = useState<Awaited<ReturnType<typeof window.api.updateStatus>> | null>(null)
+
+  useEffect(() => {
+    void window.api.updateStatus().then(setUpdateStatus)
+    return window.api.onUpdateStatus(setUpdateStatus)
+  }, [])
 
   const openFolder = useCallback(async () => {
     try {
@@ -56,6 +62,8 @@ export default function SettingsPanel() {
       setWorkspacePath(dir)
       setCurrentDirectory(dir)
       await window.api.saveSettings(newSettings)
+      const memory = await window.api.projectMemoryLoad(dir, true)
+      if (!('error' in memory)) setProjectMemory(memory.content)
     } catch (err) { console.error('Failed to open folder:', err) }
   }, [settings])
 
@@ -159,7 +167,20 @@ export default function SettingsPanel() {
                 {workspacePath || 'No folder selected'}
               </div>
               <button className="btn btn-sm btn-primary" onClick={openFolder}>Open</button>
+              {workspacePath && (
+                <button
+                  className="btn btn-sm"
+                  title="Refresh local project memory"
+                  onClick={async () => {
+                    const memory = await window.api.projectMemoryLoad(workspacePath, true)
+                    if (!('error' in memory)) setProjectMemory(memory.content)
+                  }}
+                >
+                  Refresh context
+                </button>
+              )}
             </div>
+            {projectMemory && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 5 }}>Local project context ready ({projectMemory.length.toLocaleString()} characters)</div>}
           </div>
 
           <div className="divider" />
@@ -462,6 +483,57 @@ export default function SettingsPanel() {
                 >
                   {settings.planMode ? 'ON' : 'OFF'}
                 </button>
+              </div>
+            </div>
+
+            <div style={{ marginTop: 18, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Tool permissions</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10, lineHeight: 1.5 }}>
+                Enforced by the desktop process. Writes outside the open workspace are always blocked.
+              </div>
+              <select
+                className="input"
+                value={settings.permissionMode || 'ask-risky'}
+                onChange={(event) => {
+                  const permissionMode = event.target.value as NonNullable<typeof settings.permissionMode>
+                  const next = { ...settings, permissionMode }
+                  setSettings(next)
+                  void window.api.saveSettings(next)
+                }}
+              >
+                <option value="ask-risky">Ask for commands, deletes, and Git changes</option>
+                <option value="ask-all-writes">Ask before every write</option>
+                <option value="trusted">Trusted workspace (no approval dialogs)</option>
+              </select>
+            </div>
+
+            <div style={{ marginTop: 18, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, fontSize: 12 }}>
+                <input
+                  type="checkbox"
+                  checked={settings.autoUpdate === true}
+                  onChange={(event) => {
+                    const next = { ...settings, autoUpdate: event.target.checked }
+                    setSettings(next)
+                    void window.api.saveSettings(next)
+                  }}
+                />
+                Check for verified release updates after launch
+              </label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>Application updates</div>
+                  <div style={{ fontSize: 12, color: updateStatus?.state === 'error' ? 'var(--error)' : 'var(--text-muted)', marginTop: 4 }}>
+                    {updateStatus?.message || 'Updates have not been checked.'}
+                  </div>
+                </div>
+                {updateStatus?.state === 'downloaded' ? (
+                  <button className="btn btn-sm btn-primary" onClick={() => { void window.api.installUpdate() }}>Restart and install</button>
+                ) : (
+                  <button className="btn btn-sm" disabled={updateStatus?.state === 'checking' || updateStatus?.state === 'downloading'} onClick={() => { void window.api.checkForUpdates().then(setUpdateStatus) }}>
+                    Check now
+                  </button>
+                )}
               </div>
             </div>
 

@@ -42,7 +42,7 @@ Most people should download the installer from [GitHub Releases](https://github.
 
 Prerequisites:
 
-- **Node.js 20+** and npm
+- **Node.js 20.19+** and npm
 - **Git**
 - Build tools for `node-pty`: Visual Studio Build Tools (Windows), Xcode Command Line Tools (macOS), or `build-essential` and `python3` (Linux)
 
@@ -121,7 +121,7 @@ For OpenAI-compatible providers, on each request VD does the following:
 
 1. Lists the models your key can call (`/models`, cached for 10 minutes).
 2. Drops non-chat models (embeddings, audio, speech, image, moderation, rerank).
-3. Ranks the rest by coding quality, then efficiency. On OpenRouter, only `:free` models are considered when they are available.
+3. Ranks the rest by coding quality and efficiency, then uses local success, latency, and task-type outcomes to break close choices. On OpenRouter, only `:free` models are considered when they are available.
 4. Tries the best model first, then the next few, then the model set in Settings.
 5. Moves to the next model on model-not-found, unsupported model, 404, 429, overload, capacity, or 503 errors.
 6. Stops immediately on an invalid key or other auth error. It does not try other models or providers, so you can fix the key.
@@ -131,7 +131,7 @@ To pin a specific model, choose it in the **model picker** in the Agent header. 
 
 ### Provider fallback
 
-If the active provider fails for a non-auth reason, VD tries up to three other **official free** providers that have keys, in catalog order. When another provider answers, the chat says which one. The rest of that request stays on the provider that answered, so a rate-limited provider isn't retried on every tool round. If every provider fails, the chat lists each provider's error and suggests next steps. Local servers and community proxies are never used as fallbacks.
+If the active provider fails for a non-auth reason, VD tries up to three other **official free** providers that have keys. The selected provider is always first; fallbacks are ordered by local reliability and latency, and repeatedly failing providers receive a short cooldown. When another provider answers, the chat says which one. The rest of that request stays on the provider that answered, so a rate-limited provider isn't retried on every tool round. If every provider fails, the chat lists each provider's error and suggests next steps. Local servers and community proxies are never used as fallbacks.
 
 ### Answer quality
 
@@ -218,14 +218,15 @@ Commands include panel navigation, toggling the terminal, **New Chat**, and **Go
 
 ## 10. Chat History
 
-- Chats are **saved automatically** shortly after each message to `<userData>/conversations/<session-id>.json`. Each chat keeps one file that is updated in place.
+- Chats are **saved automatically** shortly after changes and flushed periodically to `<userData>/conversations/<session-id>.json`. Each chat keeps one file and a last-known-good backup.
   - Windows: `%APPDATA%\VD Agent\conversations`
   - macOS: `~/Library/Application Support/VD Agent/conversations`
   - Linux: `~/.config/VD Agent/conversations`
-- On startup the most recent chat is restored, and all saved chats appear in the **💾 Sessions** panel and the Agent **🕘 History** popover.
-- Click a chat to open it. **＋ New chat** starts a fresh conversation, and the previous one stays in history.
+- On startup the most recent chat is restored, including its workspace, open files, tasks, recent tool outcomes, provider/model, terminal summary, verification result, and recovery checkpoint.
+- The **Sessions** panel can search, rename, pin, import, export, open, and delete chats. **＋ New chat** starts a fresh conversation, and the previous one stays in history.
+- Before agent file edits or deletes, VD stores a bounded pre-change checkpoint. Use **Restore** on the session to return the recorded files to that state. Command and Git side effects are not included.
 - Deleting a chat asks for confirmation, then removes its file from disk.
-- Configured API keys and common key formats are redacted before saving. Corrupt files are skipped, and files from older versions still load.
+- Configured API keys and common key formats are redacted before saving. If the current file is corrupt, VD attempts its `.bak` copy. Files from older versions still load.
 - Chats that contain only system notices (for example "No API key is configured") are not saved.
 - Use **📤 Export** in the Agent header to download the current chat as Markdown.
 
@@ -233,9 +234,19 @@ Commands include panel navigation, toggling the terminal, **New Chat**, and **Go
 
 ## 11. Plan Mode
 
-Toggle **📋 Plan** in the Agent header (or in Settings). With Plan Mode on, the agent lists the files it will read or change, the intended change and its risks, and the order of steps, then waits for your approval without modifying anything. Plan Mode is an instruction to the model, not a technical lock, so review tool calls as usual.
+Toggle **📋 Plan** in the Agent header (or in Settings). With Plan Mode on, the agent lists the files it will read or change, the intended change and its risks, and the order of steps, then waits for your approval without modifying anything. Plan Mode itself is an instruction to the model. Tool permissions are a separate technical control enforced by the Electron main process.
 
 Use it for multi-file refactors, architecture changes, or any time you want to review before files change.
+
+Choose the permission mode in Settings:
+
+| Mode | Behavior |
+|------|----------|
+| Ask for risky actions | Confirms shell commands, deletes, and Git mutations. Normal file edits are checkpointed. |
+| Ask for all writes | Also confirms ordinary file writes and edits. |
+| Trusted workspace | Reduces prompts. Workspace path restrictions and checkpoints still apply. |
+
+An approved shell command has your user permissions and can change files outside the workspace or call network services. Read the command in the native dialog before approving it.
 
 ---
 

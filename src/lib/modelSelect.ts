@@ -111,6 +111,35 @@ export function rankModels(ids: string[]): string[] {
   return pool.sort((a, b) => scoreModel(b) - scoreModel(a) || a.localeCompare(b))
 }
 
+type LearnedModelStats = Record<string, {
+  successes?: number
+  failures?: number
+  avgLatencyMs?: number
+  taskSuccesses?: Record<string, number>
+}>
+
+export function rankModelsWithPerformance(ids: string[], stats: LearnedModelStats = {}, taskKind = 'analysis'): string[] {
+  const ranked = rankModels(ids)
+  const baseOrder = new Map(ranked.map((model, index) => [model, ranked.length - index]))
+  return ranked.sort((a, b) => learnedScore(b, stats[b], taskKind, baseOrder) - learnedScore(a, stats[a], taskKind, baseOrder))
+}
+
+function learnedScore(
+  model: string,
+  stats: LearnedModelStats[string] | undefined,
+  taskKind: string,
+  baseOrder: Map<string, number>
+) {
+  const base = scoreModel(model) * 10 + (baseOrder.get(model) || 0)
+  if (!stats) return base
+  const successes = stats.successes || 0
+  const failures = stats.failures || 0
+  const reliability = ((successes + 2) / (successes + failures + 4)) * 20
+  const latency = stats.avgLatencyMs ? Math.max(-8, 6 - stats.avgLatencyMs / 1500) : 0
+  const task = Math.min(8, (stats.taskSuccesses?.[taskKind] || 0) * 1.5)
+  return base + reliability + latency + task
+}
+
 export const MAX_MODEL_ATTEMPTS = 6
 
 /**
@@ -123,7 +152,9 @@ export const MAX_MODEL_ATTEMPTS = 6
 export function buildModelAttemptList(
   preferred: string | undefined,
   discovered: string[],
-  max = MAX_MODEL_ATTEMPTS
+  max = MAX_MODEL_ATTEMPTS,
+  stats: LearnedModelStats = {},
+  taskKind = 'analysis'
 ): string[] {
   const out: string[] = []
   const seen = new Set<string>()
@@ -133,7 +164,7 @@ export function buildModelAttemptList(
     seen.add(name)
     out.push(name)
   }
-  const ranked = rankModels(discovered)
+  const ranked = rankModelsWithPerformance(discovered, stats, taskKind)
   if (ranked.length > 0) {
     for (const id of ranked.slice(0, max)) add(id)
   } else {

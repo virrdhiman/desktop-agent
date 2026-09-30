@@ -18,7 +18,11 @@ const assistant = (id: string, content: string): ChatMessage => ({ id, role: 'as
 
 beforeEach(() => {
   vi.useFakeTimers()
-  useStore.setState({ messages: [], sessions: [], currentSessionId: null, chatLoading: false })
+  useStore.setState({
+    messages: [], sessions: [], currentSessionId: null, chatLoading: false,
+    workspacePath: '', selectedFile: null, openFiles: [], tasks: [], toolExecutions: [],
+    projectMemory: '', latestCheckpoint: undefined, lastVerification: undefined,
+  })
   api.saveConversation.mockClear()
   api.deleteConversation.mockClear()
 })
@@ -68,6 +72,32 @@ describe('session auto-save', () => {
     useStore.getState().addMessage({ ...user('1', 'q'), fileContext: 'big file', streaming: true })
     await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY_MS + 10)
     expect(Object.keys(api.saveConversation.mock.calls[0][0].messages[0]).sort()).toEqual(['content', 'id', 'role', 'timestamp'])
+  })
+
+  it('persists bounded resume context alongside the messages', async () => {
+    const history = [user('1', 'resume this work'), ...Array.from({ length: 20 }, (_, index) => assistant(`a-${index}`, `progress ${index}`))]
+    useStore.setState({
+      messages: history,
+      workspacePath: 'C:\\work\\vd',
+      selectedFile: 'src/app.ts',
+      openFiles: ['src/app.ts'],
+      projectMemory: 'TypeScript desktop app',
+      latestCheckpoint: { id: 'cp-1', sessionId: 'session', createdAt: 10, label: 'Before edit', files: ['src/app.ts'] },
+      lastVerification: { command: 'npm test', ok: true, timestamp: 11, summary: '263 passed' },
+    })
+    useStore.getState().scheduleSessionSave()
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY_MS + 10)
+
+    const saved = api.saveConversation.mock.calls[0][0]
+    expect(saved.summary).toContain('resume this work')
+    expect(saved.resume).toMatchObject({
+      workspacePath: 'C:\\work\\vd',
+      selectedFile: 'src/app.ts',
+      openFiles: ['src/app.ts'],
+      projectMemory: 'TypeScript desktop app',
+      checkpoint: { id: 'cp-1' },
+      lastVerification: { command: 'npm test', ok: true },
+    })
   })
 })
 
@@ -139,5 +169,31 @@ describe('hydrateSessions (startup)', () => {
     )
     expect(useStore.getState().currentSessionId).toBe('session-live')
     expect(useStore.getState().messages[0].content).toBe('typing already')
+  })
+
+  it('restores workspace, task, tool, checkpoint, and verification state', () => {
+    useStore.getState().hydrateSessions(
+      [{
+        id: 'resume', title: 'Resume', createdAt: 1, updatedAt: 2, messages: [user('1', 'continue')],
+        resume: {
+          workspacePath: 'D:\\repo', selectedFile: 'src/main.ts', openFiles: ['src/main.ts'],
+          tasks: [{ id: 'task-1', title: 'Fix build', status: 'running', steps: [] }],
+          toolExecutions: [{ name: 'read_file', ok: true, timestamp: 3, argsSummary: 'src/main.ts', resultSummary: 'ok' }],
+          projectMemory: 'Electron project',
+          checkpoint: { id: 'cp-1', sessionId: 'resume', createdAt: 4, label: 'Before edit', files: ['src/main.ts'] },
+          lastVerification: { command: 'npm test', ok: false, timestamp: 5, summary: 'one failure' },
+        },
+      }],
+      { restoreLatest: true }
+    )
+
+    const state = useStore.getState()
+    expect(state.workspacePath).toBe('D:\\repo')
+    expect(state.selectedFile).toBe('src/main.ts')
+    expect(state.tasks[0].title).toBe('Fix build')
+    expect(state.toolExecutions[0].name).toBe('read_file')
+    expect(state.projectMemory).toBe('Electron project')
+    expect(state.latestCheckpoint?.id).toBe('cp-1')
+    expect(state.lastVerification?.ok).toBe(false)
   })
 })
