@@ -9,8 +9,10 @@ import type { ProviderConfig, Settings } from '../types'
 import {
   applyDiscoveredModel,
   buildProviderChain,
+  classifyAgentTask,
   getProviderCategory,
   mergeImportedSettings,
+  recordProviderOutcome,
   refreshProviderModelCatalog,
   withoutApiKeys,
 } from './providers'
@@ -48,6 +50,33 @@ describe('buildProviderChain', () => {
   it('caps the number of providers tried', () => {
     const many = ['groq', 'gemini', 'cerebras', 'sambanova', 'mistral', 'github'].map((id) => p(id, 'k'))
     expect(buildProviderChain(many, 'groq', 3)).toHaveLength(3)
+  })
+
+  it('prefers healthier fallbacks while keeping the selected provider first', () => {
+    const active = p('groq', 'k')
+    const slow = { ...p('gemini', 'k'), performance: { successes: 1, failures: 5, avgLatencyMs: 5000, lastUsedAt: 1 } }
+    const healthy = { ...p('cerebras', 'k'), performance: { successes: 8, failures: 1, avgLatencyMs: 500, lastUsedAt: 1 } }
+    expect(buildProviderChain([active, slow, healthy], 'groq').map((provider) => provider.id)).toEqual(['groq', 'cerebras', 'gemini'])
+  })
+})
+
+describe('provider learning', () => {
+  it('classifies tasks and records model/provider outcomes', () => {
+    expect(classifyAgentTask('Fix the failing TypeScript test')).toBe('coding')
+    expect(classifyAgentTask('Update the README guide')).toBe('documentation')
+    const next = recordProviderOutcome(settings([p('groq', 'k')]), 'groq', 'model-a', true, 800, 'coding', 100)
+    const performance = next.providers[0].performance
+    expect(performance).toMatchObject({ successes: 1, failures: 0, avgLatencyMs: 800, lastUsedAt: 100 })
+    expect(performance?.models?.['model-a']).toMatchObject({ successes: 1, failures: 0 })
+    expect(performance?.taskSuccesses?.coding).toBe(1)
+  })
+
+  it('temporarily cools down a provider after repeated failures', () => {
+    let current = settings([p('groq', 'k')])
+    current = recordProviderOutcome(current, 'groq', 'm', false, 100, 'analysis', 1)
+    current = recordProviderOutcome(current, 'groq', 'm', false, 100, 'analysis', 2)
+    current = recordProviderOutcome(current, 'groq', 'm', false, 100, 'analysis', 3)
+    expect(current.providers[0].performance?.cooldownUntil).toBe(120_003)
   })
 })
 

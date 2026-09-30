@@ -26,6 +26,8 @@ type ChatConfig = {
   messages: any[]
   stream: boolean
   autoSelect?: boolean
+  modelPerformance?: Record<string, { successes?: number; failures?: number; avgLatencyMs?: number; taskSuccesses?: Record<string, number> }>
+  taskKind?: string
 }
 
 type ChatError = { error: string; kind: ModelErrorKind | 'cancelled'; status?: number; models?: string[] }
@@ -206,7 +208,7 @@ export function registerAiHandlers(getMainWindow: () => BrowserWindow | null) {
       if (config.autoSelect !== false) {
         try {
           discovered = await listProviderModels(config.baseUrl, config.apiKey)
-          models = buildModelAttemptList(config.model, discovered)
+          models = buildModelAttemptList(config.model, discovered, undefined, config.modelPerformance, config.taskKind)
         } catch {
           models = [config.model]
         }

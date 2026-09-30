@@ -53,6 +53,7 @@ if (exe && !fs.existsSync(exe)) {
 const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'vd-agent-smoke-data-'))
 const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'vd-agent-smoke-ws-'))
 fs.writeFileSync(path.join(workspace, 'smoke-editor.ts'), 'export const SMOKE_EDITOR_MARKER = 42\n')
+fs.writeFileSync(path.join(workspace, 'checkpoint-smoke.txt'), 'before checkpoint\n')
 const results = []
 const check = (name, ok, detail = '') => {
   results.push({ name, ok: !!ok })
@@ -82,6 +83,7 @@ function stamp(dir) {
 
 async function launch(label) {
   const env = { ...process.env }
+  env.VD_AGENT_AUTO_APPROVE_TOOLS = '1'
   delete env.VITE_DEV_SERVER_URL
   delete env.ELECTRON_RUN_AS_NODE
   const portFile = path.join(userData, 'DevToolsActivePort')
@@ -302,15 +304,17 @@ try {
     title: document.title,
     rootChildren: document.getElementById('root')?.children.length ?? 0,
     api: typeof window.api,
-    missing: ['saveConversation','listConversations','deleteConversation','loadSettings','aiChat','aiCancel','aiListModels','onAIStream'].filter(k => typeof window.api?.[k] !== 'function'),
+    missing: ['saveConversation','listConversations','deleteConversation','updateConversation','exportConversation','importConversations','loadSettings','aiChat','aiCancel','aiListModels','onAIStream','toolExecute','projectMemoryLoad','listCheckpoints','restoreCheckpoint','updateStatus'].filter(k => typeof window.api?.[k] !== 'function'),
     hasNode: typeof require !== 'undefined' || typeof process !== 'undefined',
     links: [...document.querySelectorAll('a')].map(x => x.href),
     credit: /by Virender Dhiman/.test(document.body.innerText),
+    layout: (() => { const r = document.getElementById('root')?.getBoundingClientRect(); return { width: r?.width || 0, height: r?.height || 0, bodyWidth: document.body.scrollWidth, viewportWidth: innerWidth } })(),
   })`)
   check('window title is "VD Agent"', info.title === 'VD Agent', info.title)
   check('React UI rendered', info.rootChildren > 0)
   check('preload bridge exposes the expected API', info.api === 'object' && info.missing.length === 0, info.missing.join(', '))
   check('renderer has no Node globals (context isolation)', !info.hasNode)
+  check('first viewport is nonblank and does not overflow horizontally', info.layout.width > 600 && info.layout.height > 400 && info.layout.bodyWidth <= info.layout.viewportWidth + 1, JSON.stringify(info.layout))
   check('welcome screen credits the author with a star link', info.credit && info.links.includes(AUTHOR_URL) && info.links.includes(REPO_URL))
   await a.screenshot('welcome.png')
 
@@ -337,8 +341,29 @@ try {
   check('settings load over IPC', Array.isArray(settings?.providers) && settings.providers.length > 0, `active=${settings?.activeProvider}`)
   await a.evaluate(`window.api.loadSettings().then(s => window.api.saveSettings({ ...s, workspacePath: ${JSON.stringify(workspace)} }))`)
 
-  const saved = await a.evaluate(`window.api.saveConversation({ id: 'smoke-session', title: 'Smoke test chat', messages: ${smokeMessages} })`)
-  const resaved = await a.evaluate(`window.api.saveConversation({ id: 'smoke-session', title: 'Smoke test chat', messages: ${smokeMessages} })`)
+  const terminal = await a.evaluate(`window.api.terminalCreate('smoke-terminal', ${JSON.stringify(workspace)})`)
+  await a.evaluate(`window.api.terminalKill('smoke-terminal')`)
+  check('native terminal PTY starts in the workspace', terminal?.success === true)
+
+  const updateStatus = await a.evaluate(`window.api.updateStatus()`)
+  check('update status is available over IPC', typeof updateStatus?.state === 'string' && typeof updateStatus?.message === 'string', updateStatus?.state)
+  const memory = await a.evaluate(`window.api.projectMemoryLoad(${JSON.stringify(workspace)}, true)`)
+  check('local project memory is generated for the workspace', memory?.workspace === workspace && memory?.content?.includes('smoke-editor.ts'))
+
+  const changed = await a.evaluate(`window.api.toolExecute({ name: 'write_file', args: { path: 'checkpoint-smoke.txt', content: 'after checkpoint\\n' }, workspace: ${JSON.stringify(workspace)}, sessionId: 'smoke-session', taskId: 'smoke-task' })`)
+  const checkpoints = await a.evaluate(`window.api.listCheckpoints('smoke-session')`)
+  check('agent file writes create a pre-edit checkpoint', !!changed?.result && Array.isArray(checkpoints) && checkpoints.length === 1 && checkpoints[0].files.some((file) => file.relativePath === 'checkpoint-smoke.txt'))
+  const checkpointSummary = checkpoints?.[0] ? {
+    id: checkpoints[0].id, sessionId: checkpoints[0].sessionId, createdAt: checkpoints[0].createdAt,
+    label: checkpoints[0].label, files: checkpoints[0].files.map((file) => file.relativePath),
+  } : null
+  const restoredCheckpoint = checkpoints?.[0]
+    ? await a.evaluate(`window.api.restoreCheckpoint('smoke-session', ${JSON.stringify(checkpoints[0].id)})`)
+    : null
+  check('checkpoint restore returns the previous file content', restoredCheckpoint?.success && fs.readFileSync(path.join(workspace, 'checkpoint-smoke.txt'), 'utf8') === 'before checkpoint\n')
+
+  const saved = await a.evaluate(`window.api.saveConversation({ id: 'smoke-session', title: 'Smoke test chat', pinned: true, summary: 'SMOKE-SUMMARY', resume: { workspacePath: ${JSON.stringify(workspace)}, selectedFile: 'smoke-editor.ts', projectMemory: 'SMOKE-PROJECT-MEMORY', checkpoint: ${JSON.stringify(checkpointSummary)}, lastVerification: { command: 'npm test', ok: true, timestamp: Date.now(), summary: 'SMOKE-VERIFIED' } }, messages: ${smokeMessages} })`)
+  const resaved = await a.evaluate(`window.api.saveConversation({ id: 'smoke-session', title: 'Smoke test chat', pinned: true, summary: 'SMOKE-SUMMARY', resume: { workspacePath: ${JSON.stringify(workspace)}, selectedFile: 'smoke-editor.ts', projectMemory: 'SMOKE-PROJECT-MEMORY', checkpoint: ${JSON.stringify(checkpointSummary)}, lastVerification: { command: 'npm test', ok: true, timestamp: Date.now(), summary: 'SMOKE-VERIFIED' } }, messages: ${smokeMessages} })`)
   const files = fs.existsSync(convDir) ? fs.readdirSync(convDir).filter((f) => f.endsWith('.json')) : []
   check('chat saves to userData/conversations; re-save updates the same file', saved?.success && resaved?.success && files.length === 1 && files[0] === 'smoke-session.json', files.join(','))
   const raw = files.length ? fs.readFileSync(path.join(convDir, files[0]), 'utf8') : ''
@@ -352,6 +377,13 @@ try {
   b = await launch('launch-2')
   const listed = await b.evaluate(`window.api.listConversations()`)
   check('saved chat is listed after restart', Array.isArray(listed) && listed.some((c) => c.id === 'smoke-session'))
+  const resumed = Array.isArray(listed) ? listed.find((item) => item.id === 'smoke-session') : null
+  const richResumeOk = resumed?.pinned === true && resumed?.resume?.workspacePath === workspace
+    && resumed?.resume?.selectedFile === 'smoke-editor.ts' && resumed?.resume?.projectMemory?.includes('smoke-editor.ts')
+    && resumed?.resume?.checkpoint?.id === checkpointSummary?.id
+    && resumed?.resume?.lastVerification?.summary === 'SMOKE-VERIFIED'
+  check('restart data includes pinned rich resume and verification state', richResumeOk,
+    richResumeOk ? '' : JSON.stringify({ pinned: resumed?.pinned, resume: resumed?.resume }).slice(0, 800))
   await sleep(1200)
   const restored = await b.evaluate(`(() => {
     const btn = [...document.querySelectorAll('button')].find(x => /History/.test(x.textContent || ''))
@@ -387,7 +419,11 @@ try {
 
   const del = await b.evaluate(`window.api.deleteConversation('smoke-session')`)
   const after = await b.evaluate(`window.api.listConversations()`)
-  check('delete removes the chat from disk and the list', del?.success && !fs.existsSync(path.join(convDir, 'smoke-session.json')) && after.length === 0)
+  check('delete removes the chat, backup, checkpoints, and list entry', del?.success
+    && !fs.existsSync(path.join(convDir, 'smoke-session.json'))
+    && !fs.existsSync(path.join(convDir, 'smoke-session.json.bak'))
+    && !fs.existsSync(path.join(userData, 'checkpoints', 'smoke-session'))
+    && after.length === 0)
   const traversal = await b.evaluate(`window.api.deleteConversation('../settings')`)
   check('path-traversal session id is rejected', !traversal?.success)
   const errors2 = [...b.errors]

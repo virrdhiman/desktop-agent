@@ -8,12 +8,14 @@
  * Tool Execution IPC Handler
  * Agent tools: file ops, git ops, code search, web search, Web3, image/video, speech
  */
-import { ipcMain } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import { simpleGit, SimpleGit } from 'simple-git'
 import { SETTINGS_PATH } from './settings'
 import { COMMAND_TIMEOUT_MS, formatCommandResult, resolveToolArgs } from '../toolSupport'
+import { assessToolPolicy, checkpointTargets, resolvesInsideWorkspace, toolApprovalDetail, type PermissionMode } from '../toolPolicy'
+import { createCheckpoint } from '../checkpointStore'
 
 /** Git instances cache for tool execution */
 const toolGitInstances: Map<string, SimpleGit> = new Map()
@@ -35,9 +37,61 @@ async function loadToolSettings(): Promise<any> {
 export function registerToolHandlers() {
   ipcMain.handle(
     'tool:execute',
-    async (_event, tool: { name: string; args: Record<string, any>; workspace?: string }) => {
+    async (event, tool: { name: string; args: Record<string, any>; workspace?: string; sessionId?: string; taskId?: string }) => {
       try {
         tool.args = resolveToolArgs(tool.name, tool.args, tool.workspace)
+        const policySettings = await loadToolSettings()
+        const permissionMode = (policySettings.permissionMode || 'ask-risky') as PermissionMode
+        const decision = assessToolPolicy(tool.name, tool.args, tool.workspace, permissionMode)
+
+        if (decision.risk !== 'read' && tool.name !== 'run_command' && !tool.workspace) {
+          return { error: `Blocked ${tool.name}: open a workspace before allowing agent mutations.` }
+        }
+        if (decision.risk !== 'read' && decision.outsideWorkspace.length > 0) {
+          return { error: `Blocked ${tool.name}: writes must stay inside the open workspace. Outside path: ${decision.outsideWorkspace[0]}` }
+        }
+        if (decision.risk !== 'read' && tool.workspace) {
+          for (const target of decision.targets) {
+            if (!await resolvesInsideWorkspace(tool.workspace, target)) {
+              return { error: `Blocked ${tool.name}: the real destination escapes the open workspace through a symlink or junction. Path: ${target}` }
+            }
+          }
+        }
+
+        if (decision.needsApproval && process.env.VD_AGENT_AUTO_APPROVE_TOOLS !== '1') {
+          const options = {
+            type: 'warning' as const,
+            title: 'Approve agent action',
+            message: `Allow VD Agent to run ${tool.name}?`,
+            detail: toolApprovalDetail(tool.name, tool.args, decision),
+            buttons: ['Cancel', 'Allow once'],
+            defaultId: 0,
+            cancelId: 0,
+            noLink: true,
+          }
+          const owner = BrowserWindow.fromWebContents(event.sender)
+          const choice = owner ? await dialog.showMessageBox(owner, options) : await dialog.showMessageBox(options)
+          if (choice.response !== 1) return { error: `User declined ${tool.name}` }
+        }
+
+        const targets = checkpointTargets(tool.name, tool.args)
+        if (tool.workspace && tool.sessionId && targets.length > 0) {
+          const checkpoint = await createCheckpoint(path.join(app.getPath('userData'), 'checkpoints'), {
+            sessionId: tool.sessionId,
+            workspace: tool.workspace,
+            label: `${tool.name}${tool.taskId ? ` for task ${tool.taskId}` : ''}`,
+            paths: targets,
+          })
+          if (checkpoint) {
+            event.sender.send('checkpoint:created', {
+              id: checkpoint.id,
+              sessionId: checkpoint.sessionId,
+              createdAt: checkpoint.createdAt,
+              label: checkpoint.label,
+              files: checkpoint.files.map((file) => file.relativePath),
+            })
+          }
+        }
         switch (tool.name) {
           // ═══ FILE SYSTEM ═══════════════════════════════════════════════════
           case 'read_file': {

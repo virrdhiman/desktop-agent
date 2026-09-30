@@ -9,6 +9,17 @@
 
 All notable changes to VD Agent are documented here.
 
+## [1.1.0] - 2026-09-30
+
+### Resume, safety, and usability
+- Conversation schema v2 persists workspace, task, terminal, tool, model, project-memory, verification, and checkpoint state; previous valid saves are retained as recovery backups.
+- Agent file tools create bounded pre-edit checkpoints, with one-click restore from Sessions.
+- Sessions can be searched, renamed, pinned, exported, and imported.
+- Risky tools use native approval dialogs, and agent writes outside the open workspace are blocked in the main process.
+- Older chat context receives a local rolling summary, while deterministic project memory refreshes from repository metadata and instructions.
+- Provider and model routing learns locally from success, failure, task type, and latency, with cooldowns for repeatedly failing providers.
+- Added verified updater wiring, update controls, code-signing-aware cross-platform CI/release workflows, and zero-vulnerability dependency upgrades (Electron 44, Vite 7, Electron Builder 26).
+
 ## [1.0.1] - 2026-09-30
 
 ### Branding

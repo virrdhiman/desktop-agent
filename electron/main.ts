@@ -17,7 +17,7 @@
  * - handlers/ai.ts     — AI chat with streaming, model discovery, cancel
  * - handlers/shell.ts  — OS shell operations
  */
-import { app, BrowserWindow, session, shell } from 'electron'
+import { app, BrowserWindow, dialog, session, shell } from 'electron'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { isExternalWebUrl, isSameAppPage } from './navigation'
@@ -31,12 +31,15 @@ import { registerSettingsHandlers } from './handlers/settings'
 import { registerConversationHandlers } from './handlers/conversations'
 import { registerAiHandlers } from './handlers/ai'
 import { registerShellHandlers } from './handlers/shell'
+import { registerWorkspaceStateHandlers } from './handlers/workspaceState'
+import { registerUpdateHandlers } from './handlers/updates'
 
 // package.json has "type": "module", so the main bundle is ESM and has no CommonJS __dirname.
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 /** Main BrowserWindow reference — passed to handlers that need to send events to renderer */
 let mainWindow: BrowserWindow | null = null
+let rendererRecoveryAttempts = 0
 const getMainWindow = () => mainWindow
 
 // ─── Window Management ────────────────────────────────────────────────────
@@ -77,6 +80,20 @@ function createWindow() {
     event.preventDefault()
     if (isExternalWebUrl(url)) void shell.openExternal(url)
   })
+  contents.on('render-process-gone', async (_event, details) => {
+    if (details.reason === 'clean-exit' || !mainWindow || mainWindow.isDestroyed()) return
+    rendererRecoveryAttempts++
+    const choice = await dialog.showMessageBox(mainWindow, {
+      type: 'error',
+      title: 'VD Agent recovered from a crash',
+      message: 'The interface process stopped unexpectedly. Your saved chats and pre-edit checkpoints are still on disk.',
+      detail: `Reason: ${details.reason}. Exit code: ${details.exitCode}.`,
+      buttons: rendererRecoveryAttempts <= 2 ? ['Close', 'Reload VD Agent'] : ['Close'],
+      defaultId: rendererRecoveryAttempts <= 2 ? 1 : 0,
+      cancelId: 0,
+    })
+    if (choice.response === 1 && mainWindow && !mainWindow.isDestroyed()) mainWindow.reload()
+  })
 
   mainWindow.on('closed', () => { mainWindow = null })
 }
@@ -97,6 +114,8 @@ app.whenReady().then(() => {
       },
     })
   })
+  session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
+  session.defaultSession.setPermissionCheckHandler(() => false)
 
   createWindow()
 
@@ -107,6 +126,8 @@ app.whenReady().then(() => {
   registerToolHandlers()
   registerSettingsHandlers()
   registerConversationHandlers()
+  registerWorkspaceStateHandlers()
+  registerUpdateHandlers(getMainWindow)
   registerAiHandlers(getMainWindow)
   registerShellHandlers()
 

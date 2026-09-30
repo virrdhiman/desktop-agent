@@ -13,6 +13,7 @@ import {
   isUsableChatModel,
   MAX_MODEL_ATTEMPTS,
   rankModels,
+  rankModelsWithPerformance,
   scoreModel,
   tryModels,
   type ModelAttemptResult,
@@ -90,6 +91,18 @@ describe('model ranking', () => {
 
   it('strips the Gemini models/ prefix and de-duplicates', () => {
     expect(rankModels(['models/gemini-2.0-flash', 'gemini-2.0-flash'])).toEqual(['gemini-2.0-flash'])
+  })
+
+  it('uses local reliability data without overriding a large quality gap', () => {
+    const ranked = rankModelsWithPerformance(
+      ['mistral-small-latest', 'gemini-2.0-flash'],
+      {
+        'mistral-small-latest': { successes: 20, failures: 0, avgLatencyMs: 200, taskSuccesses: { coding: 10 } },
+        'gemini-2.0-flash': { successes: 0, failures: 10, avgLatencyMs: 8000 },
+      },
+      'coding'
+    )
+    expect(ranked[0]).toBe('gemini-2.0-flash')
   })
 })
 

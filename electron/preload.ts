@@ -76,7 +76,12 @@ contextBridge.exposeInMainWorld('api', {
 
   // ═══ Agent Tools ══════════════════════════════════════════════════════════════
   // Tools the agent calls autonomously (definitions in src/types AGENT_TOOLS)
-  toolExecute: (tool: { name: string; args: Record<string, any>; workspace?: string }) => invokeWithTimeout('tool:execute', tool),
+  toolExecute: (tool: { name: string; args: Record<string, any>; workspace?: string; sessionId?: string; taskId?: string }) => invokeWithTimeout('tool:execute', tool),
+  onCheckpointCreated: (cb: (checkpoint: CheckpointSummary) => void) => {
+    const listener = (_e: unknown, checkpoint: CheckpointSummary) => cb(checkpoint)
+    ipcRenderer.on('checkpoint:created', listener)
+    return () => { ipcRenderer.removeListener('checkpoint:created', listener) }
+  },
 
   // ═══ Settings ══════════════════════════════════════════════════════════════════
   // API keys, providers, workspace config
@@ -85,7 +90,7 @@ contextBridge.exposeInMainWorld('api', {
 
   // ═══ AI ════════════════════════════════════════════════════════════════════════
   // Streaming chat completions, per-key model discovery, cancellation
-  aiChat: (config: { provider: string; apiKey: string; baseUrl: string; model: string; messages: any[]; stream?: boolean; autoSelect?: boolean }) =>
+  aiChat: (config: { provider: string; apiKey: string; baseUrl: string; model: string; messages: any[]; stream?: boolean; autoSelect?: boolean; modelPerformance?: Record<string, unknown>; taskKind?: string }) =>
     invokeWithTimeout('ai:chat', config),
   aiCancel: () => invokeWithTimeout('ai:cancel'),
   aiListModels: (config: { provider: string; apiKey: string; baseUrl: string }) => invokeWithTimeout('ai:listModels', config),
@@ -105,11 +110,31 @@ contextBridge.exposeInMainWorld('api', {
   saveConversation: (session: ConversationInput) => invokeWithTimeout('conversations:save', session),
   listConversations: () => invokeWithTimeout('conversations:list'),
   deleteConversation: (id: string) => invokeWithTimeout('conversations:delete', id),
+  updateConversation: (id: string, patch: { title?: string; pinned?: boolean }) => invokeWithTimeout('conversations:update', id, patch),
+  exportConversation: (id: string) => invokeWithTimeout('conversations:export', id),
+  importConversations: () => invokeWithTimeout('conversations:import'),
+
+  // Local project memory and file recovery checkpoints
+  projectMemoryLoad: (workspace: string, force = false) => invokeWithTimeout('projectMemory:load', workspace, force),
+  listCheckpoints: (sessionId: string) => invokeWithTimeout('checkpoints:list', sessionId),
+  restoreCheckpoint: (sessionId: string, checkpointId: string) => invokeWithTimeout('checkpoints:restore', sessionId, checkpointId),
+
+  // Packaged-app updates with release metadata integrity checks
+  updateStatus: () => invokeWithTimeout('updates:status'),
+  checkForUpdates: () => invokeWithTimeout('updates:check'),
+  installUpdate: () => invokeWithTimeout('updates:install'),
+  onUpdateStatus: (cb: (status: UpdateStatus) => void) => {
+    const listener = (_e: unknown, status: UpdateStatus) => cb(status)
+    ipcRenderer.on('updates:status', listener)
+    return () => { ipcRenderer.removeListener('updates:status', listener) }
+  },
 })
 
 export type ConversationMessage = { id: string; role: 'user' | 'assistant' | 'system'; content: string; timestamp: number }
-export type ConversationInput = { id: string; title?: string; createdAt?: number; messages: ConversationMessage[] }
-export type ConversationRecord = { version: number; id: string; title: string; createdAt: number; updatedAt: number; messages: ConversationMessage[] }
+export type CheckpointSummary = { id: string; sessionId: string; createdAt: number; label: string; files: string[] }
+export type UpdateStatus = { state: 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'current' | 'error' | 'unavailable'; message: string; version?: string; percent?: number }
+export type ConversationInput = { id: string; title?: string; createdAt?: number; messages: ConversationMessage[]; pinned?: boolean; summary?: string; resume?: Record<string, unknown> }
+export type ConversationRecord = ConversationInput & { version: number; title: string; createdAt: number; updatedAt: number }
 export type AiChatResult =
   | { content: string; model?: string; models?: string[] }
   | { error: string; kind?: 'auth' | 'retry-model' | 'other' | 'cancelled'; status?: number; models?: string[] }
@@ -149,10 +174,11 @@ export type ElectronAPI = {
   terminalKill: (termId: string) => Promise<void>
   onTerminalData: (cb: (termId: string, data: string) => void) => void
   onTerminalExit: (cb: (termId: string, exitCode: number) => void) => void
-  toolExecute: (tool: { name: string; args: Record<string, any>; workspace?: string }) => Promise<{ result?: string; error?: string }>
+  toolExecute: (tool: { name: string; args: Record<string, any>; workspace?: string; sessionId?: string; taskId?: string }) => Promise<{ result?: string; error?: string }>
+  onCheckpointCreated: (cb: (checkpoint: CheckpointSummary) => void) => () => void
   loadSettings: () => Promise<Settings>
   saveSettings: (settings: Settings) => Promise<{ success: boolean } | { error: string }>
-  aiChat: (config: { provider: string; apiKey: string; baseUrl: string; model: string; messages: any[]; stream?: boolean; autoSelect?: boolean }) =>
+  aiChat: (config: { provider: string; apiKey: string; baseUrl: string; model: string; messages: any[]; stream?: boolean; autoSelect?: boolean; modelPerformance?: Record<string, unknown>; taskKind?: string }) =>
     Promise<AiChatResult>
   aiCancel: () => Promise<{ success: boolean }>
   aiListModels: (config: { provider: string; apiKey: string; baseUrl: string }) => Promise<string[]>
@@ -162,6 +188,16 @@ export type ElectronAPI = {
   saveConversation: (session: ConversationInput) => Promise<{ success: boolean; id: string; updatedAt: number } | { error: string }>
   listConversations: () => Promise<ConversationRecord[] | { error: string }>
   deleteConversation: (id: string) => Promise<{ success: boolean } | { error: string }>
+  updateConversation: (id: string, patch: { title?: string; pinned?: boolean }) => Promise<ConversationRecord | { error: string }>
+  exportConversation: (id: string) => Promise<{ success?: boolean; cancelled?: boolean; path?: string; error?: string }>
+  importConversations: () => Promise<ConversationRecord[] | { error: string }>
+  projectMemoryLoad: (workspace: string, force?: boolean) => Promise<{ content: string; updatedAt: number; fingerprint: string } | { error: string }>
+  listCheckpoints: (sessionId: string) => Promise<Array<CheckpointSummary & { workspace: string }> | { error: string }>
+  restoreCheckpoint: (sessionId: string, checkpointId: string) => Promise<{ success: boolean; restored: string[]; removed: string[]; skipped: string[]; workspace: string } | { error: string }>
+  updateStatus: () => Promise<UpdateStatus>
+  checkForUpdates: () => Promise<UpdateStatus>
+  installUpdate: () => Promise<{ success: boolean } | { error: string }>
+  onUpdateStatus: (cb: (status: UpdateStatus) => void) => () => void
 }
 
 type FileEntry = { name: string; isDirectory: boolean; path: string }
@@ -179,5 +215,14 @@ type ProviderConfig = {
   model: string
   models?: string[]
   modelsUpdatedAt?: number
+  performance?: any
 }
-type Settings = { providers: ProviderConfig[]; activeProvider: string; workspacePath: string; customRules?: string; planMode?: boolean }
+type Settings = {
+  providers: ProviderConfig[]
+  activeProvider: string
+  workspacePath: string
+  customRules?: string
+  planMode?: boolean
+  permissionMode?: 'ask-risky' | 'ask-all-writes' | 'trusted'
+  autoUpdate?: boolean
+}

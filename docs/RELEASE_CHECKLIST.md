@@ -19,7 +19,7 @@ Each platform has to be built on that OS. Every script cleans `release/`, `dist/
 | macOS | `bash Mac/build.sh` | `VD Agent-<version>.dmg` and `VD Agent-<version>-mac.zip` (`-arm64` in the name on Apple Silicon) |
 | Linux | `bash Linux/build.sh` | `VD Agent-<version>.AppImage` and `vd-agent_<version>_amd64.deb` |
 
-**Only upload files built by these scripts.** `release/` can also contain test builds made with manual `electron-builder` commands, for example with native module rebuilds turned off. Those are not release builds; delete them or rebuild with the official script.
+**Only upload files built by these scripts.** `release/` can also contain test builds made with manual `electron-builder` commands. Those are not release builds; delete them or rebuild with the official script. `npmRebuild` is intentionally disabled because `node-pty` supplies Windows/macOS prebuilds and its install step builds the Linux Node-API binary; CI and packaged smoke tests verify that the terminal starts on each release platform.
 
 ## Code signing
 
@@ -42,9 +42,9 @@ Never commit certificates, passwords, or `.env` files.
 
 ## Build and verify
 
-- [ ] `npm test`, `npm run lint`, and `npm run build` pass
+- [ ] `npm run security:audit`, `npm test`, `npm run lint`, and `npm run build` pass
 - [ ] `npm run agent:evals` passes. It validates the golden agent-eval dataset, enforces minimum unit/smoke coverage, and runs functional, trajectory, and visual checks.
-- [ ] `npm run smoke` passes. It launches the dev build twice with a throwaway profile and checks the UI, IPC, chat persistence, key redaction, the editor, and link handling.
+- [ ] `npm run smoke` passes. It launches the dev build three times with a throwaway profile and checks UI/IPC isolation, native PTY startup, rich restart state, checkpoint restore/deletion, key redaction, the editor, model/provider trajectories, and link handling.
 - [ ] Build with the official script on each platform
 - [ ] Smoke-test the packaged app:
   - Windows: `npm run smoke -- --exe "release/win-unpacked/VD Agent.exe"`
@@ -79,8 +79,10 @@ When you build on several machines, combine the per-platform files into one `SHA
      SHA256SUMS.txt
    ```
    Use the version's `CHANGELOG.md` section as `notes.md`, and say whether each build is signed.
-3. Don't upload `win-unpacked/`, `mac/`, `linux-unpacked/`, `builder-debug.yml`, `latest*.yml`, or `.blockmap` files. VD Agent has no auto-updater, so they aren't needed.
+3. Upload the installer artifacts, `latest*.yml`, and blockmaps produced by electron-builder. Installed builds use the metadata's SHA-512 hashes to verify downloads; code signing protects supported platform packages separately. Do not upload unpacked application directories or `builder-debug.yml`.
 4. Download each file from the draft, check it against `SHA256SUMS.txt`, and publish the release.
+
+The release workflow in `.github/workflows/release.yml` builds and smoke-tests packaged apps on all three operating systems, then creates one draft release with combined checksums. Tagged Windows/macOS releases stop if signing or notarization secrets are missing. Configure `WIN_CSC_LINK`, `WIN_CSC_KEY_PASSWORD`, `MAC_CSC_LINK`, `MAC_CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID` as repository secrets. A private GitHub repository cannot serve anonymous client updates; keep automatic updates disabled for general distribution until releases are public or use a public generic update feed.
 
 ## After publishing
 

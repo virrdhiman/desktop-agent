@@ -1,11 +1,14 @@
 {
   "name": "vd-agent",
   "productName": "VD Agent",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "type": "module",
   "private": true,
   "description": "VD Agent: desktop AI coding agent with free API key model selection, git, terminal, and local chat history",
   "license": "SEE LICENSE IN LICENSE",
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "author": {
     "name": "Virender Dhiman",
     "email": "virrdhiman@gmail.com",
@@ -19,7 +22,19 @@
   "bugs": {
     "url": "https://github.com/virrdhiman/desktop-agent/issues"
   },
-  "keywords": ["ai", "agent", "coding-agent", "desktop", "electron", "code", "git", "llm", "openai-compatible", "vd-agent", "virender-dhiman"],
+  "keywords": [
+    "ai",
+    "agent",
+    "coding-agent",
+    "desktop",
+    "electron",
+    "code",
+    "git",
+    "llm",
+    "openai-compatible",
+    "vd-agent",
+    "virender-dhiman"
+  ],
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
@@ -31,12 +46,15 @@
     "lint": "tsc --noEmit",
     "smoke": "npm run build && node scripts/smoke.mjs",
     "agent:evals": "node scripts/agent-evals.mjs",
+    "verify": "npm run lint && npm test && npm run build",
+    "security:audit": "npm audit --omit=dev --audit-level=high",
     "checksums": "node scripts/checksums.mjs",
     "electron:dev": "vite --config vite.config.ts",
     "electron:build": "vite build && electron-builder"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
+    "electron-updater": "^6.8.9",
     "monaco-editor": "^0.50.0",
     "node-pty": "^1.1.0",
     "react": "^18.3.1",
@@ -55,25 +73,35 @@
     "@testing-library/user-event": "^14.6.6",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
-    "@vitejs/plugin-react": "^4.3.1",
-    "electron": "^31.3.1",
-    "electron-builder": "^24.13.3",
+    "@vitejs/plugin-react": "^5.2.0",
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3",
     "eslint": "^10.9.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.4",
     "jsdom": "^30.0.1",
     "typescript": "^5.5.3",
     "typescript-eslint": "^8.67.0",
-    "vite": "^5.4.0",
+    "vite": "^7.3.6",
     "vite-plugin-electron": "^0.28.8",
     "vite-plugin-electron-renderer": "^0.14.5",
     "vitest": "^4.1.11"
   },
+  "overrides": {
+    "js-yaml": "^4.3.2",
+    "undici": "^8.10.2"
+  },
   "build": {
-    "npmRebuild": true,
+    "npmRebuild": false,
     "forceCodeSigning": false,
     "appId": "com.vd.agent",
     "productName": "VD Agent",
+    "electronUpdaterCompatibility": ">=2.16",
+    "publish": {
+      "provider": "github",
+      "owner": "virrdhiman",
+      "repo": "desktop-agent"
+    },
     "copyright": "Copyright © 2025-2026 Virender Dhiman (virender.in). All rights reserved.",
     "directories": {
       "output": "release",

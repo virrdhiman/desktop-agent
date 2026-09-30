@@ -46,8 +46,12 @@ Covered by Vitest:
 - provider failure classification,
 - path resolution,
 - chat persistence,
+- rich restart resume state and corrupt-file backup recovery,
+- workspace permission classification and out-of-workspace blocking,
+- pre-edit checkpoint creation and restoration,
+- deterministic project-memory refreshes,
 - IPC helpers,
-- model discovery/ranking/fallback behavior,
+- model discovery/ranking/fallback behavior and learned local outcome weighting,
 - live model catalog refreshes that drop stale/deprecated model IDs.
 
 Command:
@@ -89,6 +93,8 @@ Covered by `scripts/smoke.mjs` using Electron plus the Chrome DevTools Protocol:
 - external links cannot navigate the app window,
 - settings and chat history survive restart in a throwaway profile,
 - API keys are redacted before conversations are written to disk,
+- project memory and pre-edit checkpoints survive through main-process IPC,
+- a checkpoint can restore a file to its pre-edit content,
 - bundled Monaco opens a workspace file,
 - no renderer errors are logged.
 

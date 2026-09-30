@@ -22,9 +22,11 @@
  */
 import { useState, useRef, useEffect, useCallback } from 'react'
 import DiffViewer from './DiffViewer'
-import { useStore } from '../store'
-import type { ChatMessage, AgentStep, ProviderConfig } from '../types'
-import { applyDiscoveredModel, buildProviderChain, refreshProviderModelCatalog } from '../lib/providers'
+import { buildConversationSummary, useStore } from '../store'
+import type { AgentTaskKind, ChatMessage, AgentStep, ProviderConfig } from '../types'
+import {
+  applyDiscoveredModel, buildProviderChain, classifyAgentTask, recordProviderOutcome, refreshProviderModelCatalog,
+} from '../lib/providers'
 import { highlightSyntax } from '../lib/highlight'
 import { AUTHOR_NAME, AUTHOR_URL, REPO_URL } from '../lib/brand'
 import {
@@ -289,7 +291,9 @@ export default function AgentChat() {
     streamingContent, setStreamingContent, appendStreamingContent,
     addOpenFile,
     setSelectedFile,
-    sessionStats, addTokens, addToolExecution,
+    sessionStats, addTokens, addToolExecution, recordToolExecution, setLastVerification,
+    projectMemory, latestCheckpoint, lastVerification,
+    toolExecutions, tasks,
   } = useStore()
 
   const [input, setInput] = useState('')
@@ -366,7 +370,7 @@ export default function AgentChat() {
     return () => window.removeEventListener('paste', handler)
   }, [])
 
-  const executeTool = useCallback(async (toolName: string, args: Record<string, any>) => {
+  const executeTool = useCallback(async (toolName: string, args: Record<string, any>, taskId: string) => {
     addTerminalEntry({
       id: Date.now().toString(),
       type: 'command',
@@ -375,7 +379,13 @@ export default function AgentChat() {
     })
     try {
       const workspace = useStore.getState().workspacePath || undefined
-      return await window.api.toolExecute({ name: toolName, args, workspace })
+      return await window.api.toolExecute({
+        name: toolName,
+        args,
+        workspace,
+        sessionId: useStore.getState().currentSessionId || undefined,
+        taskId,
+      })
     } catch (err: any) {
       return { error: `Tool execution failed: ${err?.message || err}` }
     }
@@ -400,9 +410,26 @@ export default function AgentChat() {
         toolCall: { ...toolCall, id: Date.now().toString(), status: 'running' },
       } as AgentStep)
 
-      const result = await executeTool(toolCall.name, toolCall.args)
+      const result = await executeTool(toolCall.name, toolCall.args, taskId)
       addToolExecution(settings.activeProvider)
       runs.push({ name: toolCall.name, ok: !!result && typeof result.error !== 'string' })
+      const ok = !!result && typeof result.error !== 'string'
+      const resultText = ok ? (result?.result || 'Done') : result?.error || 'No result'
+      recordToolExecution({
+        name: toolCall.name,
+        ok,
+        timestamp: Date.now(),
+        argsSummary: JSON.stringify(toolCall.args).slice(0, 600),
+        resultSummary: resultText.slice(0, 1_200),
+      })
+      if (toolCall.name === 'run_command' && typeof toolCall.args.command === 'string') {
+        setLastVerification({
+          command: toolCall.args.command.slice(0, 500),
+          ok,
+          timestamp: Date.now(),
+          summary: resultText.slice(0, 1_200),
+        })
+      }
 
       if (typeof result?.error === 'string') {
         addStepToTask(taskId, {
@@ -427,16 +454,18 @@ export default function AgentChat() {
       results.push(formatToolResult(toolCall, result || { error: 'The tool returned nothing.' }))
     }
     return results.join('\n\n')
-  }, [executeTool, addTerminalEntry, addStepToTask, addOpenFile, setSelectedFile])
+  }, [executeTool, addTerminalEntry, addStepToTask, addOpenFile, setSelectedFile, recordToolExecution, setLastVerification])
 
   /**
    * Active provider first, then official free providers with keys. Auth failures stop the chain.
    * `preferredId` moves the provider that already answered this request to the front, so later
    * tool rounds don't keep hitting a provider that is rate limited.
    */
-  const callWithFallback = useCallback(async (apiMessages: any[], preferredId?: string): Promise<ChatOutcome> => {
+  const callWithFallback = useCallback(async (
+    apiMessages: any[], preferredId?: string, taskKind: AgentTaskKind = 'analysis'
+  ): Promise<ChatOutcome> => {
     const current = useStore.getState().settings
-    const base = buildProviderChain(current.providers, current.activeProvider)
+    const base = buildProviderChain(current.providers, current.activeProvider, undefined, taskKind)
     const preferred = base.find((p) => p.id === preferredId)
     const chain = preferred ? [preferred, ...base.filter((p) => p !== preferred)] : base
     if (chain.length === 0) return { error: noProviderNotice() }
@@ -449,6 +478,7 @@ export default function AgentChat() {
       setStreamingContent('')
 
       let result: Awaited<ReturnType<typeof window.api.aiChat>>
+      const startedAt = Date.now()
       try {
         result = await window.api.aiChat({
           provider: p.id,
@@ -458,6 +488,8 @@ export default function AgentChat() {
           messages: apiMessages,
           stream: true,
           autoSelect: !override,
+          modelPerformance: p.performance?.models,
+          taskKind,
         })
       } catch (err: any) {
         result = { error: err?.message || String(err), kind: 'other' }
@@ -470,6 +502,18 @@ export default function AgentChat() {
           void window.api.saveSettings(catalogSettings)
         }
       }
+
+      const usedModel = 'error' in result ? (override || p.model) : (result.model || override || p.model)
+      const healthSettings = recordProviderOutcome(
+        useStore.getState().settings,
+        p.id,
+        usedModel,
+        !('error' in result),
+        Date.now() - startedAt,
+        taskKind
+      )
+      setAppSettings(healthSettings)
+      void window.api.saveSettings(healthSettings)
 
       if ('error' in result) {
         if (result.kind === 'cancelled' || useStore.getState().cancelRequested) return { error: 'Cancelled', cancelled: true }
@@ -523,6 +567,7 @@ export default function AgentChat() {
       return
     }
     setCancelRequested(false)
+    const taskKind = classifyAgentTask(text)
 
     // Image contents are not sent yet; the model is told which files were attached.
     let userContent = text
@@ -532,7 +577,19 @@ export default function AgentChat() {
 
     const systemPrompt = buildSystemPrompt({
       planMode,
-      context: buildContext({ workspacePath, selectedFile, fileContent }),
+      context: buildContext({
+        workspacePath,
+        selectedFile,
+        fileContent,
+        projectMemory,
+        conversationSummary: buildConversationSummary(messages),
+        resumeNote: [
+          latestCheckpoint ? `Latest recovery checkpoint: ${latestCheckpoint.label} (${latestCheckpoint.files.join(', ')})` : '',
+          lastVerification ? `Last verification: ${lastVerification.ok ? 'passed' : 'failed'} ${lastVerification.command}\n${lastVerification.summary}` : '',
+          tasks.length ? `Task state:\n${tasks.slice(-5).map((task) => `- ${task.status}: ${task.title}`).join('\n')}` : '',
+          toolExecutions.length ? `Recent tool outcomes:\n${toolExecutions.slice(-8).map((run) => `- ${run.ok ? 'OK' : 'FAILED'} ${run.name}: ${run.resultSummary}`).join('\n')}` : '',
+        ].filter(Boolean).join('\n'),
+      }),
       customRules: appSettings.customRules,
     })
 
@@ -573,7 +630,7 @@ export default function AgentChat() {
     let answeredBy: string | undefined
     let fallbackNoticeShown = false
     const call = async (): Promise<Extract<ChatOutcome, { content: string }> | null> => {
-      const outcome = await callWithFallback(apiMessages, answeredBy)
+      const outcome = await callWithFallback(apiMessages, answeredBy, taskKind)
       if ('error' in outcome) {
         finish('error', outcome.cancelled ? 'Generation stopped.' : outcome.error)
         return null
@@ -638,7 +695,7 @@ export default function AgentChat() {
       if (!outcome) return
       addTokens(0, Math.ceil(outcome.content.length / 4))
     }
-  }, [input, chatLoading, messages, getActiveProvider, workspacePath, selectedFile, fileContent, pendingImages, planMode, appSettings.customRules, callWithFallback, processToolCalls, setCancelRequested])
+  }, [input, chatLoading, messages, getActiveProvider, workspacePath, selectedFile, fileContent, pendingImages, planMode, appSettings.customRules, callWithFallback, processToolCalls, setCancelRequested, projectMemory, latestCheckpoint, lastVerification, toolExecutions, tasks])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -663,7 +720,8 @@ export default function AgentChat() {
         reader.readAsDataURL(file)
       } else {
         // Text file — add path as context
-        setInput(prev => prev + (prev ? '\n' : '') + `File: ${file.path || file.name}`)
+        const droppedPath = (file as File & { path?: string }).path
+        setInput(prev => prev + (prev ? '\n' : '') + `File: ${droppedPath || file.name}`)
       }
     }
   }

@@ -14,6 +14,7 @@ import {
   isValidSessionId,
   listConversations,
   normalizeConversation,
+  readConversation,
   redactSecrets,
   saveConversation,
 } from '../conversationStore'
@@ -39,7 +40,7 @@ describe('conversationStore', () => {
 
     const list = await listConversations(dir)
     expect(list.map((c) => c.id)).toEqual(['session-b', 'session-a'])
-    expect(list[0]).toMatchObject({ version: 1, title: 'Second chat' })
+    expect(list[0]).toMatchObject({ version: 2, title: 'Second chat' })
   })
 
   it('repeated saves update the same session file instead of creating duplicates', async () => {
@@ -58,10 +59,22 @@ describe('conversationStore', () => {
     expect(fs.readdirSync(dir).some((f) => f.endsWith('.tmp'))).toBe(false)
   })
 
+  it('recovers listing and direct reads from the last-known-good backup', async () => {
+    await saveConversation(dir, { id: 'session-backup', messages: [msg('1', 'user', 'recover me')] })
+    await saveConversation(dir, { id: 'session-backup', messages: [msg('1', 'user', 'newer content')] })
+    fs.writeFileSync(path.join(dir, 'session-backup.json'), '{ corrupt')
+
+    expect((await listConversations(dir))[0].messages[0].content).toBe('recover me')
+    expect((await readConversation(dir, 'session-backup'))?.messages[0].content).toBe('recover me')
+  })
+
   it('deletes the file from disk and tolerates already-deleted sessions', async () => {
     await saveConversation(dir, { id: 'session-del', messages: [msg('1', 'user', 'bye')] })
+    await saveConversation(dir, { id: 'session-del', messages: [msg('1', 'user', 'bye again')] })
+    expect(fs.existsSync(path.join(dir, 'session-del.json.bak'))).toBe(true)
     expect(await deleteConversation(dir, 'session-del')).toBe(true)
     expect(fs.existsSync(path.join(dir, 'session-del.json'))).toBe(false)
+    expect(fs.existsSync(path.join(dir, 'session-del.json.bak'))).toBe(false)
     expect(await deleteConversation(dir, 'session-del')).toBe(false)
     expect(await listConversations(dir)).toEqual([])
   })
@@ -116,6 +129,20 @@ describe('conversationStore', () => {
 
   it('redactSecrets ignores short placeholders like local provider keys', () => {
     expect(redactSecrets('use ollama locally', ['ollama'])).toBe('use ollama locally')
+  })
+
+  it('stores resumable state, pins, and summaries while redacting secrets', async () => {
+    const secret = 'custom-secret-key-123456789'
+    await saveConversation(dir, {
+      id: 'session-resume',
+      pinned: true,
+      summary: `worked with ${secret}`,
+      resume: { workspacePath: '/repo', toolExecutions: [{ resultSummary: secret }] },
+      messages: [msg('1', 'user', 'continue')],
+    }, [secret])
+    const [saved] = await listConversations(dir)
+    expect(saved).toMatchObject({ version: 2, pinned: true, summary: 'worked with [redacted-key]' })
+    expect(JSON.stringify(saved.resume)).not.toContain(secret)
   })
 
   it('normalizeConversation drops invalid messages and returns null when nothing is left', () => {

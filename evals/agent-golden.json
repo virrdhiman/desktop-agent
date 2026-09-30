@@ -3,8 +3,8 @@
   "name": "VD Agent local golden evals",
   "inspiration": "Golden tasks, trace checks, and release smoke gates.",
   "minimums": {
-    "vitestPassed": 251,
-    "smokeChecks": 33
+    "vitestPassed": 269,
+    "smokeChecks": 40
   },
   "tiers": [
     {
@@ -138,6 +138,39 @@
         "Deprecated model IDs not returned by discovery are not kept in the saved catalog."
       ],
       "coveredBy": [
+        "scripts/smoke.mjs"
+      ]
+    },
+    {
+      "id": "component-safety-and-recovery",
+      "tier": 1,
+      "prompt": "Classify agent tool risk, keep file mutations in the workspace, and preserve the pre-edit state.",
+      "checks": [
+        "Writes outside the open workspace are blocked.",
+        "Permission modes distinguish reads, ordinary writes, and risky actions.",
+        "A pre-edit checkpoint restores existing files and removes newly created files.",
+        "Oversized checkpoint files are reported as skipped."
+      ],
+      "coveredBy": [
+        "electron/__tests__/toolPolicy.test.ts",
+        "electron/__tests__/checkpointStore.test.ts",
+        "scripts/smoke.mjs"
+      ]
+    },
+    {
+      "id": "component-durable-resume",
+      "tier": 1,
+      "prompt": "Restart after a multi-step task and continue with the prior workspace, task, tool, model, checkpoint, and verification context.",
+      "checks": [
+        "Schema v2 redacts secrets inside nested resume state.",
+        "A corrupt primary conversation can recover from its backup.",
+        "The renderer restores rich resume state rather than messages alone.",
+        "Project memory refreshes when repository metadata changes."
+      ],
+      "coveredBy": [
+        "electron/__tests__/conversationStore.test.ts",
+        "electron/__tests__/projectMemoryStore.test.ts",
+        "src/__tests__/sessions.test.ts",
         "scripts/smoke.mjs"
       ]
     }

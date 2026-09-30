@@ -120,12 +120,16 @@ export function registerSettingsHandlers() {
       } else {
         parsed.providers = DEFAULT_PROVIDERS
       }
+      parsed.permissionMode ??= 'ask-risky'
+      parsed.autoUpdate ??= false
       return parsed
     } catch {
       return {
         providers: DEFAULT_PROVIDERS,
         activeProvider: 'groq',
         workspacePath: '',
+        permissionMode: 'ask-risky',
+        autoUpdate: false,
       }
     }
   })
@@ -139,7 +143,9 @@ export function registerSettingsHandlers() {
           apiKey: encryptApiKey(p.apiKey),
         })) || settings.providers,
       }
-      await fs.promises.writeFile(SETTINGS_PATH, JSON.stringify(toSave, null, 2), 'utf-8')
+      const tmp = `${SETTINGS_PATH}.${process.pid}.tmp`
+      await fs.promises.writeFile(tmp, JSON.stringify(toSave, null, 2), 'utf-8')
+      await fs.promises.rename(tmp, SETTINGS_PATH)
       return { success: true }
     } catch (err: any) {
       return { error: err.message }
