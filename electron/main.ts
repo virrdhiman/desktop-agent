@@ -19,6 +19,7 @@
  */
 import { app, BrowserWindow, session } from 'electron'
 import path from 'path'
+import { fileURLToPath } from 'url'
 
 // Handler module imports
 import { registerFsHandlers } from './handlers/fs'
@@ -29,6 +30,9 @@ import { registerSettingsHandlers } from './handlers/settings'
 import { registerConversationHandlers } from './handlers/conversations'
 import { registerAiHandlers } from './handlers/ai'
 import { registerShellHandlers } from './handlers/shell'
+
+// package.json has "type": "module", so the main bundle is ESM and has no CommonJS __dirname.
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 /** Main BrowserWindow reference — passed to handlers that need to send events to renderer */
 let mainWindow: BrowserWindow | null = null
@@ -45,7 +49,7 @@ function createWindow() {
     titleBarStyle: 'hiddenInset',
     backgroundColor: '#0f172a',
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       spellcheck: true,

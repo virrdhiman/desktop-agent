@@ -16,6 +16,7 @@
  */
 import { useStore } from '../store'
 import type { Panel } from '../types'
+import { version } from '../../package.json'
 
 const PANELS: { id: Panel; icon: string; label: string; shortcut?: string }[] = [
   { id: 'chat', icon: '🤖', label: 'Agent', shortcut: 'Ctrl+Shift+A' },
@@ -94,8 +95,8 @@ export default function Sidebar() {
       </button>
 
       {/* Version */}
-      <div style={{ fontSize: 8, color: 'var(--text-muted)', textAlign: 'center', marginTop: 4, lineHeight: 1.3 }} title="VD Agent v1.0.0 by Virender Dhiman">
-        v1.0.0
+      <div style={{ fontSize: 8, color: 'var(--text-muted)', textAlign: 'center', marginTop: 4, lineHeight: 1.3 }} title={`VD Agent v${version} by Virender Dhiman`}>
+        v{version}
       </div>
     </nav>
   )
