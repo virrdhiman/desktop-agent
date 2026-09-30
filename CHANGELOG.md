@@ -59,6 +59,7 @@ All notable changes to VD Agent are documented here.
 ### License and credit
 - VD Agent is now proprietary, source-available software owned by Virender Dhiman, under the new VD Agent License. It is free to download and use, including for commercial work, but credit is required and it may not be resold, redistributed, rebranded, or hosted as a service.
 - Source headers, docs, and package metadata reflect the new license. `package.json` is marked `private` and points to the correct repository.
+- Third-party dependencies keep their own open-source licenses and notices. Those licenses cover the dependencies only.
 - The Windows installer shows the license, and packaged builds include `LICENSE.txt`.
 - Settings has an About card, and the chat welcome screen credits the author, with links to [virender.in](https://virender.in) and the GitHub repository.
 
