@@ -1,39 +1,47 @@
 <!--
   @author Virender Dhiman
-  @year 2025
+  @year 2026
   @project VD Agent
   @license MIT
 -->
 
-# 🛠️ Agent Tools Reference
+# Agent Tools Reference
 
-VD Agent has **33 autonomous tools** it can use to interact with your filesystem, git, web, image generation, video, speech, and blockchain.
+These are the tools VD Agent can call. The definitions the model sees live in `AGENT_TOOLS` (`src/types/index.ts`), and the implementations live in `electron/handlers/tools.ts`. Tools run in the main process with your user permissions.
 
-**Author:** Virender Dhiman  
+**Author:** Virender Dhiman
 **License:** MIT
 
-## 📁 File System Tools
+The model calls a tool with a fenced block:
+
+````
+```tool
+{"name": "read_file", "args": {"path": "src/index.ts"}}
+```
+````
+
+## File system
 
 ### `read_file`
-Read the contents of a file.
+Read a file's contents.
 ```json
 { "name": "read_file", "args": { "path": "src/index.ts" } }
 ```
 
 ### `write_file`
-Write content to a file (creates or overwrites).
+Write a file, creating or overwriting it.
 ```json
 { "name": "write_file", "args": { "path": "output.txt", "content": "Hello world" } }
 ```
 
 ### `edit_file`
-Edit a specific part of a file by replacing old text with new text.
+Replace the first occurrence of `old_string` with `new_string`. Fails if `old_string` is not found.
 ```json
 { "name": "edit_file", "args": { "path": "src/app.ts", "old_string": "old code", "new_string": "new code" } }
 ```
 
 ### `create_file`
-Create a new file with optional content.
+Create a file with optional content.
 ```json
 { "name": "create_file", "args": { "path": "new-file.ts", "content": "export {}" } }
 ```
@@ -45,41 +53,41 @@ Delete a file permanently.
 ```
 
 ### `list_files`
-List files and directories in a path.
+List a directory.
 ```json
 { "name": "list_files", "args": { "path": "src/" } }
 ```
 
 ### `search_files`
-Search for files by name pattern.
+Find files whose names match a pattern.
 ```json
 { "name": "search_files", "args": { "pattern": "config", "path": "." } }
 ```
 
 ### `search_code`
-Search through file contents for a pattern (grep-like).
+Search file contents (grep-like).
 ```json
 { "name": "search_code", "args": { "pattern": "useState", "path": "src/" } }
 ```
 
-## 🔧 Command Tools
+## Commands
 
 ### `run_command`
-Execute a shell command.
+Run a shell command. It times out after 30 seconds.
 ```json
 { "name": "run_command", "args": { "command": "npm test", "cwd": "." } }
 ```
 
-## 🌳 Project Structure
+## Project
 
 ### `read_directory_tree`
-Get a visual tree view of the project structure.
+A tree view of the project structure.
 ```json
 { "name": "read_directory_tree", "args": { "path": "." } }
 ```
 
 ### `multi_file_edit`
-Edit multiple files at once with targeted replacements.
+Targeted replacements across several files.
 ```json
 { "name": "multi_file_edit", "args": { "edits": [
   { "path": "file1.ts", "old_string": "a", "new_string": "b" },
@@ -87,120 +95,66 @@ Edit multiple files at once with targeted replacements.
 ] } }
 ```
 
-## 🔀 Git Tools
+### `code_review`
+Runs simple static checks on a file (TODOs, `console.log`, `any`, empty catch blocks, long lines, `eval`, `innerHTML`, possible hardcoded secrets) and returns the findings with the file content for the model to review.
+```json
+{ "name": "code_review", "args": { "path": "src/auth.ts", "focus": "security" } }
+```
 
-### `git_status`
-Get git repository status (branch, staged, modified, untracked files).
+## Git
 
-### `git_diff`
-Show git diff for all files or a specific file.
+All git tools accept an optional `path` (the repository, default `.`).
 
-### `git_commit`
-Stage all changes and commit with a message.
+| Tool | What it does |
+|------|--------------|
+| `git_status` | Branch, staged, modified, and untracked files |
+| `git_diff` | Diff for everything or one `file` |
+| `git_commit` | Commit with `message`. Set `add: true` to stage everything first. |
+| `git_log` | Recent commits (`count`, default 10) |
+| `git_branch` | List branches, or create/switch with `branch` + `create` / `switch` |
+| `git_stash` | Stash changes, or `pop: true` |
+| `git_generate_commit` | Returns the diff so the model can write a commit message |
+| `git_undo_last` | Undo the last commit and keep its changes staged |
+| `git_discard_changes` | Discard all uncommitted changes (**destructive**) |
 
-### `git_log`
-Show recent git log with hashes, messages, and authors.
-
-### `git_branch`
-List branches, or create/switch branches.
-
-### `git_stash`
-Stash or pop stash of uncommitted changes.
-
-### `git_generate_commit`
-Get the git diff to help generate a commit message.
-
-### `git_undo_last`
-Undo the last commit, keeping changes staged.
-
-### `git_discard_changes`
-Discard all uncommitted changes (⚠️ dangerous!).
-
-## 🌐 Web Tools
+## Web
 
 ### `web_search`
-Search the web for documentation, references, or answers.
+Search the web and return text snippets.
 ```json
 { "name": "web_search", "args": { "query": "React useEffect cleanup" } }
 ```
 
-## ⛓️ Web3 / Blockchain Tools
+## Media
 
-### `web3_balance`
-Check crypto wallet balance on any EVM chain.
-```json
-{ "name": "web3_balance", "args": { "address": "0x...", "chain": "ethereum" } }
-```
-Supported chains: `ethereum`, `polygon`, `arbitrum`, `optimism`, `base`, `bsc`, `sepolia`
+| Tool | What it actually does | Requirements |
+|------|-----------------------|--------------|
+| `generate_image` | Returns a Pollinations image URL for `prompt` (`width`, `height`, `model`, `seed` optional) | None |
+| `image_analysis` | Sends an image (`image_url`: URL or local path) and optional `question` to Gemini | Gemini key |
+| `generate_video` | Returns a Pollinations video URL, or setup steps for Runway/Kling (`provider`, `prompt`) | None |
+| `comfyui_workflow` | Returns ComfyUI setup instructions | None |
+| `speech_to_text` | Transcribes `audio_path` with Whisper (`language` optional) | Groq or Hugging Face key |
+| `text_to_speech` | Returns a Pollinations audio URL for `text` (`voice` optional) | None |
 
-### `web3_explorer`
-Look up transactions, addresses, or blocks on block explorers.
-```json
-{ "name": "web3_explorer", "args": { "tx": "0x...", "chain": "ethereum" } }
-```
+## Web3
 
-### `web3_ipfs`
-Upload or fetch content from IPFS decentralized storage.
-```json
-{ "name": "web3_ipfs", "args": { "action": "fetch", "cid": "Qm..." } }
-```
+| Tool | What it does |
+|------|--------------|
+| `web3_balance` | Native balance for `address` on `chain` (ethereum, polygon, arbitrum, optimism, base, bsc, sepolia) |
+| `web3_explorer` | Explorer link for a `tx`, `address`, or `block` |
+| `web3_ipfs` | `fetch` content by `cid`. `upload` depends on an external service. |
+| `web3_contract` | Verification steps or an ABI lookup link (`action`: verify or abi) |
+| `web3_deploy` | Hardhat deployment steps for `file` on `chain`. It does not deploy anything. |
 
-### `web3_contract`
-Smart contract operations: verify contracts, get ABIs.
-```json
-{ "name": "web3_contract", "args": { "action": "abi", "address": "0x...", "chain": "ethereum" } }
-```
+## Execution flow
 
-### `web3_deploy`
-Get deployment instructions for a smart contract.
-```json
-{ "name": "web3_deploy", "args": { "file": "contracts/Token.sol", "chain": "sepolia" } }
-```
+1. The model replies with one or more `tool` blocks.
+2. VD parses them, runs each through `tool:execute`, and logs the call in the Tasks panel and terminal.
+3. The results go back to the model, which continues.
+4. This repeats for up to **10 rounds** per request. **Stop** cancels the in-flight request and skips any remaining tools.
 
-## 🎨 Image / Video / Speech Tools
+## Adding a tool
 
-### `generate_image`
-Generate an image from a text prompt.
-```json
-{ "name": "generate_image", "args": { "prompt": "a sunset over mountains", "provider": "pollinations" } }
-```
-
-### `image_analysis`
-Analyze an image (describe contents, extract text, etc.).
-```json
-{ "name": "image_analysis", "args": { "image_path": "screenshot.png", "prompt": "what is in this image?" } }
-```
-
-### `generate_video`
-Generate a video from a text prompt.
-```json
-{ "name": "generate_video", "args": { "prompt": "a cat playing piano" } }
-```
-
-### `speech_to_text`
-Transcribe an audio file to text.
-```json
-{ "name": "speech_to_text", "args": { "audio_path": "recording.wav" } }
-```
-
-### `text_to_speech`
-Convert text to speech audio.
-```json
-{ "name": "text_to_speech", "args": { "text": "Hello world" } }
-```
-
-## 🤖 Tool Execution Flow
-
-1. User sends a message
-2. Agent analyzes the request and decides which tools to use
-3. Agent outputs tool calls in ```` ```tool ```` blocks
-4. VD Agent parses the tool calls and executes them
-5. Results are sent back to the agent for follow-up
-6. This loops up to 5 rounds of tool → result → follow-up
-
-## ⚙️ Adding Custom Tools
-
-To add a new tool:
-1. Add the tool definition in `src/types/index.ts` → `AGENT_TOOLS`
-2. Add the implementation in `electron/handlers/tools.ts` → `tool:execute` handler
-3. The agent will automatically see and use the new tool
+1. Add the definition to `AGENT_TOOLS` in `src/types/index.ts`.
+2. Implement it in `electron/handlers/tools.ts`.
+3. Document it here.

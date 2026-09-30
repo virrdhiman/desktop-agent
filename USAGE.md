@@ -1,37 +1,35 @@
 <!--
   @author Virender Dhiman
-  @year 2025
+  @year 2026
   @project VD Agent
   @license MIT
 -->
 
-# 📘 VD Agent — Complete Usage Guide
+# VD Agent Usage Guide
 
 **Author:** Virender Dhiman
-
-This guide walks you through everything you need to know to use VD Agent effectively.
 
 ---
 
 ## Table of Contents
 
-1. [Installation](#installation)
-2. [First Launch & Setup](#first-launch--setup)
-3. [Getting Your First API Key](#getting-your-first-api-key)
-4. [Using the AI Agent](#using-the-ai-agent)
-5. [Code Editor](#code-editor)
-6. [Terminal](#terminal)
-7. [Git Manager](#git-manager)
-8. [File Browser](#file-browser)
-9. [Command Palette](#command-palette)
-10. [Session Management](#session-management)
-11. [Plan Mode](#plan-mode)
-12. [Image & File Support](#image--file-support)
-13. [Web3 / Blockchain Tools](#web3--blockchain-tools)
-14. [Keyboard Shortcuts](#keyboard-shortcuts)
-15. [Building the Desktop App](#building-the-desktop-app)
-16. [Troubleshooting](#troubleshooting)
-17. [FAQ](#faq)
+1. [Installation](#1-installation)
+2. [First Launch and Setup](#2-first-launch-and-setup)
+3. [Getting Your First API Key](#3-getting-your-first-api-key)
+4. [Using the AI Agent](#4-using-the-ai-agent)
+5. [Code Editor](#5-code-editor)
+6. [Terminal](#6-terminal)
+7. [Git](#7-git)
+8. [File Browser](#8-file-browser)
+9. [Command Palette](#9-command-palette)
+10. [Chat History](#10-chat-history)
+11. [Plan Mode](#11-plan-mode)
+12. [Images and Files](#12-images-and-files)
+13. [Web3 Tools](#13-web3-tools)
+14. [Keyboard Shortcuts](#14-keyboard-shortcuts)
+15. [Building the Desktop App](#15-building-the-desktop-app)
+16. [Troubleshooting](#16-troubleshooting)
+17. [FAQ](#17-faq)
 
 ---
 
@@ -39,419 +37,212 @@ This guide walks you through everything you need to know to use VD Agent effecti
 
 ### Prerequisites
 
-- **Node.js 18+** — [Download](https://nodejs.org/)
-- **npm 9+** — Comes with Node.js
-- **Git** — [Download](https://git-scm.com/)
-- **Windows:** PowerShell or Git Bash
-- **macOS:** Terminal (bash or zsh)
+- **Node.js 18+** and npm
+- **Git**
+- Build tools for `node-pty`: Visual Studio Build Tools (Windows) or Xcode Command Line Tools (macOS)
 
-### Install Steps
+### Install
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/virrdhiman/desktop-agent.git
+git clone https://github.com/virenderdhiman/vd-agent.git
 cd vd-agent
-
-# 2. Install dependencies
 npm install
-
-# 3. Start the app in development mode
 npm run dev
 ```
 
-The app window will open automatically after a few seconds.
+The app window opens once the dev server is ready.
 
 ---
 
-## 2. First Launch & Setup
+## 2. First Launch and Setup
 
-When you first open VD Agent, you'll see:
-
-1. **Sidebar (left)** — Navigation icons for each panel
-2. **Main area (center)** — Shows the currently active panel
-3. **Terminal (bottom)** — Collapsible integrated terminal
-
-### Initial Setup Checklist
+The layout has a **sidebar** (left) for switching panels, the **main area** for the active panel, and a collapsible **terminal** at the bottom.
 
 | Step | Action | Where |
 |------|--------|-------|
-| 1 | Open Settings | Click ⚙️ in sidebar, or press nothing yet |
-| 2 | Pick a provider | Choose any FREE provider (Groq recommended) |
-| 3 | Get API key | Click "Get Key" → sign up → copy key |
-| 4 | Paste key | Paste in the API key field → click Save |
-| 5 | Open workspace | Click 📁 in sidebar → Open → select a folder |
-| 6 | Start chatting | Click 🤖 in sidebar → type your first message |
+| 1 | Open Settings | ⚙️ in the sidebar |
+| 2 | Pick a provider | Any free official provider (Groq or Gemini recommended) |
+| 3 | Get an API key | Click "Get API Key", sign up, and copy the key |
+| 4 | Save it | Paste it into the API key field and click Save |
+| 5 | Open a workspace | 📁 in the sidebar → Open, or Settings → Open |
+| 6 | Start chatting | 🤖 in the sidebar |
 
 ---
 
 ## 3. Getting Your First API Key
 
-### Recommended: Groq (Fastest Free)
+### Groq (fast, free tier)
 
-1. Go to [console.groq.com/keys](https://console.groq.com/keys)
-2. Sign up (free, no credit card)
-3. Click **"Create API Key"**
-4. Copy the key (starts with `gsk_...`)
-5. In VD Agent: ⚙️ Settings → Find "Groq" → Paste key → Save
+1. Go to [console.groq.com/keys](https://console.groq.com/keys).
+2. Create an API key (starts with `gsk_`).
+3. In VD Agent: Settings → Groq → paste the key → Save.
 
-### Alternative: Google Gemini (Best Multimodal)
+### Google Gemini (free tier, multimodal)
 
-1. Go to [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
-2. Sign in with Google account
-3. Click **"Create API Key"**
-4. Copy the key (starts with `AIza...`)
-5. In VD Agent: ⚙️ Settings → Find "Google Gemini" → Paste key → Save
+1. Go to [aistudio.google.com/apikey](https://aistudio.google.com/apikey).
+2. Create an API key (starts with `AIza`).
+3. In VD Agent: Settings → Google Gemini → paste the key → Save.
 
-### Alternative: No Key Needed (Local AI)
+### No key: local models
 
-1. Install Ollama: [ollama.com/download](https://ollama.com/download)
-2. Pull a model: `ollama pull llama3.3`
-3. In VD Agent: ⚙️ Settings → Find "Ollama (Local)" → Save
-4. Start chatting — everything runs on your machine, 100% private
+1. Install [Ollama](https://ollama.com/download) and pull a model, for example `ollama pull llama3.3`.
+2. In VD Agent: Settings → Ollama (Local) → Save and make it active.
+3. Prompts stay on your machine.
 
-### All Providers (See [README.md](./README.md#-ai-providers-37) for full list)
-
-You can configure multiple providers and the app auto-falls back if one fails.
+See [README.md](./README.md#ai-providers) for the provider categories.
 
 ---
 
 ## 4. Using the AI Agent
 
-### Basic Chat
+### Basic chat
 
-1. Click 🤖 in the sidebar to open the Agent panel
-2. Type your message in the input box at the bottom
-3. Press **Enter** or click the Send button
-4. Watch the response stream in real-time
+1. Open 🤖 Agent.
+2. Type a message and press **Enter** (**Shift+Enter** for a new line).
+3. The response streams in. Click **⏹ Stop** to cancel the request.
 
-### What the Agent Can Do
+### How the agent behaves
 
-The agent can **autonomously**:
+The agent is prompted to act like a senior engineer:
+
+- It reads code and runs commands before explaining or changing things.
+- It pushes back on vague or risky requests and proposes a safer approach.
+- It verifies changes with your project's own commands (tests, typecheck, build) and reports what it ran.
+- It asks before destructive actions like deleting files, discarding changes, or force-pushing.
+
+You can add your own conventions in Settings → **Custom Rules**.
+
+### Free keys and automatic model selection
+
+For OpenAI-compatible providers, on each request VD does the following:
+
+1. Lists the models your key can call (`/models`, cached for 10 minutes).
+2. Drops non-chat models (embeddings, audio, speech, image, moderation, rerank).
+3. Ranks the rest by coding quality, then efficiency. On OpenRouter, only `:free` models are considered when they are available.
+4. Tries the best model first, then the next few, then the model set in Settings.
+5. Moves to the next model on model-not-found, unsupported model, 404, 429, overload, capacity, or 503 errors.
+6. Stops immediately on an invalid key or other auth error. It does not try other models or providers, so you can fix the key.
+7. Saves the model that worked as the provider's model in Settings.
+
+To pin a specific model, choose it in the **model picker** in the Agent header. The list shows models discovered for the active provider. A pinned model is never replaced automatically. Choose **Auto** to go back to automatic selection.
+
+### Provider fallback
+
+If the active provider fails for a non-auth reason, VD tries up to three other **official free** providers that have keys. The terminal panel logs each attempt. Local servers and community proxies are never used as fallbacks.
+
+### What the agent can do
 
 | Action | Example |
 |--------|---------|
-| **Read files** | "Read src/App.tsx and explain it" |
-| **Write files** | "Create a new component called Button.tsx" |
-| **Edit files** | "In main.ts, change the port to 3001" |
-| **Run commands** | "Run npm test and fix any failures" |
-| **Git operations** | "Commit these changes with a descriptive message" |
-| **Search code** | "Find all uses of useState in the project" |
-| **Web search** | "Search for the latest React 19 features" |
-| **Web3/blockchain** | "Check the ETH balance of this address" |
+| Read files | "Read src/App.tsx and explain it" |
+| Write files | "Create a Button component in src/components" |
+| Edit files | "In main.ts, change the port to 3001" |
+| Run commands | "Run npm test and fix any failures" |
+| Git | "Show the diff and write a commit message" |
+| Search code | "Find all uses of useState" |
+| Web search | "Look up the React 19 release notes" |
 
-### Multi-Round Execution
+### Multi-round tool execution
 
-When the agent uses a tool, it goes through up to 5 rounds:
+After each batch of tool calls, the results go back to the model and it continues. A request runs up to **10 tool rounds**. If the limit is reached, the chat says so and you can reply "continue".
 
-```
-Your message → Agent decides to read a file → Reads it →
-  → Agent sees the content → Decides to edit the file → Edits it →
-  → Agent sees the edit worked → Reports back to you
-```
+### @ mentions
 
-### @Context Mentions
-
-Type `@` in the chat input to reference things:
-
-| Type | What It Does | Example |
-|------|-------------|---------|
-| `@filename` | Reference a specific file | `@src/App.tsx explain this` |
-| `@folder` | Reference a directory | `@src/components/ list all files` |
-| `@web` | Trigger a web search | `@web latest Node.js LTS version` |
-
-### Streaming Responses
-
-Responses stream token-by-token in real-time. You'll see text appearing character by character, just like ChatGPT.
-
-### Stop Generation
-
-While the agent is streaming a response, a red **"Stop"** button appears. Click it to cancel the response immediately.
-
-### Plan Mode
-
-Toggle Plan Mode in the chat header to have the agent:
-1. Analyze your request
-2. Create a detailed plan of changes
-3. Show the plan for your review
-4. Execute only after you approve
+| Type | Meaning | Example |
+|------|---------|---------|
+| `@path` | A file or folder in the workspace | `@src/App.tsx explain this` |
+| `@web` | Search the web | `@web latest Node.js LTS` |
 
 ---
 
 ## 5. Code Editor
 
-### Opening Files
-
-- **File Browser:** Click 📁 in sidebar → click any file
-- **Command Palette:** Press `Ctrl+P` → type filename → press Enter
-- **From Chat:** When the agent mentions a file, click to open
-
-### Editor Features
-
-| Feature | How to Use |
-|---------|-----------|
-| **Syntax Highlighting** | Automatic for 50+ languages |
-| **Minimap** | Toggle with the minimap button in top-right |
-| **Find/Replace** | `Ctrl+F` to find, `Ctrl+H` to replace |
-| **Multiple Tabs** | Click files to open in tabs |
-| **Save** | `Ctrl+S` — saves to disk |
-| **Close Tab** | `Ctrl+W` — close current tab |
-| **Dirty Indicator** | Yellow dot on tab = unsaved changes |
-| **Language Detection** | Automatic based on file extension |
+- Open files from the File Browser, the command palette (`Ctrl+P`), or when the agent reads a file.
+- Monaco editor with syntax highlighting, minimap, and find/replace (`Ctrl+F` / `Ctrl+H`).
+- `Ctrl+S` saves and `Ctrl+W` closes the tab. A dot on the tab marks unsaved changes.
 
 ---
 
 ## 6. Terminal
 
-### Opening the Terminal
-
-- Click **☰** in the sidebar
-- Press `` Ctrl+` `` to toggle
-- Drag the divider up from the bottom
-
-### Multi-Tab Terminal
-
-| Action | How |
-|--------|-----|
-| **New Tab** | Click the **+** button in the terminal header |
-| **Close Tab** | Click the **×** on the tab |
-| **Switch Tabs** | Click the tab name |
-| **Shell** | PowerShell (Windows), bash/zsh (macOS/Linux) |
-
-### What You Can Do
-
-The terminal runs a real PTY (pseudo-terminal) — it's a fully functional shell:
-
-```bash
-# Run any command
-npm install
-git status
-python3 script.py
-
-# Navigate
-cd src/
-ls -la
-
-# Build
-cargo build --release
-go run main.go
-```
+- Toggle with ``Ctrl+` `` or open the Terminal panel from the sidebar.
+- Use **+** to add tabs and **×** to close them.
+- It's a real PTY shell: PowerShell on Windows, your login shell on macOS/Linux.
 
 ---
 
-## 7. Git Manager
+## 7. Git
 
-### Opening Git Panel
+Open with `Ctrl+G` or the branch icon in the sidebar.
 
-- Click the branch icon in the sidebar
-- Press `Ctrl+G`
+- **Status**: current branch, and staged, modified, and untracked files.
+- **Diff**: click a file for a unified or split diff.
+- **Commit / Push / Pull / Refresh**: buttons in the Git panel.
+- **Branches**: the Branch Manager creates, switches, and deletes branches and handles stash/pop.
 
-### Viewing Status
-
-The Git panel shows:
-- **Current branch** name
-- **Staged files** (green)
-- **Modified files** (yellow)
-- **Untracked files** (gray)
-
-### Diff Viewer
-
-Click any file to see its diff:
-- **Unified View** — Standard diff format
-- **Split View** — Side-by-side comparison
-- **Color-coded** — Green = added, Red = removed
-
-### Committing Changes
-
-1. Review your changes in the diff viewer
-2. Optionally click **"AI Generate Message"** for a commit message
-3. Type your commit message in the input box
-4. Click **"Commit"**
-
-### Branch Management
-
-Click **"Branches"** to open the branch manager:
-- **Create** a new branch
-- **Switch** between branches
-- **Delete** a branch
-- **Stash** and **Pop** changes
-
-### Other Git Operations
-
-| Operation | Button |
-|-----------|--------|
-| Push to remote | **Push** button |
-| Pull from remote | **Pull** button |
-| Undo last commit | **Undo** button |
-| Discard all changes | **Discard** button (⚠️ irreversible) |
-| Refresh status | **Refresh** button |
+Undoing the last commit, discarding changes, and generating commit messages are agent tools (`git_undo_last`, `git_discard_changes`, `git_generate_commit`). Ask the agent. It is instructed to confirm destructive actions first.
 
 ---
 
 ## 8. File Browser
 
-### Navigation
-
-- Click the 📁 icon in the sidebar
-- Click folders to expand/collapse
-- Click files to open in the code editor
-
-### Creating Files
-
-1. Right-click a folder (or use the **+** button)
-2. Enter the file name
-3. The file opens in the editor
-
-### Filtering
-
-Use the search bar at the top of the file browser to filter files by name.
-
-### Workspace
-
-- Click **"Open Folder"** at the top of the file browser to change your workspace
-- The workspace path is shown in the settings
+- Click folders to expand them and files to open them.
+- Right-click for file actions. Use the filter box to narrow by name.
+- **Open Folder** changes the workspace.
 
 ---
 
 ## 9. Command Palette
 
-### Opening
+| Shortcut | Opens |
+|----------|-------|
+| `Ctrl+P` | File search |
+| `Ctrl+Shift+P` | Commands |
 
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl+P` | Open with file search |
-| `Ctrl+Shift+P` | Open with command search |
-
-### Searching Files
-
-Type a filename to search across your entire workspace:
-
-```
-App.tsx        → finds src/App.tsx
-git panel      → finds GitPanel.tsx
-store          → finds store/index.ts
-```
-
-### Running Commands
-
-The command palette also lets you run actions:
-
-```
-commit         → Git commit
-push           → Git push
-new terminal   → Open terminal
-settings       → Open settings
-```
-
-### Navigation
-
-- **↑↓** arrows to navigate results
-- **Enter** to select
-- **Escape** to close
+Commands include panel navigation, toggling the terminal, **New Chat**, and **Go to Chat History**. Use ↑/↓ to move, Enter to run, and Escape to close.
 
 ---
 
-## 10. Session Management
+## 10. Chat History
 
-### Saving Sessions
-
-Sessions are saved automatically. You can also manually save:
-
-1. Go to the 💾 Sessions panel (click 💾 in sidebar)
-2. Click **"Save Session"**
-3. Enter a name (optional)
-
-### Loading Sessions
-
-1. Open the Sessions panel
-2. Click any saved session to load it
-3. The conversation history appears in the Agent chat
-
-### Session Persistence
-
-Sessions persist across app restarts. When you close and reopen the app, your conversation history is restored.
+- Chats are **saved automatically** shortly after each message to `<userData>/conversations/<session-id>.json`. Each chat keeps one file that is updated in place.
+  - Windows: `%APPDATA%\VD Agent\conversations`
+  - macOS: `~/Library/Application Support/VD Agent/conversations`
+  - Linux: `~/.config/VD Agent/conversations`
+- On startup the most recent chat is restored, and all saved chats appear in the **💾 Sessions** panel and the Agent **🕘 History** popover.
+- Click a chat to open it. **＋ New chat** starts a fresh conversation, and the previous one stays in history.
+- Deleting a chat asks for confirmation, then removes its file from disk.
+- Configured API keys and common key formats are redacted before saving. Corrupt files are skipped, and files from older versions still load.
+- Chats that contain only system notices (for example "No API key configured") are not saved.
+- Use **📤 Export** in the Agent header to download the current chat as Markdown.
 
 ---
 
 ## 11. Plan Mode
 
-### What Is Plan Mode?
+Toggle **📋 Plan** in the Agent header (or in Settings). With Plan Mode on, the agent lists the files it will read or change, the intended change and its risks, and the order of steps, then waits for your approval without modifying anything.
 
-Plan Mode makes the agent think before acting. Instead of immediately executing changes, it:
-
-1. Analyzes your request
-2. Creates a step-by-step plan
-3. Shows the plan for review
-4. Executes only when you approve
-
-### How to Use
-
-1. Toggle **"Plan Mode"** in the Agent chat header
-2. Send your request
-3. Review the agent's plan
-4. If satisfied, approve it
-5. The agent executes the plan step by step
-
-### When to Use
-
-- Complex refactoring across multiple files
-- Architecture changes
-- When you want to review before any file changes happen
-- Learning how to approach a problem
+Use it for multi-file refactors, architecture changes, or any time you want to review before files change.
 
 ---
 
-## 12. Image & File Support
+## 12. Images and Files
 
-### Pasting Images
+- **Paste** a screenshot with `Ctrl+V`, **drag** image files onto the chat, or use **📎**.
+- Thumbnails appear above the input. Click × to remove one.
+- Dropping a non-image file adds its path to the message.
 
-1. Take a screenshot (`Print Screen`, `Cmd+Shift+4`, etc.)
-2. Press `Ctrl+V` in the chat input
-3. The image appears as a thumbnail preview
-4. Send the message with the image attached
-
-### Drag & Drop
-
-1. Drag an image file from your desktop/file manager
-2. Drop it onto the chat input area
-3. The image appears as a thumbnail
-4. Type a message and send
-
-### Attaching Files
-
-Click the 📎 button in the chat input to browse for images to attach.
-
-### Removing Attachments
-
-Click the **×** on any thumbnail to remove it before sending.
+Image contents are not sent to the model yet. The message lists the attached file names. Use the `image_analysis` tool (Gemini key required) to analyze an image by path or URL.
 
 ---
 
-## 13. Web3 / Blockchain Tools
+## 13. Web3 Tools
 
-The agent has built-in Web3 tools:
-
-### Check Wallet Balance
-
-Ask the agent:
-> "What's the ETH balance of 0x742d35Cc6634C0532925a3b844Bc9e7595f2bD38?"
-
-The agent will check across 7 chains: Ethereum, Polygon, Arbitrum, Optimism, Base, BSC, Sepolia.
-
-### Look Up Transactions
-
-> "Look up this transaction: 0xabc123..."
-
-### IPFS Operations
-
-> "Fetch content from IPFS CID: QmT78zSuBmuS4z925WZfrqQ1qHaJ56DQaTfyMUF7F8ff5o"
-
-### Smart Contract Operations
-
-> "Get the ABI of this contract: 0x... on Ethereum"
-
-### Deployment Instructions
-
-> "How do I deploy contracts/Token.sol to Sepolia testnet?"
+- `web3_balance`: native balance on Ethereum, Polygon, Arbitrum, Optimism, Base, BSC, or Sepolia.
+- `web3_explorer`: block explorer links for a transaction, address, or block.
+- `web3_ipfs`: fetch content by CID. Upload depends on an external service.
+- `web3_contract`: verification steps and ABI lookup links.
+- `web3_deploy`: Hardhat deployment steps. It does not deploy anything itself.
 
 ---
 
@@ -459,58 +250,43 @@ The agent will check across 7 chains: Ethereum, Polygon, Arbitrum, Optimism, Bas
 
 | Shortcut | Action |
 |----------|--------|
-| `Ctrl+P` | File search / Command palette |
-| `Ctrl+Shift+P` | Commands only |
-| `Ctrl+S` | Save current file |
-| `Ctrl+W` | Close current tab |
-| `` Ctrl+` `` | Toggle terminal |
-| `Ctrl+G` | Go to Git panel |
-| `Ctrl+B` | Go to File browser |
-| `Ctrl+Shift+A` | Go to Agent chat |
-| `Ctrl+F` | Find in editor |
-| `Ctrl+H` | Find & replace in editor |
-| `Escape` | Close command palette / menus |
-| `Enter` | Send chat message |
-| `Shift+Enter` | New line in chat input |
+| `Ctrl+P` | File search |
+| `Ctrl+Shift+P` | Commands |
+| `Ctrl+S` | Save file |
+| `Ctrl+W` | Close tab |
+| ``Ctrl+` `` | Toggle terminal |
+| `Ctrl+G` | Git panel |
+| `Ctrl+B` | File browser |
+| `Ctrl+Shift+A` | Agent chat |
+| `Ctrl+F` / `Ctrl+H` | Find / replace in editor |
+| `Escape` | Close palette or menus |
+| `Enter` / `Shift+Enter` | Send / new line |
 | `Ctrl+V` | Paste image into chat |
 
 ---
 
 ## 15. Building the Desktop App
 
-### Windows (.exe)
+### Windows
 
 ```cmd
-# Option A: Use the build script
 Win\build.bat
-
-# Option B: Manual build
-npm install
-npm run build
-npx electron-builder --win
 ```
 
-**Output:**
-- `release/VD Agent Setup.exe` — NSIS installer
-- `release/VD Agent.exe` — Portable (no install needed)
+The script runs from the repository root. It cleans old output, installs dependencies, runs `npm test`, `npm run lint`, and `npm run build`, then packages with electron-builder. It **stops if any step fails**. Output in `release\`:
 
-### macOS (.dmg)
+- `VD Agent Setup <version>.exe`: NSIS installer
+- `VD Agent <version>.exe`: portable
+
+### macOS
 
 ```bash
-# Option A: Use the build script
-Mac/build.sh
-
-# Option B: Manual build
-npm install
-npm run build
-npx electron-builder --mac
+bash Mac/build.sh
 ```
 
-**Output:**
-- `release/VD Agent.dmg` — Disk image installer
-- `release/VD Agent-*.zip` — Archive
+Output in `release/`: `VD Agent-<version>.dmg` and `VD Agent-<version>-mac.zip`.
 
-### Linux (AppImage / .deb)
+### Linux
 
 ```bash
 npm install
@@ -518,159 +294,78 @@ npm run build
 npx electron-builder --linux
 ```
 
-**Output:**
-- `release/VD Agent-*.AppImage` — Portable
-- `release/VD Agent-*.deb` — Debian package
+Output: an AppImage and a `.deb` in `release/`.
 
-### Build Script Features
+Code signing is disabled by default. Set `CSC_LINK` and `CSC_KEY_PASSWORD` to sign.
 
-Both `Win/build.bat` and `Mac/build.sh` automatically:
-1. Clean previous builds
-2. Install dependencies
-3. Run all 65 tests
-4. Typecheck the project
-5. Build with Vite
-6. Package with electron-builder
-7. Open the release folder
-
-### Running Tests Only
+### Tests and checks
 
 ```bash
-# Run all tests
-npm test
-
-# Run tests in watch mode
-npm run test:watch
-
-# Run with coverage report
-npm run test:coverage
-```
-
-### Lint / Typecheck
-
-```bash
-# Typecheck only (fast)
-npx tsc --noEmit
-
-# ESLint (if configured)
-npx eslint src/ electron/
+npm test               # all unit tests
+npm run test:watch     # watch mode
+npm run test:coverage  # coverage report
+npm run lint           # TypeScript typecheck
+npm run build          # production build
 ```
 
 ---
 
 ## 16. Troubleshooting
 
-### App Won't Start
+### App won't start
 
 | Problem | Solution |
 |---------|----------|
-| `npm install` fails | Run `rm -rf node_modules && npm install` |
-| `node-pty` fails | Make sure you have build tools: `npm install -g windows-build-tools` (Windows) or Xcode Command Line Tools (macOS) |
-| Port already in use | Kill the existing process: `lsof -ti:5173 \| xargs kill` (Mac) or `netstat -ano \| findstr :5173` then kill (Windows) |
-| Blank screen | Open DevTools (`Ctrl+Shift+I`) and check console errors |
+| `npm install` fails on `node-pty` | Install native build tools (see Prerequisites), then reinstall |
+| Port 5173 in use | Stop the other dev server |
+| Blank screen | Open DevTools (`Ctrl+Shift+I`) and check the console |
 
-### AI Agent Not Responding
-
-| Problem | Solution |
-|---------|----------|
-| "No API key configured" | Go to ⚙️ Settings → add at least one API key |
-| "Rate limited" | Wait a minute or switch to a different provider |
-| "Invalid API key" | Re-copy the key from the provider's website |
-| Timeout | Check internet connection, or try a local provider (Ollama) |
-
-### Git Operations Fail
+### Agent not responding
 
 | Problem | Solution |
 |---------|----------|
-| "Not a git repository" | Initialize: `git init` in your workspace |
-| "Permission denied" | Check file permissions |
+| "No API key configured" | Settings → add a key for the active provider |
+| "rejected the API key" | The key is invalid or revoked. Re-copy it from the provider. VD does not fall back on auth errors on purpose. |
+| Rate limited / all providers failed | Wait a minute, add a key for another free provider, or use a local model |
+| Wrong or weak model chosen | Pick a model in the Agent header to pin it |
+| Timeout | Check your connection or try a local provider |
+
+### Git
+
+| Problem | Solution |
+|---------|----------|
+| "Not a git repository" | Run `git init` in the workspace |
 | Push rejected | Pull first: `git pull --rebase` |
 
-### Terminal Won't Open
+### Build
 
 | Problem | Solution |
 |---------|----------|
-| node-pty error | Rebuild: `cd node_modules/node-pty && npm run install` |
-| Wrong shell | The app detects your OS default shell automatically |
-
-### Build Fails
-
-| Problem | Solution |
-|---------|----------|
-| Type errors | Run `npx tsc --noEmit` to find and fix them |
-| electron-builder fails | Make sure `build/` folder has icons (see below) |
-| Missing icons | Create `build/` folder with `icon.ico`, `icon.icns`, `icon.png` |
+| Type errors | `npm run lint` |
+| Tests fail | `npm test`. The build scripts stop on failures. |
+| Missing icons warning | Add `build/icon.ico`, `build/icon.icns`, `build/icon.png` |
 
 ---
 
 ## 17. FAQ
 
-### Q: Is this really free?
-**A:** Yes! The app itself is 100% free and open source. Many AI providers offer free tiers. You only need 1 API key to start.
+**Is it free?**
+The app is free and open source (MIT). Many providers have free tiers, and their limits are set by the provider and change over time. Local models cost nothing.
 
-### Q: What's the best free provider?
-**A:** **Groq** is the fastest (ultra-low latency). **Google Gemini** is best for multimodal (images + text). **Ollama** is best for privacy (runs locally, no data sent anywhere).
+**Can I use several providers?**
+Yes. Add keys for several official free providers and VD falls back between them on rate limits or unavailable models. Invalid keys are reported instead of skipped.
 
-### Q: Can I use multiple providers?
-**A:** Yes! Configure as many as you want. The app auto-falls back to the next configured provider if one fails.
+**Where are my API keys stored?**
+In `<userData>/settings.json`, encrypted with the OS keychain via Electron `safeStorage` when available. They are never written to chat history or settings exports.
 
-### Q: Where are my API keys stored?
-**A:** Encrypted on disk using your OS keychain (Windows Credential Manager, macOS Keychain, or Linux libsecret). They're never sent to anyone except the configured AI provider.
+**Where is my chat history?**
+In `<userData>/conversations/`, one JSON file per chat. See [Chat History](#10-chat-history).
 
-### Q: Does the app collect telemetry?
-**A:** No. Zero telemetry, zero tracking, zero data collection. Everything stays on your machine.
+**Telemetry?**
+None.
 
-### Q: Can I use this offline?
-**A:** Yes, if you use a local provider like **Ollama**. All file editing, terminal, and git features work offline too.
+**Offline?**
+Yes, with a local provider such as Ollama. Editing, terminal, and git work offline.
 
-### Q: How do I update?
-**A:** Pull the latest changes:
-```bash
-git pull
-npm install
-npm run dev
-```
-
-### Q: How do I contribute?
-**A:** See [CONTRIBUTING](#-contributing) section in README.md.
-
-### Q: How many tools does the agent have?
-**A:** 33 autonomous tools covering file ops, git, web search, Web3, image generation, video, speech-to-text, and more.
-
-### Q: Can I run this on a server / in the cloud?
-**A:** The desktop app requires a display. For headless use, you can use the Electron builder to create a virtual display (Xvfb on Linux).
-
----
-
-## Quick Reference Card
-
-```
-┌──────────────────────────────────────────────────────┐
-│                    VD AGENT                           │
-│                                                       │
-│  SHORTCUTS:                                           │
-│    Ctrl+P          Command palette                    │
-│    Ctrl+Shift+P    Commands only                      │
-│    Ctrl+S          Save file                          │
-│    Ctrl+W          Close tab                          │
-│    Ctrl+`          Toggle terminal                    │
-│    Ctrl+G          Git panel                          │
-│    Ctrl+B          File browser                       │
-│    Ctrl+Shift+A    Agent chat                         │
-│    Ctrl+V          Paste image                        │
-│    Enter           Send message                       │
-│    Shift+Enter     New line in input                  │
-│                                                       │
-│  PROVIDERS: 44 (38 free + 3 local + 4 paid)          │
-│  TOOLS:      33 autonomous tools                      │
-│  TESTS:      65 passing                               │
-│  BUILD:      Win\build.bat / Mac/build.sh             │
-│                                                       │
-│  Author: Virender Dhiman                              │
-│  License: MIT                                         │
-└──────────────────────────────────────────────────────┘
-```
-
----
-
-**Built with ❤️ by Virender Dhiman**
+**How do I update?**
+`git pull && npm install && npm run dev`.

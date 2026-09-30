@@ -7,8 +7,8 @@
 import '@testing-library/jest-dom'
 import { vi } from 'vitest'
 
-// Mock window.api for all tests
-Object.defineProperty(window, 'api', {
+// Mock window.api for all DOM tests (node-environment tests have no window)
+if (typeof window !== 'undefined') Object.defineProperty(window, 'api', {
   value: {
     openDirectory: vi.fn(),
     readDirectory: vi.fn(),
@@ -48,11 +48,14 @@ Object.defineProperty(window, 'api', {
     loadSettings: vi.fn(),
     saveSettings: vi.fn(),
     aiChat: vi.fn(),
-    onAIStream: vi.fn(),
+    aiCancel: vi.fn().mockResolvedValue({ success: true }),
+    aiListModels: vi.fn().mockResolvedValue([]),
+    onAIStream: vi.fn(() => () => {}),
     openPath: vi.fn(),
     showItemInFolder: vi.fn(),
-    saveConversations: vi.fn(),
-    loadConversations: vi.fn(),
+    saveConversation: vi.fn().mockResolvedValue({ success: true }),
+    listConversations: vi.fn().mockResolvedValue([]),
+    deleteConversation: vi.fn().mockResolvedValue({ success: true }),
   },
   writable: true,
 })

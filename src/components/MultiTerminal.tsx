@@ -87,7 +87,7 @@ export default function MultiTerminal() {
     term.onData((data) => window.api.terminalWrite(termId, data))
 
     term.writeln('\x1b[36m╔═══════════════════════════════════════╗\x1b[0m')
-    term.writeln('\x1b[36m║       VD Agent Terminal               ║\x1b[0m')
+    term.writeln('\x1b[36m║         VD Terminal                   ║\x1b[0m')
     term.writeln('\x1b[36m╚═══════════════════════════════════════╝\x1b[0m')
     term.writeln('')
 

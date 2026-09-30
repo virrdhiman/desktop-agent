@@ -13,7 +13,7 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 
-const TEST_DIR = path.join(os.tmpdir(), 'vd-agent-test-' + Date.now())
+const TEST_DIR = path.join(os.tmpdir(), 'vd-test-' + Date.now())
 
 beforeEach(() => {
   fs.mkdirSync(TEST_DIR, { recursive: true })
@@ -41,9 +41,9 @@ describe('File System Tool Logic', () => {
     const filePath = path.join(TEST_DIR, 'edit.txt')
     fs.writeFileSync(filePath, 'Hello World', 'utf-8')
     const content = fs.readFileSync(filePath, 'utf-8')
-    const newContent = content.replace('World', 'VD Agent')
+    const newContent = content.replace('World', 'VD')
     fs.writeFileSync(filePath, newContent, 'utf-8')
-    expect(fs.readFileSync(filePath, 'utf-8')).toBe('Hello VD Agent')
+    expect(fs.readFileSync(filePath, 'utf-8')).toBe('Hello VD')
   })
 
   it('creates directories recursively', async () => {
@@ -96,7 +96,7 @@ describe('Search Logic', () => {
   it('searches files by name pattern', () => {
     const files = ['index.ts', 'App.tsx', 'utils.ts', 'test.spec.ts']
     const pattern = '.ts'
-    const matches = files.filter(f => f.includes(pattern) && !f.includes('.spec.'))
+    const matches = files.filter(f => f.endsWith(pattern) && !f.includes('.spec.'))
     expect(matches).toEqual(['index.ts', 'utils.ts'])
   })
 

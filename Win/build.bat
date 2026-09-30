@@ -1,83 +1,83 @@
 @echo off
 :: ============================================================
-:: VD Agent — Windows Build Script
-:: Builds the app into a .exe installer (NSIS) + portable .exe
+:: VD Agent - Windows Build Script
+:: Builds an NSIS installer and a portable .exe into release\
 :: ============================================================
 :: @author Virender Dhiman
-:: @year 2025
 :: @project VD Agent
 :: @license MIT
 
+setlocal
+cd /d "%~dp0.."
+
+for /f "delims=" %%v in ('node -p "require('./package.json').version"') do set VERSION=%%v
+
 echo.
 echo  ========================================
-echo   VD Agent — Windows Build
+echo   VD Agent %VERSION% - Windows Build
 echo  ========================================
 echo.
 
-:: Step 1: Clean previous builds
 echo [1/6] Cleaning previous builds...
 if exist release rmdir /s /q release
 if exist dist rmdir /s /q dist
 if exist dist-electron rmdir /s /q dist-electron
 
-:: Step 2: Install dependencies
 echo [2/6] Installing dependencies...
 call npm install
 if %errorlevel% neq 0 (
-    echo ERROR: npm install failed!
+    echo ERROR: npm install failed.
     pause
     exit /b 1
 )
 
-:: Step 3: Run tests
 echo [3/6] Running tests...
-call npx vitest run
+call npm test
 if %errorlevel% neq 0 (
-    echo WARNING: Some tests failed, but continuing build...
+    echo ERROR: Tests failed. Fix them before packaging.
+    pause
+    exit /b 1
 )
 
-:: Step 4: Typecheck
 echo [4/6] Running TypeScript typecheck...
-call npx tsc --noEmit
+call npm run lint
 if %errorlevel% neq 0 (
-    echo ERROR: Typecheck failed! Fix errors before building.
+    echo ERROR: Typecheck failed. Fix errors before building.
     pause
     exit /b 1
 )
 
-:: Step 5: Build the app
-echo [5/6] Building Windows app...
-call npx vite build
+echo [5/6] Building renderer and Electron main process...
+call npm run build
 if %errorlevel% neq 0 (
-    echo ERROR: Vite build failed!
+    echo ERROR: Build failed.
     pause
     exit /b 1
 )
 
-:: Step 6: Build Electron package with electron-builder
-:: Code signing is disabled (no certificate). To sign, set CSC_LINK env var.
+:: Code signing is disabled (no certificate). To sign, set CSC_LINK and CSC_KEY_PASSWORD.
 echo.
-echo [6/6] Building Electron package (NSIS installer + portable)...
+echo [6/6] Packaging with electron-builder (NSIS installer + portable)...
 set CSC_IDENTITY_AUTO_DISCOVERY=false
 call npx electron-builder --win --publish never
 if %errorlevel% neq 0 (
-    echo ERROR: electron-builder failed!
+    echo ERROR: electron-builder failed.
     pause
     exit /b 1
 )
 
 echo.
 echo  ========================================
-echo   BUILD COMPLETE!
+echo   BUILD COMPLETE
 echo  ========================================
 echo.
-echo  Output files (in release\ folder):
-echo    - VD Agent Setup 1.0.0.exe   (NSIS installer)
-echo    - VD Agent 1.0.0.exe          (portable, no install needed)
+echo  Output (release\):
+echo    - VD Agent Setup %VERSION%.exe   (NSIS installer)
+echo    - VD Agent %VERSION%.exe         (portable)
 echo.
 echo  To run the dev version: npm run dev
 echo.
 
-:: Open the release folder
 explorer release
 pause
+endlocal

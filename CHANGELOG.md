@@ -1,6 +1,6 @@
 <!--
   @author Virender Dhiman
-  @year 2025
+  @year 2026
   @project VD Agent
   @license MIT
 -->
@@ -9,88 +9,103 @@
 
 All notable changes to VD Agent are documented here.
 
+## [1.0.1] - 2026-09-30
+
+### Branding
+- Consistent **VD Agent** / **VD** branding across the app title, package metadata (`vd-agent`, `com.vd.agent`, product name `VD Agent`), build scripts, and docs.
+
+### Agent behaviour
+- Rewrote the system prompt as a senior engineering assistant. It inspects before claiming, challenges weak or risky requests, verifies with commands before reporting success, states risks and tradeoffs, and asks before destructive actions.
+- Fixed the tool-call format shown to the model. It previously rendered with stray backslashes.
+- Tool-call parsing tolerates CRLF and trailing whitespace. Hitting the 10-round limit is now reported in the chat.
+- **Stop** cancels the in-flight request in the main process (`ai:cancel`) and skips remaining tool rounds.
+- Fixed duplicated streaming tokens after switching panels. The stream listener now unsubscribes on unmount.
+- System notices (errors, missing key) are no longer sent to the model as user messages.
+- Tool descriptions for speech, video, and image analysis now match what the tools actually do.
+
+### Free API key model selection
+- Discovers `/models` for OpenAI-compatible providers (8 s timeout, 10 min cache keyed by a hash of the key).
+- Wider non-chat filtering: embeddings, rerank, moderation/guard, audio, speech, TTS, transcription, realtime, image, and video.
+- Ranks by quality tier, then efficiency. Small variants of strong families are capped, and previews and reasoning-heavy variants are penalized. On OpenRouter, only `:free` models are used when listed.
+- Retries the next model on model-not-found, unsupported, 402/404/429/503/529, overload, capacity, and quota errors. Auth failures stop immediately, with no model or provider retry.
+- Persists the working model to settings unless a model is pinned in the header. The header picker lists discovered models for the active provider.
+- Provider fallback uses only official free providers with keys (up to 4 total). Local servers and community proxies are never used implicitly.
+- Provider error text has the API key redacted. Anthropic requests send the system prompt in the `system` field.
+
+### Chat history
+- Conversations auto-save (debounced) to `<userData>/conversations/<session-id>.json`, with a stable session ID so saves update one file.
+- The latest chat is restored on startup. Sessions can be opened and deleted from the Sessions panel and the History popover. Deleting removes the file from disk.
+- Atomic writes, path-safe session IDs, a tolerant loader for corrupt and legacy files, and redaction of configured API keys and common key formats.
+- "Clear" is now **New chat**. The previous conversation stays in history.
+
+### Settings and security
+- Settings export no longer includes API keys. Import keeps locally stored keys.
+- Providers added to the catalog appear in existing settings files automatically.
+- Updated the Hugging Face endpoint (`router.huggingface.co/v1`), the Cohere OpenAI-compatible endpoint, and the Together default model.
+- Toned down provider notes and marketing copy. Community proxies now show a privacy warning.
+
+### Build and tests
+- `Win/build.bat` and `Mac/build.sh`: ASCII output (fixed garbled characters), run from the repo root, read the version from `package.json`, and stop on test failures.
+- Electron unit tests now run with `npm test`. Added tests for model ranking and filtering, error classification, provider chain, model persistence, settings export, the conversation store, and session auto-save.
+- `.gitattributes` pins line endings for the build scripts.
+
 ## [1.0.0] - 2025-08-28
 
 ### Initial Release
 
 #### AI Agent
-- Autonomous AI coding agent with streaming responses
-- 33 agent tools: file ops, git, code search, web search, Web3, image/video, speech
-- Multi-provider fallback chain (auto-retry on failure)
+- Autonomous coding agent with streaming responses and tool calls for files, git, code search, web search, Web3, and media
+- Multi-provider fallback
 - Plan Mode (plan before executing)
-- Multi-round tool execution (up to 10 follow-ups)
+- Multi-round tool execution
 - @context mentions (@file, @folder, @web)
-- Image paste (Ctrl+V) and drag-and-drop support
-- Token/cost tracking with per-provider pricing estimates
-- Diff viewer for agent file edits (inline before/after)
-- Model quick-switch dropdown in chat header
+- Image paste (Ctrl+V) and drag-and-drop
+- Token/cost estimates per provider
+- Diff viewer for agent file edits
+- Model quick-switch dropdown in the chat header
 - Stop generation button
 - Session save/load/export
 
 #### AI Providers
-- 44 providers: 16 free official, 3 local, 14 community, 6 image/video, 4 paid, 1 other
-- Provider categories: Free, Local, Community, Image/Video, Paid
-- API key encryption via OS keychain (safeStorage)
+- Provider catalog grouped as free, local, community, image/video, and paid
+- API key encryption via the OS keychain (`safeStorage`)
 - Provider search and filter in Settings
-- Import/export settings
+- Settings import/export
 
 #### Code Editor
 - Monaco editor with syntax highlighting
-- Multi-tab file editing
-- Save/close files
-- Lazy-loaded for performance
+- Multi-tab editing, save and close
+- Lazy-loaded
 
 #### Git Integration
-- Git status, diff (unified + split view)
-- Commit with AI-generated messages
+- Status, diff (unified and split view), commit, push, pull
 - Branch manager (create, switch, delete)
 - Stash operations
-- Push/pull instructions
 
 #### Terminal
-- Multi-tab terminal with PTY support
-- Integrated bottom panel
-- Keyboard shortcut (Ctrl+`)
+- Multi-tab PTY terminal
+- Integrated bottom panel with `Ctrl+`` toggle
 
 #### File System
 - File browser with directory tree
-- Create/delete files
-- File search (by name and content)
-- Code search (grep-like)
+- Create/delete files, file and content search
 
 #### UI/UX
-- Dark theme with CSS custom properties
+- Dark theme
 - Command palette (Ctrl+P)
-- Keyboard shortcuts for all panels
-- Responsive layout
+- Keyboard shortcuts for panels
 - ARIA labels and keyboard navigation
 
 #### Security
 - Content Security Policy headers
 - API key encryption at rest
-- Context isolation enabled
-- Sandbox mode
+- Context isolation and sandboxed renderer
 
 #### Developer Experience
-- TypeScript strict mode (0 errors)
-- 65 unit + integration tests (Vitest)
-- ESLint configured
+- TypeScript strict mode
+- Vitest unit and integration tests
 - electron-builder packaging (NSIS, DMG, AppImage)
 - Build scripts for Windows (.bat) and macOS (.sh)
-
-#### Web3 Tools
-- Wallet balance check (7 EVM chains)
-- Block explorer links
-- IPFS upload/fetch
-- Smart contract operations (verify, ABI, deploy)
-
-#### Image/Video/Speech
-- Image generation via Pollinations (free, no API key)
-- Image analysis via Gemini
-- Video generation instructions (Pollinations, Runway, Kling)
-- Speech-to-text via Groq Whisper / HuggingFace
-- Text-to-speech via Pollinations
-- Code review with static analysis
 
 ### Built With
 - Electron 31

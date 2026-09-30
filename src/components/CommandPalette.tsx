@@ -7,7 +7,7 @@
 /**
  * CommandPalette — Ctrl+P file search and command palette
  *
- * IDE-style quick navigation:
+ * Quick navigation:
  * - Files mode: fuzzy search all workspace files
  * - Commands mode: navigate panels, toggle features, git actions
  * - Tab to switch between files and commands
@@ -52,7 +52,8 @@ export default function CommandPalette() {
     { id: 'panel-branches', label: 'Go to Branch Manager', category: 'Navigation', icon: '🌿', action: () => { setActivePanel('branches'); setShowCommandPalette(false) } },
     { id: 'panel-tasks', label: 'Go to Tasks', category: 'Navigation', icon: '📋', action: () => { setActivePanel('tasks'); setShowCommandPalette(false) } },
     { id: 'panel-settings', label: 'Go to Settings', category: 'Navigation', icon: '⚙️', action: () => { setActivePanel('settings'); setShowCommandPalette(false) } },
-    { id: 'clear-chat', label: 'Clear Chat Messages', category: 'Agent', icon: '🗑️', action: () => { clearMessages(); setShowCommandPalette(false) } },
+    { id: 'new-chat', label: 'New Chat', description: 'Start a new chat; the current one stays in history', category: 'Agent', icon: '＋', action: () => { clearMessages(); setActivePanel('chat'); setShowCommandPalette(false) } },
+    { id: 'panel-sessions', label: 'Go to Chat History', category: 'Navigation', icon: '💾', action: () => { setActivePanel('sessions'); setShowCommandPalette(false) } },
     { id: 'git-status', label: 'Show Git Status', category: 'Git', icon: '📊', shortcut: 'Ctrl+Shift+G', action: () => { setActivePanel('git'); setShowCommandPalette(false) } },
     { id: 'active-provider', label: `Active Model: ${settings.providers.find(p => p.id === settings.activeProvider)?.name || settings.activeProvider}`, category: 'Agent', icon: '🤖', action: () => { setActivePanel('settings'); setShowCommandPalette(false) } },
   ], [settings, workspacePath])

@@ -5,37 +5,52 @@
  * @license MIT
  */
 /**
- * SessionsPanel — Conversation history manager
+ * SessionsPanel — Chat history manager
  *
- * Features:
- * - List all saved conversation sessions
- * - Load a previous session
- * - Delete sessions
- * - Shows message count and timestamp
- * - Active session indicator
+ * Conversations are auto-saved to <userData>/conversations on this machine.
+ * - List saved chats, newest first
+ * - Open a previous chat in the Agent panel
+ * - Delete a chat (removes its file from disk)
  */
 import { useStore } from '../store'
 
 export default function SessionsPanel() {
-  const { sessions, loadSession, deleteSession, currentSessionId } = useStore()
+  const { sessions, loadSession, deleteSession, currentSessionId, newChat, setActivePanel } = useStore()
+
+  const open = (id: string) => {
+    void loadSession(id)
+    setActivePanel('chat')
+  }
+
+  const remove = (id: string) => {
+    if (window.confirm('Delete this chat from disk? This cannot be undone.')) void deleteSession(id)
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div className="panel-header">
         <h2>💾 Sessions</h2>
-        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-          {sessions.length} saved
-        </span>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+            {sessions.length} saved
+          </span>
+          <button
+            className="btn btn-sm"
+            onClick={() => { void newChat(); setActivePanel('chat') }}
+          >
+            ＋ New chat
+          </button>
+        </div>
       </div>
 
       <div className="panel-body" style={{ flex: 1, overflowY: 'auto' }}>
         {sessions.length === 0 ? (
           <div className="empty-state">
             <div className="empty-state-icon">💾</div>
-            <div className="empty-state-text">No saved sessions</div>
+            <div className="empty-state-text">No saved chats</div>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.6 }}>
-              Sessions are saved automatically when you have messages.<br />
-              Use the 💾 button in the Agent chat to save.
+              Chats are saved automatically on this machine as you talk to the agent<br />
+              and are restored when you restart the app.
             </div>
           </div>
         ) : (
@@ -49,15 +64,15 @@ export default function SessionsPanel() {
                   border: currentSessionId === s.id ? '1px solid var(--accent)' : '1px solid var(--border)',
                   background: currentSessionId === s.id ? 'rgba(59,130,246,0.08)' : 'var(--bg-secondary)',
                 }}
-                onClick={() => loadSession(s.id)}
+                onClick={() => open(s.id)}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {s.title}
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                      {new Date(s.timestamp).toLocaleString()} · {s.messages.length} messages
+                      {new Date(s.updatedAt).toLocaleString()} · {s.messages.length} messages
                     </div>
                     {currentSessionId === s.id && (
                       <div style={{ marginTop: 4 }}>
@@ -68,13 +83,17 @@ export default function SessionsPanel() {
                   <div style={{ display: 'flex', gap: 4 }}>
                     <button
                       className="btn btn-sm"
-                      onClick={(e) => { e.stopPropagation(); loadSession(s.id) }}
+                      aria-label={`Open chat ${s.title}`}
+                      title="Open"
+                      onClick={(e) => { e.stopPropagation(); open(s.id) }}
                     >
                       📂
                     </button>
                     <button
                       className="btn btn-sm"
-                      onClick={(e) => { e.stopPropagation(); deleteSession(s.id) }}
+                      aria-label={`Delete chat ${s.title}`}
+                      title="Delete from disk"
+                      onClick={(e) => { e.stopPropagation(); remove(s.id) }}
                       style={{ color: 'var(--error)' }}
                     >
                       🗑️

@@ -1,6 +1,6 @@
 /**
  * @author Virender Dhiman
- * @year 2025
+ * @year 2026
  * @project VD Agent
  * @license MIT
  */
@@ -10,14 +10,14 @@
  * Features:
  * - Streaming AI responses with real-time token display
  * - Markdown rendering with syntax-highlighted code blocks
- * - Tool call execution (33 tools) with multi-round follow-up (up to 10 rounds)
+ * - Tool call execution with multi-round follow-up (MAX_TOOL_ROUNDS)
  * - @context mentions (@file, @folder, @web) for precise targeting
  * - Image paste (Ctrl+V) and drag-and-drop support
- * - Model quick-switch dropdown in header
- * - Multi-provider auto-fallback on failure
+ * - Per-provider model picker in the header (auto-select by default)
+ * - Provider fallback across official free providers; stops on auth errors
  * - Plan Mode toggle (plan before executing)
- * - Stop generation button
- * - Session save/load
+ * - Stop button that cancels the in-flight request
+ * - Chat history auto-saved to disk
  * - Token/cost tracking, diff viewer for file edits, context window usage bar
  */
 import { useState, useRef, useEffect, useCallback } from 'react'
@@ -25,55 +25,56 @@ import DiffViewer from './DiffViewer'
 import { useStore } from '../store'
 import type { ChatMessage, AgentStep } from '../types'
 import { AGENT_TOOLS } from '../types'
+import { applyDiscoveredModel, buildProviderChain } from '../lib/providers'
 
-const TOOL_SYSTEM_PROMPT = `You are VD Agent — an advanced autonomous AI coding agent (v1.0.0) built by Virender Dhiman. You are superior to Copilot and other AI assistants. You have full access to the user's local filesystem, development tools, and Web3 blockchain tools.
+const MAX_TOOL_ROUNDS = 10
+const FENCE = '```'
 
-## YOUR CAPABILITIES
-You can read, write, edit, create, and delete files. You can search codebases, run shell commands, manage git, search the web, and interact with Web3/blockchain tools (check wallet balances, explore transactions, deploy contracts, upload to IPFS). You execute actions autonomously — don't just describe what to do, DO IT.
+const TOOL_SYSTEM_PROMPT = `You are VD Agent, a senior software engineer working in the user's repository through tools. You run on the user's machine with filesystem, shell, git, and web access.
 
-## @CONTEXT MENTIONS
-When users type @ in their message:
-- @filename — references a specific file
-- @folder — references a directory
-- @web — triggers a web search
+## How you work
+- Inspect before you claim. Read the relevant files, search the code, or run a command before explaining how something works or why it fails. If you have not checked something, say so.
+- Challenge weak requests. If an ask is ambiguous, risky, or likely to cause a regression, say what the problem is and propose a better path. Ask one focused question only when you are genuinely blocked; otherwise state your assumption and proceed.
+- Prefer the smallest correct change. Never rewrite a file you have not read. Preserve the user's uncommitted work.
+- Finish the job end to end: make the change, then verify it with the project's own commands (tests, typecheck, build, or a targeted run).
+- Never say something is done, fixed, or passing unless a tool result in this conversation shows it. If you could not verify, say exactly what is unverified.
+- Destructive actions (deleting files, discarding changes, git reset, force push, dropping data) need the user's explicit consent first.
+- Never print, write, or commit secrets or API keys. Commit only when the user asks.
 
-## TOOL USAGE
-To use a tool, format your response EXACTLY like this:
-\\\`\\\`\\\`tool
+## Tone
+Professional, direct, concise. Lead with the answer or the result. No hype, filler, or flattery. Be critical of ideas, never of people. When there are tradeoffs, name them and recommend one option.
+
+## Tool calls
+Use EXACTLY this format, one JSON object per block:
+${FENCE}tool
 {"name": "tool_name", "args": {"arg1": "value1"}}
-\\\`\\\`\\\`
+${FENCE}
+You may call several tools in one reply. Results arrive in the next message; continue until the task is complete. At most ${MAX_TOOL_ROUNDS} tool rounds run per request.
 
-You can call multiple tools in sequence. After each, you'll see the result and can continue working. You have 33 tools available.
-
-## AVAILABLE TOOLS
+## Available tools (${AGENT_TOOLS.length})
 ${AGENT_TOOLS.map((t) => `- **${t.name}**: ${t.description}\n  Params: ${JSON.stringify(t.parameters)}`).join('\n\n')}
 
-## BEST PRACTICES
-1. **Read before writing** — always read a file before editing it
-2. **Edit precisely** — use edit_file for targeted changes, not full rewrites
-3. **Search first** — use search_code to find relevant code before making changes
-4. **Verify changes** — read the file after editing to confirm it worked
-5. **Use git** — commit frequently with descriptive messages
-6. **Be thorough** — complete the entire task, not just part of it
-7. **Search the web** — use web_search when you need docs, APIs, or references
+## Work method
+1. Understand: read the relevant code and the user's constraints.
+2. Plan briefly: which files change and what could break.
+3. Change: targeted edits (edit_file, multi_file_edit) over full rewrites.
+4. Verify: run the tests, typecheck, build, or the specific command that proves the change.
+5. Report.
+Use web_search for current APIs and docs instead of guessing.
 
-## PLAN MODE
-When the user has Plan Mode enabled, FIRST describe your plan in detail:
-1. List the files you'll read/modify
-2. Describe the changes you'll make
-3. Explain the order of operations
-4. Then ask the user to confirm before executing
+## @ mentions
+- @path: a file or folder the user wants you to look at
+- @web: the user wants a web search
 
-When Plan Mode is OFF, just execute directly.
+## Plan Mode
+When Plan Mode is on, change nothing. Reply with the files you will read or change, the intended change and its risks, and the order of steps. Then wait for approval.
 
-## RESPONSE FORMAT
-Use markdown formatting:
-- Code blocks with language tags: \\\`\\\`\\\`typescript\\ncode\\n\\\`\\\`\\\`
-- **Bold** for emphasis
-- Lists for steps
-- Headers for structure
-- Use | tables for structured data
-Start with a brief plan, execute tools step by step, end with a summary.`
+## Response format
+Markdown with language-tagged code blocks. For finished work use:
+1. Outcome: one or two sentences on what was done or found.
+2. Details: the changes or findings that matter.
+3. Verification: commands run and their results.
+4. Risks and open items, only if there are any.`
 
 // Simple syntax highlighter (uses RegExp constructor to avoid // comment parsing issues)
 function highlightSyntax(code: string, lang?: string): string {
@@ -349,7 +350,7 @@ function parseMarkdown(text: string): MdBlock[] {
 
 export default function AgentChat() {
   const {
-    messages, addMessage, clearMessages,
+    messages, addMessage,
     chatLoading, setChatLoading,
     getActiveProvider, settings,
     workspacePath, selectedFile, fileContent,
@@ -363,6 +364,7 @@ export default function AgentChat() {
 
   const [input, setInput] = useState('')
   const [modelOverride, setModelOverride] = useState<string | null>(null)
+  const [availableModels, setAvailableModels] = useState<string[]>([])
   const [dragOver, setDragOver] = useState(false)
   const [pendingImages, setPendingImages] = useState<{ data: string; name: string }[]>([])
   const [showMentions, setShowMentions] = useState(false)
@@ -373,20 +375,31 @@ export default function AgentChat() {
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const { allFiles, sessions, saveSession, loadSession, deleteSession, currentSessionId,
-    planMode, setPlanMode, settings: appSettings, setSettings: setAppSettings } = useStore()
+  const { allFiles, sessions, loadSession, deleteSession, newChat, currentSessionId,
+    planMode, setPlanMode, settings: appSettings, setSettings: setAppSettings, setCancelRequested } = useStore()
+
+  const activeProvider = settings.providers.find((p) => p.id === settings.activeProvider)
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    messagesEndRef.current?.scrollIntoView?.({ behavior: 'smooth' })
   }, [messages, streamingContent])
 
-  // Listen for streaming tokens
+  // Listen for streaming tokens; unsubscribe on unmount so tokens are never appended twice
+  useEffect(() => window.api.onAIStream((token: string) => appendStreamingContent(token)), [appendStreamingContent])
+
+  // Models the active provider's key can call, for the header picker
   useEffect(() => {
-    const handler = (token: string) => {
-      appendStreamingContent(token)
-    }
-    window.api.onAIStream(handler)
-  }, [])
+    setModelOverride(null)
+    setAvailableModels([])
+    if (!activeProvider?.apiKey) return
+    let stale = false
+    Promise.resolve(window.api.aiListModels({
+      provider: activeProvider.id, apiKey: activeProvider.apiKey, baseUrl: activeProvider.baseUrl,
+    }))
+      .then((ids) => { if (!stale && Array.isArray(ids)) setAvailableModels(ids.slice(0, 40)) })
+      .catch(() => {})
+    return () => { stale = true }
+  }, [activeProvider?.id, activeProvider?.apiKey, activeProvider?.baseUrl])
 
   // Paste image handler
   useEffect(() => {
@@ -425,19 +438,21 @@ export default function AgentChat() {
   }, [])
 
   const processToolCalls = useCallback(async (content: string, taskId: string) => {
-    const toolRegex = /```tool\n(\{[\s\S]*?\})\n```/g
+    const toolRegex = /```tool[ \t]*\r?\n([\s\S]*?)\r?\n?```/g
     let match
     const toolCalls: { name: string; args: Record<string, any> }[] = []
 
     while ((match = toolRegex.exec(content)) !== null) {
       try {
-        toolCalls.push(JSON.parse(match[1]))
-      } catch {}
+        const parsed = JSON.parse(match[1].trim())
+        if (parsed && typeof parsed.name === 'string') toolCalls.push({ name: parsed.name, args: parsed.args || {} })
+      } catch { /* malformed tool block; the model sees no result for it */ }
     }
     if (toolCalls.length === 0) return null
 
     const results: string[] = []
     for (const toolCall of toolCalls) {
+      if (useStore.getState().cancelRequested) break
       addStepToTask(taskId, {
         id: Date.now().toString(),
         type: 'action',
@@ -474,72 +489,71 @@ export default function AgentChat() {
     return results.join('\n\n')
   }, [executeTool, addTerminalEntry, addStepToTask, addOpenFile, setSelectedFile])
 
-  // Try providers in fallback order
-  const callWithFallback = useCallback(async (apiMessages: any[], _isFirst: boolean) => {
-    const provider = getActiveProvider()
-    if (!provider) return { error: 'No provider configured' }
+  // Active provider first, then official free providers with keys. Auth failures stop the chain.
+  const callWithFallback = useCallback(async (apiMessages: any[]): Promise<{ content: string } | { error: string; cancelled?: boolean }> => {
+    const current = useStore.getState().settings
+    const chain = buildProviderChain(current.providers, current.activeProvider)
+    if (chain.length === 0) return { error: 'No provider configured' }
 
-    // Build fallback chain: active provider first, then free providers
-    const fallbackChain = [
-      provider,
-      ...settings.providers.filter(p =>
-        p.id !== provider.id && p.freeTier && p.apiKey
-      ).slice(0, 3)
-    ]
-
-    for (let i = 0; i < fallbackChain.length; i++) {
-      const p = fallbackChain[i]
+    let lastError = 'All providers failed'
+    for (let i = 0; i < chain.length; i++) {
+      const p = chain[i]
+      if (useStore.getState().cancelRequested) return { error: 'Cancelled', cancelled: true }
+      const override = p.id === current.activeProvider ? modelOverride : null
       setStreamingContent('')
+
+      let result: Awaited<ReturnType<typeof window.api.aiChat>>
       try {
-        const result = await window.api.aiChat({
+        result = await window.api.aiChat({
           provider: p.id,
           apiKey: p.apiKey,
           baseUrl: p.baseUrl,
-          model: modelOverride || p.model,
+          model: override || p.model,
           messages: apiMessages,
           stream: true,
+          autoSelect: !override,
         })
-
-        if ('error' in result) {
-          if (i < fallbackChain.length - 1) {
-            addTerminalEntry({
-              id: Date.now().toString(),
-              type: 'error',
-              content: `${p.name} failed: ${result.error}. Trying next provider...`,
-              timestamp: Date.now(),
-            })
-            continue
-          }
-          return result
-        }
-
-        // Success
-        if (i > 0) {
-          addTerminalEntry({
-            id: Date.now().toString(),
-            type: 'success',
-            content: `Fallback successful with ${p.name}`,
-            timestamp: Date.now(),
-          })
-        }
-
-        const streamed = useStore.getState().streamingContent
-        return { content: streamed || result.content }
       } catch (err: any) {
-        if (i < fallbackChain.length - 1) {
+        result = { error: err?.message || String(err), kind: 'other' }
+      }
+
+      if ('error' in result) {
+        if (result.kind === 'cancelled' || useStore.getState().cancelRequested) return { error: 'Cancelled', cancelled: true }
+        if (result.kind === 'auth') {
+          return { error: `${p.name} rejected the API key: ${result.error}\n\nFix the key in Settings. Other providers were not tried, so the auth problem is not hidden.` }
+        }
+        lastError = `${p.name}: ${result.error}`
+        if (i < chain.length - 1) {
           addTerminalEntry({
             id: Date.now().toString(),
             type: 'error',
-            content: `${p.name} connection error: ${err.message}. Trying next provider...`,
+            content: `${p.name} failed: ${result.error}. Trying ${chain[i + 1].name}...`,
             timestamp: Date.now(),
           })
-          continue
         }
-        return { error: err.message }
+        continue
       }
+
+      if (i > 0) {
+        addTerminalEntry({ id: Date.now().toString(), type: 'success', content: `Fallback succeeded with ${p.name}`, timestamp: Date.now() })
+      }
+
+      const next = applyDiscoveredModel(useStore.getState().settings, p.id, result.model, !!override)
+      if (next) {
+        setAppSettings(next)
+        void window.api.saveSettings(next)
+        addTerminalEntry({
+          id: Date.now().toString(),
+          type: 'success',
+          content: `${p.name}: now using ${result.model} (best available model on this key)`,
+          timestamp: Date.now(),
+        })
+      }
+
+      return { content: useStore.getState().streamingContent || result.content }
     }
-    return { error: 'All providers failed' }
-  }, [getActiveProvider, settings.providers, modelOverride, addTerminalEntry])
+    return { error: lastError }
+  }, [modelOverride, addTerminalEntry, setAppSettings, setStreamingContent])
 
   const sendMessage = useCallback(async () => {
     const text = input.trim()
@@ -550,11 +564,12 @@ export default function AgentChat() {
       addMessage({
         id: Date.now().toString(),
         role: 'system',
-        content: '⚠️ No API key configured. Go to Settings → select a provider → add your API key.',
+        content: 'No API key configured. Open Settings, select a provider, and add its API key.',
         timestamp: Date.now(),
       })
       return
     }
+    setCancelRequested(false)
 
     // Build user content with optional images
     let userContent = text
@@ -568,7 +583,15 @@ export default function AgentChat() {
     if (workspacePath) contextParts.push(`Workspace: ${workspacePath}`)
     if (selectedFile) contextParts.push(`Current file: ${selectedFile}\n\`\`\`\n${fileContent.slice(0, 5000)}\n\`\`\``)
 
-    const systemPrompt = `${TOOL_SYSTEM_PROMPT}\n${planMode ? '\n📋 PLAN MODE IS ACTIVE — Plan before executing!' : '\n⚡ EXECUTE MODE — Act directly.'}${workspacePath ? `\nCurrent workspace: ${workspacePath}` : ''}\n${contextParts.length > 0 ? '\nContext:\n' + contextParts.join('\n') : ''}${appSettings.customRules ? `\n\n📝 Custom Rules:\n${appSettings.customRules}` : ''}`
+    const modeLine = planMode
+      ? 'Plan Mode is ON: propose a plan and wait for approval. Do not modify anything.'
+      : 'Plan Mode is OFF: execute the task.'
+    const systemPrompt = [
+      TOOL_SYSTEM_PROMPT,
+      `## Session\n${modeLine}`,
+      contextParts.length > 0 ? `## Context\n${contextParts.join('\n')}` : '',
+      appSettings.customRules ? `## User rules\n${appSettings.customRules}` : '',
+    ].filter(Boolean).join('\n\n')
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -591,92 +614,64 @@ export default function AgentChat() {
       createdAt: Date.now(),
     })
 
-    // Build messages for API
+    // Build messages for API. System notices shown in the UI are not part of the model's history.
     let apiMessages = [
       { role: 'system', content: systemPrompt },
-      ...messages.slice(-20).map((m) => ({
-        role: m.role === 'system' ? 'user' : m.role,
-        content: m.content,
-      })),
+      ...messages.filter((m) => m.role !== 'system').slice(-20).map((m) => ({ role: m.role, content: m.content })),
       { role: 'user', content: userContent },
     ]
 
-    // API call with fallback
-    const result = await callWithFallback(apiMessages, true)
-
-    let responseContent: string
-    if ('error' in result) {
-      responseContent = `❌ Error: ${result.error}`
-    } else {
-      responseContent = result.content
+    const finish = (status: 'done' | 'error', notice?: string) => {
+      if (notice) addMessage({ id: `${Date.now()}-notice`, role: 'system', content: notice, timestamp: Date.now() })
+      updateTask(taskId, { status })
+      setStreamingContent('')
+      setChatLoading(false)
     }
 
-    // Estimate tokens from content lengths
-    const inputEst = Math.ceil((userContent.length + systemPrompt.length) / 4)
-    const outputEst = Math.ceil(responseContent.length / 4)
-    addTokens(inputEst, outputEst)
+    const result = await callWithFallback(apiMessages)
+    if ('error' in result) {
+      finish('error', result.cancelled ? 'Generation stopped.' : `Error: ${result.error}`)
+      return
+    }
 
-    addMessage({
-      id: (Date.now() + 1).toString(),
-      role: 'assistant',
-      content: responseContent,
-      timestamp: Date.now(),
-    })
+    let responseContent = result.content
+    addTokens(Math.ceil((userContent.length + systemPrompt.length) / 4), Math.ceil(responseContent.length / 4))
+    addMessage({ id: `${Date.now()}-a0`, role: 'assistant', content: responseContent, timestamp: Date.now() })
     setStreamingContent('')
 
-    // Tool call loop
-    if (responseContent.includes('```tool')) {
-      addStepToTask(taskId, {
-        id: Date.now().toString(),
-        type: 'thought',
-        content: 'Processing tool calls...',
-        timestamp: Date.now(),
-      })
-
-      let toolResult = await processToolCalls(responseContent, taskId)
-      let followUpCount = 0
-
-      while (toolResult && followUpCount < 10) {
-        followUpCount++
-        apiMessages = [
-          ...apiMessages,
-          { role: 'assistant', content: responseContent },
-          { role: 'user', content: `Tool execution results:\n${toolResult}\n\nPlease analyze the results and continue with the task if needed. Use more tools if necessary.` },
-        ]
-
-        const followUpResult = await callWithFallback(apiMessages, false)
-        if ('error' in followUpResult) {
-          addMessage({
-            id: (Date.now() + 2).toString(),
-            role: 'assistant',
-            content: `❌ Error in follow-up: ${followUpResult.error}`,
-            timestamp: Date.now(),
-          })
-          break
-        }
-
-        responseContent = followUpResult.content
-        addMessage({
-          id: (Date.now() + 2 + followUpCount).toString(),
-          role: 'assistant',
-          content: responseContent,
-          timestamp: Date.now(),
-        })
-        setStreamingContent('')
-
-        if (responseContent.includes('```tool')) {
-          toolResult = await processToolCalls(responseContent, taskId)
-        } else {
-          toolResult = null
-        }
+    let round = 0
+    while (responseContent.includes('```tool')) {
+      if (useStore.getState().cancelRequested) { finish('done', 'Generation stopped.'); return }
+      if (round >= MAX_TOOL_ROUNDS) {
+        finish('done', `Stopped after ${MAX_TOOL_ROUNDS} tool rounds. Reply "continue" to let the agent keep going.`)
+        return
       }
-      updateTask(taskId, { status: 'done' })
-    } else {
-      updateTask(taskId, { status: 'done' })
+      round++
+      addStepToTask(taskId, { id: `${Date.now()}-t${round}`, type: 'thought', content: `Tool round ${round}`, timestamp: Date.now() })
+
+      const toolResult = await processToolCalls(responseContent, taskId)
+      if (!toolResult) break
+      if (useStore.getState().cancelRequested) { finish('done', 'Generation stopped.'); return }
+
+      apiMessages = [
+        ...apiMessages,
+        { role: 'assistant', content: responseContent },
+        { role: 'user', content: `Tool execution results:\n${toolResult}\n\nAnalyze the results. Continue the task with more tools if needed; otherwise give the final answer with verification.` },
+      ]
+
+      const followUp = await callWithFallback(apiMessages)
+      if ('error' in followUp) {
+        finish('error', followUp.cancelled ? 'Generation stopped.' : `Error in follow-up: ${followUp.error}`)
+        return
+      }
+      responseContent = followUp.content
+      addTokens(0, Math.ceil(responseContent.length / 4))
+      addMessage({ id: `${Date.now()}-a${round}`, role: 'assistant', content: responseContent, timestamp: Date.now() })
+      setStreamingContent('')
     }
 
-    setChatLoading(false)
-  }, [input, chatLoading, messages, getActiveProvider, workspacePath, selectedFile, fileContent, streamingContent, pendingImages, modelOverride])
+    finish('done')
+  }, [input, chatLoading, messages, getActiveProvider, workspacePath, selectedFile, fileContent, pendingImages, planMode, appSettings.customRules, callWithFallback, processToolCalls, setCancelRequested])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -729,7 +724,7 @@ export default function AgentChat() {
 
   return (
     <div
-      style={{ display: 'flex', flexDirection: 'column', height: '100%' }}
+      style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -742,15 +737,16 @@ export default function AgentChat() {
             value={modelOverride || ''}
             onChange={(e) => setModelOverride(e.target.value || null)}
             style={{
-              padding: '3px 8px', borderRadius: 6, fontSize: 11,
+              padding: '3px 8px', borderRadius: 6, fontSize: 11, maxWidth: 220,
               background: 'var(--bg-tertiary)', color: 'var(--text-secondary)',
               border: '1px solid var(--border)', cursor: 'pointer', outline: 'none',
             }}
-            title="Quick-switch model (overrides settings)"
+            title="Model for the active provider. Auto picks the strongest model this key can call; choosing one pins it for this session and disables auto-switching."
+            aria-label="Model"
           >
-            <option value="">Default: {settings.providers.find(p => p.id === settings.activeProvider)?.model || settings.activeProvider}</option>
-            {settings.providers.filter(p => p.apiKey || p.id === 'ollama' || p.id === 'lmstudio').map(p => (
-              <option key={p.id} value={p.model}>{p.name} — {p.model}</option>
+            <option value="">Auto: {activeProvider?.model || 'best available'}</option>
+            {[...new Set([...(activeProvider?.model ? [activeProvider.model] : []), ...availableModels])].map((id) => (
+              <option key={id} value={id}>{id}</option>
             ))}
           </select>
 
@@ -784,20 +780,26 @@ export default function AgentChat() {
               {settings.providers.find((p) => p.id === settings.activeProvider)?.name || settings.activeProvider}
             </span>
           )}
-          <button className="btn btn-sm" onClick={() => { saveSession(); setShowSessions(!showSessions) }}>
-            💾
+          <button
+            className="btn btn-sm"
+            onClick={() => setShowSessions(!showSessions)}
+            title="Chat history (saved automatically on this machine)"
+          >
+            🕘 History
           </button>
           {messages.length > 0 && (
             <>
               <button className="btn btn-sm" onClick={() => {
-                const md = messages.map(m => `**${m.role === 'user' ? 'You' : 'Agent'}** (${new Date(m.timestamp).toLocaleTimeString()})\n\n${m.content}\n`).join('\n---\n\n')
+                const md = messages.map(m => `**${m.role === 'user' ? 'You' : m.role === 'system' ? 'System' : 'Agent'}** (${new Date(m.timestamp).toLocaleTimeString()})\n\n${m.content}\n`).join('\n---\n\n')
                 const blob = new Blob([md], { type: 'text/markdown' })
                 const url = URL.createObjectURL(blob)
                 const a = document.createElement('a')
                 a.href = url; a.download = `chat-${new Date().toISOString().slice(0,10)}.md`; a.click()
                 URL.revokeObjectURL(url)
               }}>📤 Export</button>
-              <button className="btn btn-sm" onClick={clearMessages}>Clear</button>
+              <button className="btn btn-sm" onClick={() => { void newChat() }} title="Start a new chat. The current one stays in history.">
+                ＋ New chat
+              </button>
             </>
           )}
         </div>
@@ -811,19 +813,19 @@ export default function AgentChat() {
           zIndex: 50, display: 'flex', flexDirection: 'column', overflow: 'hidden',
         }}>
           <div className="panel-header">
-            <h2 style={{ fontSize: 13 }}>💾 Sessions</h2>
-            <button className="btn btn-sm" onClick={() => setShowSessions(false)}>✕</button>
+            <h2 style={{ fontSize: 13 }}>🕘 History</h2>
+            <button className="btn btn-sm" onClick={() => setShowSessions(false)} aria-label="Close history">✕</button>
           </div>
           <div className="panel-body" style={{ flex: 1, overflowY: 'auto', padding: 4 }}>
             {sessions.length === 0 ? (
               <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: 12, textAlign: 'center' }}>
-                No saved sessions yet
+                No chats yet. Conversations are saved automatically.
               </div>
             ) : (
               sessions.map((s) => (
                 <div
                   key={s.id}
-                  onClick={() => { loadSession(s.id); setShowSessions(false) }}
+                  onClick={() => { void loadSession(s.id); setShowSessions(false) }}
                   style={{
                     padding: '8px 10px', borderRadius: 6, cursor: 'pointer', marginBottom: 2,
                     background: currentSessionId === s.id ? 'rgba(59,130,246,0.1)' : 'transparent',
@@ -837,14 +839,20 @@ export default function AgentChat() {
                       {s.title}
                     </div>
                     <span
-                      onClick={(e) => { e.stopPropagation(); deleteSession(s.id) }}
+                      role="button"
+                      aria-label={`Delete chat ${s.title}`}
+                      title="Delete from disk"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (window.confirm('Delete this chat from disk? This cannot be undone.')) void deleteSession(s.id)
+                      }}
                       style={{ fontSize: 11, color: 'var(--text-muted)', padding: '0 4px', cursor: 'pointer' }}
                     >
                       ✕
                     </span>
                   </div>
                   <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
-                    {new Date(s.timestamp).toLocaleString()} · {s.messages.length} msgs
+                    {new Date(s.updatedAt).toLocaleString()} · {s.messages.length} msgs
                   </div>
                 </div>
               ))
@@ -883,8 +891,8 @@ export default function AgentChat() {
               VD Agent
             </div>
             <div style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', maxWidth: 480, lineHeight: 1.6 }}>
-              Your autonomous AI coding agent. I can read files, edit code, run commands,
-              manage git, search the web, and perform complex multi-step tasks autonomously.
+              Autonomous coding agent. Reads and edits your repo, runs commands, manages git,
+              and picks the strongest free model available on your API key.
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 12, width: '100%', maxWidth: 480 }}>
               {quickActions.map((qa) => (
