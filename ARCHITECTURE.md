@@ -2,15 +2,15 @@
   @author Virender Dhiman
   @year 2026
   @project VD Agent
-  @license MIT
+  @license Proprietary. See LICENSE.
 -->
 
 # Architecture
 
 A technical overview of VD Agent for contributors and maintainers.
 
-**Author:** Virender Dhiman
-**License:** MIT
+**Author:** [Virender Dhiman](https://virender.in)
+**License:** [VD Agent License](./LICENSE) (proprietary, free to use with credit)
 
 ## Overview
 

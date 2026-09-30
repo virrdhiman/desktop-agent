@@ -2,15 +2,15 @@
   @author Virender Dhiman
   @year 2026
   @project VD Agent
-  @license MIT
+  @license Proprietary. See LICENSE.
 -->
 
 # Agent Tools Reference
 
 These are the tools VD Agent can call. The definitions the model sees live in `AGENT_TOOLS` (`src/types/index.ts`), and the implementations live in `electron/handlers/tools.ts`. Tools run in the main process with your user permissions.
 
-**Author:** Virender Dhiman
-**License:** MIT
+**Author:** [Virender Dhiman](https://virender.in)
+**License:** [VD Agent License](./LICENSE) (proprietary, free to use with credit)
 
 The model calls a tool with a fenced block:
 

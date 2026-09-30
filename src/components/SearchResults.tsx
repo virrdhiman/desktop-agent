@@ -2,7 +2,7 @@
  * @author Virender Dhiman
  * @year 2025
  * @project VD Agent
- * @license MIT
+ * @license Proprietary. See LICENSE.
  */
 /**
  * SearchResults — Dedicated panel for code search results

@@ -2,7 +2,7 @@
  * @author Virender Dhiman
  * @year 2025
  * @project VD Agent
- * @license MIT
+ * @license Proprietary. See LICENSE.
  */
 /**
  * VD Agent — Electron Main Process (Slim Orchestrator)
@@ -17,9 +17,10 @@
  * - handlers/ai.ts     — AI chat with streaming, model discovery, cancel
  * - handlers/shell.ts  — OS shell operations
  */
-import { app, BrowserWindow, session } from 'electron'
+import { app, BrowserWindow, session, shell } from 'electron'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { isExternalWebUrl, isSameAppPage } from './navigation'
 
 // Handler module imports
 import { registerFsHandlers } from './handlers/fs'
@@ -64,6 +65,18 @@ function createWindow() {
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
   }
+
+  // Links (API key pages, credits) open in the system browser, never in a new app window.
+  const contents = mainWindow.webContents
+  contents.setWindowOpenHandler(({ url }) => {
+    if (isExternalWebUrl(url)) void shell.openExternal(url)
+    return { action: 'deny' }
+  })
+  contents.on('will-navigate', (event, url) => {
+    if (isSameAppPage(url, contents.getURL())) return
+    event.preventDefault()
+    if (isExternalWebUrl(url)) void shell.openExternal(url)
+  })
 
   mainWindow.on('closed', () => { mainWindow = null })
 }

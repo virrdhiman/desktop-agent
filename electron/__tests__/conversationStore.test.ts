@@ -3,7 +3,7 @@
  * @author Virender Dhiman
  * @year 2026
  * @project VD Agent
- * @license MIT
+ * @license Proprietary. See LICENSE.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'fs'

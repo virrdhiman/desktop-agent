@@ -2,7 +2,7 @@
  * @author Virender Dhiman
  * @year 2025
  * @project VD Agent
- * @license MIT
+ * @license Proprietary. See LICENSE.
  */
 /**
  * Integration tests — verify real user flows end-to-end

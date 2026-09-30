@@ -2,7 +2,7 @@
  * @author Virender Dhiman
  * @year 2025
  * @project VD Agent
- * @license MIT
+ * @license Proprietary. See LICENSE.
  */
 /**
  * Sidebar — Navigation sidebar
@@ -16,7 +16,7 @@
  */
 import { useStore } from '../store'
 import type { Panel } from '../types'
-import { version } from '../../package.json'
+import { APP_NAME, APP_VERSION, AUTHOR_NAME, AUTHOR_URL } from '../lib/brand'
 
 const PANELS: { id: Panel; icon: string; label: string; shortcut?: string }[] = [
   { id: 'chat', icon: '🤖', label: 'Agent', shortcut: 'Ctrl+Shift+A' },
@@ -95,8 +95,8 @@ export default function Sidebar() {
       </button>
 
       {/* Version */}
-      <div style={{ fontSize: 8, color: 'var(--text-muted)', textAlign: 'center', marginTop: 4, lineHeight: 1.3 }} title={`VD Agent v${version} by Virender Dhiman`}>
-        v{version}
+      <div style={{ fontSize: 8, color: 'var(--text-muted)', textAlign: 'center', marginTop: 4, lineHeight: 1.3 }} title={`${APP_NAME} v${APP_VERSION} by ${AUTHOR_NAME} (${AUTHOR_URL})`}>
+        v{APP_VERSION}
       </div>
     </nav>
   )

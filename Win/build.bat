@@ -5,7 +5,7 @@
 :: ============================================================
 :: @author Virender Dhiman
 :: @project VD Agent
-:: @license MIT
+:: @license Proprietary. See LICENSE.
 
 setlocal
 cd /d "%~dp0.."

@@ -3,12 +3,21 @@
   "productName": "VD Agent",
   "version": "1.0.1",
   "type": "module",
+  "private": true,
   "description": "VD Agent: desktop AI coding agent with free API key model selection, git, terminal, and local chat history",
-  "author": "Virender Dhiman <virenderdhiman@gmail.com>",
-  "homepage": "https://github.com/virenderdhiman/vd-agent",
+  "license": "SEE LICENSE IN LICENSE",
+  "author": {
+    "name": "Virender Dhiman",
+    "email": "virrdhiman@gmail.com",
+    "url": "https://virender.in"
+  },
+  "homepage": "https://github.com/virrdhiman/desktop-agent",
   "repository": {
     "type": "git",
-    "url": "https://github.com/virenderdhiman/vd-agent"
+    "url": "https://github.com/virrdhiman/desktop-agent.git"
+  },
+  "bugs": {
+    "url": "https://github.com/virrdhiman/desktop-agent/issues"
   },
   "keywords": ["ai", "agent", "coding-agent", "desktop", "electron", "code", "git", "llm", "openai-compatible", "vd-agent", "virender-dhiman"],
   "main": "dist-electron/main.js",
@@ -62,7 +71,7 @@
     "forceCodeSigning": false,
     "appId": "com.vd.agent",
     "productName": "VD Agent",
-    "copyright": "Copyright © 2026 Virender Dhiman / VD",
+    "copyright": "Copyright © 2025-2026 Virender Dhiman (virender.in). All rights reserved.",
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -70,6 +79,12 @@
     "files": [
       "dist/**/*",
       "dist-electron/**/*"
+    ],
+    "extraFiles": [
+      {
+        "from": "LICENSE",
+        "to": "LICENSE.txt"
+      }
     ],
     "mac": {
       "target": [
@@ -96,6 +111,7 @@
     },
     "nsis": {
       "oneClick": false,
+      "license": "LICENSE",
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
