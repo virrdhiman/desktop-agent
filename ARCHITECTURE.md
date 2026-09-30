@@ -25,7 +25,7 @@ VD Agent is an **Electron + React + TypeScript + Vite** desktop app built on Ele
 │  handlers/conversations.ts + conversationStore.ts         │
 │  handlers/settings.ts: provider catalog, encrypted keys   │
 │  handlers/tools.ts: agent tools + enforced permission gate │
-│  checkpointStore.ts, projectMemoryStore.ts, updates.ts     │
+│  archiveStore.ts, diagnostics.ts, checkpoint/project memory │
 │  handlers/fs.ts, git.ts, terminal.ts (node-pty), shell.ts │
 └────────────────────────┬─────────────────────────────────┘
                          │ ipcMain.handle / ipcRenderer.invoke
@@ -124,7 +124,7 @@ Anthropic uses the Messages API (`/v1/messages`) with the system prompt in the `
 - **Renderer** (`src/store/index.ts`): `addMessage`/`updateMessage` assign a stable `currentSessionId` and schedule a debounced save (`AUTOSAVE_DELAY_MS`). A periodic flush and visibility handler reduce loss on abnormal shutdown. `newChat`, `loadSession`, and `beforeunload` flush pending saves. `hydrateSessions` runs on startup and restores the latest chat's complete resume state.
 - **Main** (`electron/conversationStore.ts`): schema v2 stores one file per session at `<userData>/conversations/<id>.json`, with messages, title/pin/summary metadata, and a sanitized `resume` object containing workspace, file, task, terminal, tool, model, project-memory, checkpoint, verification, and Git state.
   - IDs are validated (`[A-Za-z0-9_-]`) so they can't escape the folder.
-  - Writes are atomic: write to a temp file, preserve the prior valid file as `.bak`, then rename.
+  - Writes are atomic and serialized per conversation: write to a unique temp file, preserve the prior valid file as `.bak`, then rename.
   - Keys and common key patterns are redacted from messages and nested resume state.
   - Legacy `{ messages, taskId }` and v1 files are normalized. A corrupt primary file falls back to `.bak`.
 
@@ -141,6 +141,9 @@ Anthropic uses the Messages API (`/v1/messages`) with the system prompt in the `
 | `electron/handlers/settings.ts` | Provider catalog, `settings:load/save`, key encryption |
 | `electron/handlers/tools.ts` | `tool:execute` for every entry in `AGENT_TOOLS` |
 | `electron/toolPolicy.ts` | Workspace boundaries, tool risk classification, approval details |
+| `electron/archiveStore.ts` | Validated ZIP inventory and bounded, path-safe extraction |
+| `electron/diagnostics.ts` | Privacy-redacted local runtime and storage diagnostics |
+| `electron/handlers/diagnostics.ts` | User-initiated diagnostics JSON export IPC |
 | `electron/checkpointStore.ts` | Bounded pre-edit snapshots and restore |
 | `electron/projectMemoryStore.ts` | Deterministic local repository summary and fingerprint |
 | `electron/handlers/workspaceState.ts` | Project-memory and checkpoint IPC |
@@ -184,10 +187,13 @@ Anthropic uses the Messages API (`/v1/messages`) with the system prompt in the `
 - `src/lib/agent.test.ts`: the prompt's answer-quality rules, context and history building, tool-call parsing, failure hints, filler stripping, junk detection, unverified-claim detection, and failure messages with next steps.
 - `src/lib/highlight.test.ts`: highlighting never leaks markup into code.
 - `electron/__tests__/toolSupport.test.ts`: workspace path resolution and command exit-code, timeout, and output handling.
+- `electron/__tests__/archiveStore.test.ts`: safe nested extraction, overwrite protection, traversal rejection, and archive-type validation.
+- `electron/__tests__/diagnostics.test.ts`: exported diagnostics exclude keys, user content, filenames, and paths.
+- `electron/__tests__/reliability.test.ts`: repeated and concurrent writes, backup redaction, history bounds, and malformed resume-state resilience.
 - `electron/__tests__/navigation.test.ts`: which links open externally and which navigations are allowed.
 - `electron/__tests__/tools-logic.test.ts`: file system, search, provider, and git helper logic.
 - `src/__tests__/*`: store and component tests.
-- `npm run smoke` (`scripts/smoke.mjs`): builds the app, then launches it three times with a temporary user data folder and workspace, driving it over the Chrome DevTools Protocol. It checks rendering and viewport geometry, the preload API and sandbox, native PTY startup, updater IPC, project memory, pre-edit checkpoint restore/deletion, rich restart state, key redaction, Monaco, link handling, and path-traversal rejection. The third launch points two providers at a local mock server (one always rate limited) and checks the agent end to end: prompt rules, tool failures and malformed calls, workspace-relative paths, sticky fallback, filler stripping, empty-response recovery, unverified-claim challenges, and total-provider-failure guidance. It never touches real user data; screenshots are opt-in. Use `--exe <path>` to test a packaged build.
+- `npm run smoke` (`scripts/smoke.mjs`): builds the app, then launches it three times with a temporary user data folder and workspace, driving it over the Chrome DevTools Protocol. It checks rendering and viewport geometry, the preload API and sandbox, native PTY startup, updater IPC, project memory, pre-edit checkpoint restore/deletion, rich restart state, key redaction, safe ZIP listing/extraction and rollback, Monaco, link handling, and path-traversal rejection. The third launch points two providers at a local mock server (one always rate limited) and checks the agent end to end: prompt rules, tool failures and malformed calls, workspace-relative paths, sticky fallback, filler stripping, empty-response recovery, unverified-claim challenges, and total-provider-failure guidance. It never touches real user data; screenshots are opt-in. Use `--exe <path>` to test a packaged build.
 
 ## Performance notes
 

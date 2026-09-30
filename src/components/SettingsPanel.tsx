@@ -47,6 +47,7 @@ export default function SettingsPanel() {
   const [refreshingModels, setRefreshingModels] = useState(false)
   const [refreshMessage, setRefreshMessage] = useState('')
   const [updateStatus, setUpdateStatus] = useState<Awaited<ReturnType<typeof window.api.updateStatus>> | null>(null)
+  const [diagnosticsMessage, setDiagnosticsMessage] = useState('')
 
   useEffect(() => {
     void window.api.updateStatus().then(setUpdateStatus)
@@ -535,6 +536,30 @@ export default function SettingsPanel() {
                   </button>
                 )}
               </div>
+            </div>
+
+            <div style={{ marginTop: 20, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Private diagnostics</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10, lineHeight: 1.5 }}>
+                Export app, provider-health, and storage metadata for troubleshooting. Chat text, code, filenames, workspace paths, and API keys are excluded.
+              </div>
+              <button
+                className="btn btn-sm"
+                onClick={async () => {
+                  setDiagnosticsMessage('Preparing report...')
+                  const result = await window.api.exportDiagnostics()
+                  if ('error' in result && result.error) setDiagnosticsMessage(`Export failed: ${result.error}`)
+                  else if (result.cancelled) setDiagnosticsMessage('Export cancelled.')
+                  else setDiagnosticsMessage('Diagnostics report saved.')
+                }}
+              >
+                Export diagnostics
+              </button>
+              {diagnosticsMessage && (
+                <div style={{ fontSize: 11, color: diagnosticsMessage.startsWith('Export failed') ? 'var(--error)' : 'var(--text-muted)', marginTop: 6 }}>
+                  {diagnosticsMessage}
+                </div>
+              )}
             </div>
 
             {/* Import / Export Settings */}

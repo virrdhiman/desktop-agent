@@ -114,6 +114,9 @@ contextBridge.exposeInMainWorld('api', {
   exportConversation: (id: string) => invokeWithTimeout('conversations:export', id),
   importConversations: () => invokeWithTimeout('conversations:import'),
 
+  // Privacy-redacted support metadata; excludes chats, code, filenames, paths, and API keys.
+  exportDiagnostics: () => invokeWithTimeout('diagnostics:export'),
+
   // Local project memory and file recovery checkpoints
   projectMemoryLoad: (workspace: string, force = false) => invokeWithTimeout('projectMemory:load', workspace, force),
   listCheckpoints: (sessionId: string) => invokeWithTimeout('checkpoints:list', sessionId),
@@ -191,6 +194,7 @@ export type ElectronAPI = {
   updateConversation: (id: string, patch: { title?: string; pinned?: boolean }) => Promise<ConversationRecord | { error: string }>
   exportConversation: (id: string) => Promise<{ success?: boolean; cancelled?: boolean; path?: string; error?: string }>
   importConversations: () => Promise<ConversationRecord[] | { error: string }>
+  exportDiagnostics: () => Promise<{ success?: boolean; cancelled?: boolean; path?: string; error?: string }>
   projectMemoryLoad: (workspace: string, force?: boolean) => Promise<{ content: string; updatedAt: number; fingerprint: string } | { error: string }>
   listCheckpoints: (sessionId: string) => Promise<Array<CheckpointSummary & { workspace: string }> | { error: string }>
   restoreCheckpoint: (sessionId: string, checkpointId: string) => Promise<{ success: boolean; restored: string[]; removed: string[]; skipped: string[]; workspace: string } | { error: string }>

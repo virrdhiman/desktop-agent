@@ -297,6 +297,16 @@ export const AGENT_TOOLS = [
     parameters: { path: 'string (optional)' },
   },
   {
+    name: 'archive_list',
+    description: 'Safely list every entry in a ZIP archive without extracting it',
+    parameters: { archive_path: 'string - path to a .zip file' },
+  },
+  {
+    name: 'archive_extract',
+    description: 'Safely extract a ZIP archive into a workspace folder with zip-slip, symlink, entry-count, and expanded-size protections',
+    parameters: { archive_path: 'string - path to a .zip file', output_path: 'string - destination directory', overwrite: 'boolean (optional, default false)' },
+  },
+  {
     name: 'web3_balance',
     description: 'Check crypto wallet balance on any EVM chain',
     parameters: { address: 'string — wallet address', chain: 'string — ethereum|polygon|arbitrum|optimism|base|bsc|sepolia' },

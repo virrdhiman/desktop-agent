@@ -32,6 +32,7 @@ Your chats, settings, and keys stay on your machine. There is no account and no 
 
 - **Agent that verifies its work.** Reads before it claims, pushes back on risky requests, runs your tests or build before it reports success, and asks before destructive actions.
 - **Tools.** Files, code search, shell commands, git, web search, and some media and Web3 helpers. See [TOOLS.md](./TOOLS.md).
+- **Safe archive-to-CSV workflows.** Inventories ZIP files before extraction, rejects unsafe entries, and guides the agent to inspect every source, preserve provenance, and verify structured CSV output.
 - **Plan Mode.** The agent proposes a plan and waits for your approval before it changes files.
 - **Automatic model selection.** Discovers and ranks the models your key can call, and falls back between models and providers. See [How model selection works](#how-model-selection-works).
 - **Durable resume and recovery.** Chats, tasks, workspace state, recent tool outcomes, terminal context, and verification state survive restarts. Agent file edits get pre-change recovery checkpoints.
@@ -116,6 +117,7 @@ VD Agent has no server, account, telemetry, or analytics. Everything it stores s
 - **Project memory**: `project-memory/`, a deterministic local summary used to resume work with repository context.
 - **Settings**: `settings.json`, with provider configuration, custom rules, and preferences.
 - **API keys**: stored in `settings.json` and encrypted with your OS keychain (Electron `safeStorage`) when one is available. On Linux without a keyring they are stored unencrypted. Keys are never included in settings exports.
+- **Private diagnostics**: an optional local JSON export contains app/runtime metadata and aggregate health counts only. It excludes API keys, chats, filenames, workspace paths, and source code.
 
 Your prompts and code go **only** to the AI provider you choose, plus any service an agent tool calls on your behalf (for example web search). Details are in [docs/PRIVACY.md](./docs/PRIVACY.md). The agent runs commands with your user permissions, so read [docs/SECURITY.md](./docs/SECURITY.md) before pointing it at important work.
 

@@ -30,6 +30,16 @@ describe('tool policy', () => {
     expect(assessToolPolicy('run_command', { command: 'npm test && remove-important-files', cwd: workspace }, workspace).needsApproval).toBe(true)
   })
 
+  it('treats archive inspection as read-only and extraction as a workspace write', () => {
+    const archive = path.join(workspace, 'orders.zip')
+    const output = path.join(workspace, 'orders-extracted')
+    expect(assessToolPolicy('archive_list', { archive_path: archive }, workspace).risk).toBe('read')
+    expect(assessToolPolicy('archive_extract', { archive_path: archive, output_path: output }, workspace)).toMatchObject({
+      risk: 'write', outsideWorkspace: [], needsApproval: false,
+    })
+    expect(assessToolPolicy('archive_extract', { archive_path: archive, output_path: path.resolve(workspace, '..', 'outside') }, workspace).outsideWorkspace).toHaveLength(1)
+  })
+
   it('resolves the nearest existing parent for new mutation targets', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vd-policy-'))
     try {

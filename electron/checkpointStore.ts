@@ -1,6 +1,7 @@
 /** Crash-safe, bounded pre-edit snapshots for files the agent is about to change. */
 import fs from 'fs'
 import path from 'path'
+import { randomUUID } from 'crypto'
 import { isPathInsideWorkspace, resolvesInsideWorkspace } from './toolPolicy'
 
 export const CHECKPOINT_VERSION = 1
@@ -34,7 +35,7 @@ function checkpointFile(baseDir: string, sessionId: string, id: string) {
 
 async function atomicWrite(target: string, content: string) {
   await fs.promises.mkdir(path.dirname(target), { recursive: true })
-  const tmp = `${target}.${process.pid}.tmp`
+  const tmp = `${target}.${process.pid}.${randomUUID()}.tmp`
   await fs.promises.writeFile(tmp, content, 'utf-8')
   await fs.promises.rename(tmp, target)
 }

@@ -13,7 +13,7 @@ import path from 'path'
 export const COMMAND_TIMEOUT_MS = 30_000
 const MAX_STREAM_CHARS = 20_000
 
-const PATH_KEYS = ['path', 'cwd', 'audio_path']
+const PATH_KEYS = ['path', 'cwd', 'audio_path', 'archive_path', 'output_path']
 /** Tools whose `path` defaults to the current directory, which should mean the workspace. */
 const DIRECTORY_TOOLS = new Set([
   'list_files', 'search_files', 'search_code', 'read_directory_tree',

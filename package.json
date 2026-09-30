@@ -43,6 +43,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:reliability": "vitest run electron/__tests__/reliability.test.ts electron/__tests__/archiveStore.test.ts electron/__tests__/diagnostics.test.ts",
     "lint": "tsc --noEmit",
     "smoke": "npm run build && node scripts/smoke.mjs",
     "agent:evals": "node scripts/agent-evals.mjs",
@@ -64,6 +65,7 @@
     "xterm": "^5.3.0",
     "xterm-addon-fit": "^0.8.0",
     "xterm-addon-web-links": "^0.9.0",
+    "yauzl": "^3.4.0",
     "zustand": "^4.5.2"
   },
   "devDependencies": {
@@ -73,6 +75,8 @@
     "@testing-library/user-event": "^14.6.6",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
+    "@types/yauzl": "^2.10.3",
+    "@types/yazl": "^3.3.1",
     "@vitejs/plugin-react": "^5.2.0",
     "electron": "^44.5.1",
     "electron-builder": "^26.15.3",
@@ -85,7 +89,8 @@
     "vite": "^7.3.6",
     "vite-plugin-electron": "^0.28.8",
     "vite-plugin-electron-renderer": "^0.14.5",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.11",
+    "yazl": "^3.3.1"
   },
   "overrides": {
     "js-yaml": "^4.3.2",

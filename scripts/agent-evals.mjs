@@ -32,14 +32,33 @@ function loadGolden() {
   if (data.version !== 1) fail('unsupported golden dataset version')
   if (!Array.isArray(data.tiers) || data.tiers.length !== 3) fail('golden dataset must define exactly 3 tiers')
   if (!Array.isArray(data.cases) || data.cases.length === 0) fail('golden dataset has no cases')
+  if (data.cases.length < Number(data.minimums?.goldenCases || 0)) {
+    fail(`golden dataset has ${data.cases.length} cases, below baseline ${data.minimums.goldenCases}`)
+  }
 
   const ids = new Set()
+  const prompts = new Set()
   for (const testCase of data.cases) {
     if (!testCase.id || ids.has(testCase.id)) fail(`duplicate or missing case id: ${testCase.id}`)
     ids.add(testCase.id)
     if (![1, 2, 3].includes(testCase.tier)) fail(`${testCase.id}: invalid tier`)
+    if (typeof testCase.prompt !== 'string' || !testCase.prompt.trim()) fail(`${testCase.id}: missing prompt`)
+    const promptKey = testCase.prompt.trim().toLowerCase()
+    if (prompts.has(promptKey)) fail(`${testCase.id}: duplicate prompt`)
+    prompts.add(promptKey)
     if (!Array.isArray(testCase.checks) || testCase.checks.length === 0) fail(`${testCase.id}: missing checks`)
     if (!Array.isArray(testCase.coveredBy) || testCase.coveredBy.length === 0) fail(`${testCase.id}: missing coveredBy`)
+    for (const relative of testCase.coveredBy) {
+      const resolved = path.resolve(repo, relative)
+      if (!resolved.startsWith(`${repo}${path.sep}`) || !fs.existsSync(resolved)) {
+        fail(`${testCase.id}: coveredBy file does not exist: ${relative}`)
+      }
+    }
+  }
+
+  const tierCounts = Object.fromEntries([1, 2, 3].map((tier) => [tier, data.cases.filter((item) => item.tier === tier).length]))
+  if (tierCounts[1] < 25 || tierCounts[2] < 10 || tierCounts[3] < 3) {
+    fail(`golden tier coverage is too narrow: ${JSON.stringify(tierCounts)}`)
   }
 
   const smoke = fs.readFileSync(smokePath, 'utf8')
@@ -129,6 +148,7 @@ const golden = loadGolden()
 
 console.log(`VD Agent AI evaluation gate (${pkg.name}@${pkg.version})`)
 console.log(`Golden cases: ${golden.cases.length}`)
+console.log(`Golden sources: ${golden.cases.filter((item) => item.source === 'real-user').length} real-user, ${golden.cases.filter((item) => item.source !== 'real-user').length} maintained regression cases`)
 console.log('Borrowed idea, not code: golden tasks + trajectory checks + release smoke gates from public agent-eval practice.')
 
 const testOutput = await run('Tier 1: functional/component tests', 'npm', ['test'])

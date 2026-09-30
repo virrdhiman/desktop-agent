@@ -43,8 +43,9 @@ Never commit certificates, passwords, or `.env` files.
 ## Build and verify
 
 - [ ] `npm run security:audit`, `npm test`, `npm run lint`, and `npm run build` pass
+- [ ] `npm run test:reliability` passes repeated/concurrent persistence, safe archive, and diagnostics-privacy checks.
 - [ ] `npm run agent:evals` passes. It validates the golden agent-eval dataset, enforces minimum unit/smoke coverage, and runs functional, trajectory, and visual checks.
-- [ ] `npm run smoke` passes. It launches the dev build three times with a throwaway profile and checks UI/IPC isolation, native PTY startup, rich restart state, checkpoint restore/deletion, key redaction, the editor, model/provider trajectories, and link handling.
+- [ ] `npm run smoke` passes. It launches the dev build three times with a throwaway profile and checks UI/IPC isolation, native PTY startup, rich restart state, checkpoint restore/deletion, key redaction, safe ZIP listing/extraction, the editor, model/provider trajectories, and link handling.
 - [ ] Build with the official script on each platform
 - [ ] Smoke-test the packaged app:
   - Windows: `npm run smoke -- --exe "release/win-unpacked/VD Agent.exe"`

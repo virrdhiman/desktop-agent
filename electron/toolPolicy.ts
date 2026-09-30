@@ -16,7 +16,7 @@ export type ToolPolicyDecision = {
   outsideWorkspace: string[]
 }
 
-const WRITE_TOOLS = new Set(['write_file', 'edit_file', 'create_file', 'multi_file_edit'])
+const WRITE_TOOLS = new Set(['write_file', 'edit_file', 'create_file', 'multi_file_edit', 'archive_extract'])
 const DANGEROUS_TOOLS = new Set([
   'delete_file', 'run_command', 'git_commit', 'git_branch', 'git_stash',
   'git_undo_last', 'git_discard_changes',
@@ -57,6 +57,8 @@ export function toolTargets(name: string, args: Record<string, any>): string[] {
   if (typeof args.path === 'string') targets.push(args.path)
   if (typeof args.cwd === 'string') targets.push(args.cwd)
   if (typeof args.audio_path === 'string') targets.push(args.audio_path)
+  if (typeof args.archive_path === 'string') targets.push(args.archive_path)
+  if (typeof args.output_path === 'string') targets.push(args.output_path)
   if (typeof args.image_url === 'string' && !/^https?:/i.test(args.image_url)) targets.push(args.image_url)
   if (Array.isArray(args.edits)) {
     for (const edit of args.edits) if (typeof edit?.path === 'string') targets.push(edit.path)

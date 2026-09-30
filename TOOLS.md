@@ -90,6 +90,18 @@ A tree view of the project structure.
 { "name": "read_directory_tree", "args": { "path": "." } }
 ```
 
+### `archive_list`
+Inspect a ZIP archive without extracting it. Returns every entry's normalized path, compressed and expanded sizes, type, and archive totals. Unsafe or platform-reserved paths, duplicate/case-colliding entries, symbolic links, oversized entries, and expansion-limit violations are rejected.
+```json
+{ "name": "archive_list", "args": { "archive_path": "order-api-raw.zip" } }
+```
+
+### `archive_extract`
+Extract a validated ZIP archive into a workspace directory. Existing files are preserved unless `overwrite` is explicitly enabled. Extraction is limited to 2,000 entries, 64 MB per file, and 512 MB total expanded data, and it creates a recovery checkpoint for the destination files.
+```json
+{ "name": "archive_extract", "args": { "archive_path": "order-api-raw.zip", "output_path": "order-api-raw-extracted" } }
+```
+
 ### `multi_file_edit`
 Targeted replacements across several files.
 ```json

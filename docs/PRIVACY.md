@@ -30,6 +30,10 @@ Everything is stored in your user data folder:
 
 Settings exports never include API keys. Imports keep the keys already stored on the machine.
 
+### Private diagnostics export
+
+Settings includes an optional **Export diagnostics** action for troubleshooting. The report is generated locally and is saved only to the path you choose. It contains app, OS, runtime, provider health/model counts, and aggregate conversation/checkpoint/project-memory file statistics. It explicitly excludes API keys, chat content, filenames, workspace paths, and source code. VD Agent does not upload the report; inspect it before choosing to share it with anyone.
+
 ## What leaves your machine
 
 VD Agent only sends data when you use a feature that needs a network service:

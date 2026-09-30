@@ -82,7 +82,7 @@ export async function loadProjectMemory(baseDir: string, workspace: string, forc
   }
   const memory = await buildProjectMemory(workspace)
   await fs.promises.mkdir(baseDir, { recursive: true })
-  const tmp = `${target}.${process.pid}.tmp`
+  const tmp = `${target}.${process.pid}.${crypto.randomUUID()}.tmp`
   await fs.promises.writeFile(tmp, JSON.stringify(memory, null, 2), 'utf-8')
   await fs.promises.rename(tmp, target)
   return memory

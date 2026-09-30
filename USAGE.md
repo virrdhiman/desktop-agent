@@ -258,6 +258,18 @@ An approved shell command has your user permissions and can change files outside
 
 Image contents are not sent to the model yet. The message lists the attached file names. Use the `image_analysis` tool (Gemini key required) to analyze an image by path or URL.
 
+### ZIP and CSV workflows
+
+For a request such as "check every file in this ZIP and provide the relevant common data as CSV," add the ZIP path to the message and open the folder containing it as the workspace. VD Agent can:
+
+1. Inventory the archive before extraction and reject unsafe paths, links, or excessive expansion.
+2. Extract it into a new workspace folder without replacing existing files by default.
+3. Inspect every supported source file and report anything it cannot parse.
+4. Separate common fields from entity-specific fields, keep a `source_file` column for traceability, and avoid forcing incompatible records into one table.
+5. Write UTF-8 CSV with stable headers and then parse it again to check row widths, required fields, malformed rows, and duplicates.
+
+Review the generated CSV before using it for production imports. Ambiguous field meanings still require domain knowledge.
+
 ---
 
 ## 13. Web3 Tools
@@ -307,6 +319,7 @@ Signing, packaged-app smoke tests, and publishing are covered in [docs/RELEASE_C
 
 ```bash
 npm test               # all unit tests
+npm run test:reliability # persistence, archive, and private-diagnostics stress checks
 npm run test:watch     # watch mode
 npm run lint           # TypeScript typecheck
 npm run build          # production build

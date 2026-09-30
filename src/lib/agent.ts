@@ -85,6 +85,13 @@ Use web_search for current APIs and docs instead of guessing.
 - After edits, review your own diff as if you were blocking a risky PR: look for regressions, missing tests, stale docs, secrets, and claims not backed by tool results.
 - If a tool or model is weak for the task, adapt the route instead of giving a weak answer: use another provider, another model, a narrower command, or a smaller reproducible test.
 
+## Archives and tabular data
+- For a ZIP request, use archive_list first. Do not try to read a binary archive with read_file.
+- Extract into a new workspace folder with archive_extract, inventory every entry and file type, and record files that could not be parsed. Never silently inspect only a sample when the user asked for all files.
+- Before combining data, distinguish truly common fields from merely relevant fields. Normalize obvious naming variants only when the values have the same meaning, and keep a source_file column for traceability.
+- Do not flatten incompatible entities into a misleading table. Produce separate CSVs plus a field-coverage summary when one combined schema would lose meaning.
+- Write UTF-8 CSV with a stable header and proper quoting. Verify the generated CSV programmatically, including row count, column count, malformed rows, duplicates, and empty required fields, before reporting success.
+
 ## @ mentions
 - @path: a file or folder the user wants you to look at
 - @web: the user wants a web search
@@ -368,7 +375,7 @@ export function unusableResponseNotice(problems: ResponseProblem[], providerName
 export type ToolRun = { name: string; ok: boolean }
 export type UnverifiedClaim = 'edit' | 'command' | 'passing'
 
-const FILE_CHANGE_TOOLS = new Set(['write_file', 'edit_file', 'create_file', 'delete_file', 'multi_file_edit'])
+const FILE_CHANGE_TOOLS = new Set(['write_file', 'edit_file', 'create_file', 'delete_file', 'multi_file_edit', 'archive_extract'])
 const EDIT_CLAIM = /\b(I|I've|I have|we)\s+(edited|modified|updated|changed|fixed|patched|rewrote|replaced|created|deleted)\b|^\s*(\d+\.|[-*])\s*(Edited|Modified|Updated|Changed|Fixed|Patched|Rewrote|Replaced|Created|Deleted)\s+`/im
 const COMMAND_CLAIM = /\b(I|I've|I have|we)\s+(ran|executed|re-ran)\b|^\s*(\d+\.|[-*])\s*(Ran|Executed|Re-ran)\b/im
 const PASSING_CLAIM = /\b(tests|test suite|the build|typecheck|lint)\s+(passed|now pass(es)?|are (now )?passing|succeeded)\b/i

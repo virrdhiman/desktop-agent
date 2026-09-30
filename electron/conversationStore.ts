@@ -10,6 +10,7 @@
  */
 import fs from 'fs'
 import path from 'path'
+import { randomUUID } from 'crypto'
 
 export const CONVERSATION_VERSION = 2
 export const MAX_STORED_MESSAGES = 1000
@@ -38,6 +39,16 @@ export interface StoredConversation {
 
 const SESSION_ID = /^[A-Za-z0-9_-]{1,100}$/
 const ROLES = new Set<StoredRole>(['user', 'assistant', 'system'])
+const writeQueues = new Map<string, Promise<unknown>>()
+
+function enqueueWrite<T>(target: string, operation: () => Promise<T>): Promise<T> {
+  const previous = writeQueues.get(target) || Promise.resolve()
+  const current = previous.catch(() => undefined).then(operation)
+  writeQueues.set(target, current)
+  return current.finally(() => {
+    if (writeQueues.get(target) === current) writeQueues.delete(target)
+  })
+}
 
 const KEY_PATTERNS = [
   /\bsk-(?:ant-|proj-|or-v1-)?[A-Za-z0-9_-]{20,}/g,
@@ -154,19 +165,21 @@ export async function saveConversation(
 
   await fs.promises.mkdir(dir, { recursive: true })
   const target = fileFor(dir, record.id)
-  const tmp = `${target}.${process.pid}.tmp`
-  const backup = `${target}.bak`
-  const json = JSON.stringify(record, null, 2)
-  await fs.promises.writeFile(tmp, json, 'utf-8')
-  try {
-    try { await fs.promises.copyFile(target, backup) } catch {}
-    await fs.promises.rename(tmp, target)
-  } catch {
-    // Windows can refuse the rename while another process holds the target open.
-    await fs.promises.writeFile(target, json, 'utf-8')
-    await fs.promises.rm(tmp, { force: true })
-  }
-  return record
+  return enqueueWrite(target, async () => {
+    const tmp = `${target}.${process.pid}.${randomUUID()}.tmp`
+    const backup = `${target}.bak`
+    const json = JSON.stringify(record, null, 2)
+    await fs.promises.writeFile(tmp, json, 'utf-8')
+    try {
+      try { await fs.promises.copyFile(target, backup) } catch {}
+      await fs.promises.rename(tmp, target)
+    } catch {
+      // Windows can refuse the rename while another process holds the target open.
+      await fs.promises.writeFile(target, json, 'utf-8')
+      await fs.promises.rm(tmp, { force: true })
+    }
+    return record
+  })
 }
 
 function sanitizeResume(value: unknown, secrets: string[]): Record<string, unknown> | undefined {

@@ -11,6 +11,7 @@
 import { app, ipcMain, safeStorage } from 'electron'
 import path from 'path'
 import fs from 'fs'
+import { randomUUID } from 'crypto'
 
 /** Path to settings JSON on disk */
 export const SETTINGS_PATH = path.join(app.getPath('userData'), 'settings.json')
@@ -143,7 +144,7 @@ export function registerSettingsHandlers() {
           apiKey: encryptApiKey(p.apiKey),
         })) || settings.providers,
       }
-      const tmp = `${SETTINGS_PATH}.${process.pid}.tmp`
+      const tmp = `${SETTINGS_PATH}.${process.pid}.${randomUUID()}.tmp`
       await fs.promises.writeFile(tmp, JSON.stringify(toSave, null, 2), 'utf-8')
       await fs.promises.rename(tmp, SETTINGS_PATH)
       return { success: true }

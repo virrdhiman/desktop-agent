@@ -27,6 +27,12 @@ describe('resolveToolArgs', () => {
     expect(out.edits[0]).toEqual({ path: path.join(ws, 'a.ts'), old_string: 'x', new_string: 'y' })
   })
 
+  it('resolves archive source and destination paths against the workspace', () => {
+    const out = resolveToolArgs('archive_extract', { archive_path: 'orders.zip', output_path: 'orders-extracted' }, ws)
+    expect(out.archive_path).toBe(path.join(ws, 'orders.zip'))
+    expect(out.output_path).toBe(path.join(ws, 'orders-extracted'))
+  })
+
   it('leaves URLs and non-path tools alone', () => {
     expect(resolveToolArgs('image_analysis', { image_url: 'https://x.test/a.png' }, ws).image_url).toBe('https://x.test/a.png')
     expect(resolveToolArgs('web_search', { query: 'vitest' }, ws)).toEqual({ query: 'vitest' })

@@ -28,6 +28,7 @@ import { fileURLToPath } from 'node:url'
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const require = createRequire(path.join(repo, 'package.json'))
+const yazl = require('yazl')
 const pkg = JSON.parse(fs.readFileSync(path.join(repo, 'package.json'), 'utf8'))
 const REPO_URL = 'https://github.com/virrdhiman/desktop-agent'
 const AUTHOR_URL = 'https://virender.in/'
@@ -60,6 +61,21 @@ const check = (name, ok, detail = '') => {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? `  (${detail})` : ''}`)
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+async function writeSmokeZip(target) {
+  const zip = new yazl.ZipFile()
+  zip.addBuffer(Buffer.from('{"id":"A-1","status":"paid","total":12.5}'), 'orders/order-a.json')
+  zip.addBuffer(Buffer.from('{"id":"A-2","status":"pending","total":8}'), 'orders/order-b.json')
+  zip.addBuffer(Buffer.from('generated fixture'), 'metadata/source.txt')
+  zip.end()
+  await new Promise((resolve, reject) => {
+    zip.outputStream.pipe(fs.createWriteStream(target)).on('close', resolve).on('error', reject)
+    zip.outputStream.on('error', reject)
+  })
+}
+
+const smokeArchive = path.join(workspace, 'order-api-raw.zip')
+await writeSmokeZip(smokeArchive)
 
 function realUserDataDir() {
   const name = pkg.productName || pkg.name
@@ -304,7 +320,7 @@ try {
     title: document.title,
     rootChildren: document.getElementById('root')?.children.length ?? 0,
     api: typeof window.api,
-    missing: ['saveConversation','listConversations','deleteConversation','updateConversation','exportConversation','importConversations','loadSettings','aiChat','aiCancel','aiListModels','onAIStream','toolExecute','projectMemoryLoad','listCheckpoints','restoreCheckpoint','updateStatus'].filter(k => typeof window.api?.[k] !== 'function'),
+    missing: ['saveConversation','listConversations','deleteConversation','updateConversation','exportConversation','importConversations','exportDiagnostics','loadSettings','aiChat','aiCancel','aiListModels','onAIStream','toolExecute','projectMemoryLoad','listCheckpoints','restoreCheckpoint','updateStatus'].filter(k => typeof window.api?.[k] !== 'function'),
     hasNode: typeof require !== 'undefined' || typeof process !== 'undefined',
     links: [...document.querySelectorAll('a')].map(x => x.href),
     credit: /by Virender Dhiman/.test(document.body.innerText),
@@ -349,6 +365,20 @@ try {
   check('update status is available over IPC', typeof updateStatus?.state === 'string' && typeof updateStatus?.message === 'string', updateStatus?.state)
   const memory = await a.evaluate(`window.api.projectMemoryLoad(${JSON.stringify(workspace)}, true)`)
   check('local project memory is generated for the workspace', memory?.workspace === workspace && memory?.content?.includes('smoke-editor.ts'))
+
+  const archiveList = await a.evaluate(`window.api.toolExecute({ name: 'archive_list', args: { archive_path: 'order-api-raw.zip' }, workspace: ${JSON.stringify(workspace)} })`)
+  check('archive tool inventories every ZIP file before extraction',
+    archiveList?.result?.includes('3 files') && archiveList.result.includes('orders/order-a.json') && archiveList.result.includes('metadata/source.txt'))
+  const archiveExtract = await a.evaluate(`window.api.toolExecute({ name: 'archive_extract', args: { archive_path: 'order-api-raw.zip', output_path: 'order-api-raw-extracted' }, workspace: ${JSON.stringify(workspace)}, sessionId: 'archive-smoke', taskId: 'archive-to-csv' })`)
+  check('archive tool safely extracts nested files inside the workspace',
+    archiveExtract?.result?.includes('Extracted 3 files')
+      && fs.readFileSync(path.join(workspace, 'order-api-raw-extracted', 'orders', 'order-a.json'), 'utf8').includes('A-1'))
+  const archiveCheckpoints = await a.evaluate(`window.api.listCheckpoints('archive-smoke')`)
+  const archiveRestored = archiveCheckpoints?.[0]
+    ? await a.evaluate(`window.api.restoreCheckpoint('archive-smoke', ${JSON.stringify(archiveCheckpoints[0].id)})`)
+    : null
+  check('archive extraction checkpoint removes newly extracted files on restore',
+    archiveRestored?.success && !fs.existsSync(path.join(workspace, 'order-api-raw-extracted', 'orders', 'order-a.json')))
 
   const changed = await a.evaluate(`window.api.toolExecute({ name: 'write_file', args: { path: 'checkpoint-smoke.txt', content: 'after checkpoint\\n' }, workspace: ${JSON.stringify(workspace)}, sessionId: 'smoke-session', taskId: 'smoke-task' })`)
   const checkpoints = await a.evaluate(`window.api.listCheckpoints('smoke-session')`)

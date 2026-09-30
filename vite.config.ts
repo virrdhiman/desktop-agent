@@ -20,7 +20,7 @@ export default defineConfig({
           build: {
             outDir: 'dist-electron',
             rollupOptions: {
-              external: ['electron', 'simple-git', 'node-pty', 'electron-updater'],
+              external: ['electron', 'simple-git', 'node-pty', 'electron-updater', 'yauzl'],
             },
           },
         },

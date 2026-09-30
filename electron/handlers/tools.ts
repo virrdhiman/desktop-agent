@@ -16,6 +16,7 @@ import { SETTINGS_PATH } from './settings'
 import { COMMAND_TIMEOUT_MS, formatCommandResult, resolveToolArgs } from '../toolSupport'
 import { assessToolPolicy, checkpointTargets, resolvesInsideWorkspace, toolApprovalDetail, type PermissionMode } from '../toolPolicy'
 import { createCheckpoint } from '../checkpointStore'
+import { archiveOutputPaths, extractZipArchive, inspectZipArchive, type ArchiveInspection } from '../archiveStore'
 
 /** Git instances cache for tool execution */
 const toolGitInstances: Map<string, SimpleGit> = new Map()
@@ -74,7 +75,15 @@ export function registerToolHandlers() {
           if (choice.response !== 1) return { error: `User declined ${tool.name}` }
         }
 
-        const targets = checkpointTargets(tool.name, tool.args)
+        let archiveInspection: ArchiveInspection | undefined
+        let targets = checkpointTargets(tool.name, tool.args)
+        if (tool.name === 'archive_extract') {
+          if (!tool.args.archive_path || !tool.args.output_path) {
+            return { error: 'archive_extract requires archive_path and output_path' }
+          }
+          archiveInspection = await inspectZipArchive(tool.args.archive_path)
+          targets = archiveOutputPaths(tool.args.output_path, archiveInspection)
+        }
         if (tool.workspace && tool.sessionId && targets.length > 0) {
           const checkpoint = await createCheckpoint(path.join(app.getPath('userData'), 'checkpoints'), {
             sessionId: tool.sessionId,
@@ -265,6 +274,35 @@ export function registerToolHandlers() {
             treeLines.push(dirPath)
             await buildTree(dirPath, '', 0)
             return { result: treeLines.join('\n') }
+          }
+          case 'archive_list': {
+            if (!tool.args.archive_path) return { error: 'archive_list requires archive_path' }
+            const inspection = await inspectZipArchive(tool.args.archive_path)
+            const listing = inspection.entries.map((entry) => (
+              `${entry.directory ? '[DIR] ' : '[FILE]'} ${entry.name}${entry.directory ? '' : ` (${entry.uncompressedBytes} bytes)`}`
+            ))
+            return {
+              result: [
+                `ZIP: ${inspection.fileCount} files, ${inspection.directoryCount} directories, ${inspection.totalUncompressedBytes} uncompressed bytes`,
+                ...listing,
+              ].join('\n'),
+            }
+          }
+          case 'archive_extract': {
+            const result = await extractZipArchive(tool.args.archive_path, tool.args.output_path, {
+              overwrite: tool.args.overwrite === true,
+              inspection: archiveInspection,
+            })
+            const shown = result.extracted.slice(0, 200)
+            const omitted = result.extracted.length - shown.length
+            return {
+              result: [
+                `Extracted ${result.extracted.length} files (${result.totalBytes} bytes) to ${tool.args.output_path}.`,
+                result.skipped.length ? `Skipped ${result.skipped.length} existing files because overwrite was disabled.` : '',
+                ...shown,
+                omitted > 0 ? `... ${omitted} more extracted files; use read_directory_tree to inspect them.` : '',
+              ].filter(Boolean).join('\n'),
+            }
           }
 
           // ═══ WEB SEARCH ═════════════════════════════════════════════════════

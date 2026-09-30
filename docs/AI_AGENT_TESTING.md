@@ -29,9 +29,11 @@ It runs:
 3. `npm run build`
 4. `node scripts/smoke.mjs`
 
-The runner also validates `evals/agent-golden.json`, enforces the minimum
-Vitest count, and enforces the minimum smoke-check count. If a refactor silently
-drops many tests or smoke assertions, the command fails.
+The runner also validates all 51 mapped cases in `evals/agent-golden.json`,
+including one real-user archive-to-CSV failure case. It checks unique IDs and
+prompts, coverage-file paths, tier minimums, at least 283 passing Vitest tests,
+at least 43 smoke assertions, and at least 50 golden cases. If a refactor
+silently drops coverage, the command fails.
 
 ## Tier 1: Functional & component tests
 
@@ -53,11 +55,22 @@ Covered by Vitest:
 - IPC helpers,
 - model discovery/ranking/fallback behavior and learned local outcome weighting,
 - live model catalog refreshes that drop stale/deprecated model IDs.
+- safe ZIP inventory and extraction, including traversal, symlink, overwrite,
+  and expansion-limit handling,
+- concurrent and repeated conversation writes, history bounds, backup
+  redaction, and circular resume metadata,
+- privacy guarantees for the local diagnostics export.
 
 Command:
 
 ```bash
 npm test
+```
+
+Run the focused reliability set with:
+
+```bash
+npm run test:reliability
 ```
 
 ## Tier 2: Trajectory & tool tests
@@ -75,6 +88,8 @@ Covered by `scripts/smoke.mjs` with a local mock OpenAI-compatible provider:
 - empty model output gets one corrective retry,
 - fabricated "I edited and tested it" answers are challenged before display,
 - total provider failure lists every provider and next steps.
+- ZIP entries are listed before extraction and extracted files participate in
+  checkpoint rollback.
 
 Command:
 
@@ -97,6 +112,8 @@ Covered by `scripts/smoke.mjs` using Electron plus the Chrome DevTools Protocol:
 - a checkpoint can restore a file to its pre-edit content,
 - bundled Monaco opens a workspace file,
 - no renderer errors are logged.
+- a synthetic multi-file order archive is safely listed and extracted without
+  touching real user data.
 
 Command:
 
@@ -129,6 +146,8 @@ code, or screenshots.
 ## Adding a new golden case
 
 1. Add a case to `evals/agent-golden.json`.
+   Mark a prompt `source: "real-user"` only when it came from an actual user;
+   maintained regression scenarios use `source: "synthetic"`.
 2. Add deterministic coverage in Vitest or a mock-provider case in
    `scripts/smoke.mjs`.
 3. If the case increases coverage, raise the minimum count in

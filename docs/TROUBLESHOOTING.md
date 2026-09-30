@@ -40,6 +40,8 @@
 | Local model doesn't respond | Make sure Ollama or LM Studio is running, and that the model name in Settings matches a model you've installed. |
 | Timeouts | Check your connection or proxy, or try another provider. |
 
+For a reproducible problem, use **Settings > Export diagnostics**. The JSON report contains runtime metadata and aggregate health counts, but no API keys, chat text, filenames, workspace paths, or source code. Review it before sharing it with an issue report.
+
 ## Editor, files, and git
 
 | Problem | Fix |
@@ -68,4 +70,4 @@
 | The app uses the default Electron icon | Add `build/icon.ico`, `build/icon.icns`, and `build/icon.png` (512×512). See [RELEASE_CHECKLIST.md](./RELEASE_CHECKLIST.md). |
 | `npm run smoke` fails to open a window on Linux CI | It needs a display. Run it under `xvfb-run`. |
 
-Still stuck? [Open an issue](https://github.com/virrdhiman/desktop-agent/issues) with your OS, VD Agent version, and the exact error. Leave API keys out of screenshots and logs.
+Still stuck? [Open an issue](https://github.com/virrdhiman/desktop-agent/issues) with your OS, VD Agent version, the exact error, and the optional private diagnostics report. Leave API keys out of screenshots and logs.
