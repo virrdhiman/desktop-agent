@@ -655,7 +655,7 @@ export default function AgentChat() {
       setStreamingContent('')
 
       if (!hasToolBlock(responseContent)) {
-        const problems = assessResponse(responseContent)
+        const problems = assessResponse(responseContent, userContent, messages.some((message) => message.role === 'user' || message.role === 'assistant'))
         const claims = problems.length === 0 ? unverifiedClaims(responseContent, toolRuns) : []
         if ((problems.length > 0 || claims.length > 0) && !retried) {
           retried = true

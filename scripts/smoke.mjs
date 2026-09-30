@@ -228,18 +228,22 @@ function mockReply(provider, body) {
   if (last.startsWith('Tool results:')) {
     return { text: "Sure! I'd be happy to help.\n\n`read_file` failed for `missing-smoke-file.txt` because it does not exist; `smoke-editor.ts` exports `SMOKE_EDITOR_MARKER`.\n\nNext steps:\n1. SMOKE-NEXT-STEP create `missing-smoke-file.txt` or give the correct path.\n\nI hope this helps! Let me know if you have any other questions." }
   }
-  if (last.startsWith('Your previous reply was')) return { text: 'SMOKE-RECOVERED The setting is read from `settings.json`.' }
+  if (last.startsWith('Your previous reply was')) {
+    return { text: last.includes('generic request for information') ? 'SMOKE-DIRECT Local chat history is stored on disk and restored at startup.' : 'SMOKE-RECOVERED The setting is read from `settings.json`.' }
+  }
   if (last.startsWith('Your reply says you')) return { text: 'SMOKE-HONEST Nothing was edited or run yet; the fix is to change `a - b` to `a + b` in `calc.js`.' }
   if (last.includes('SMOKE-CLAIM')) {
     return { text: 'SMOKE-FABRICATED Fixed.\n\n1. Edited `calc.js` to return `a + b`.\n2. Ran `node calc.test.js`.\n\nAll tests passed.' }
   }
   if (last.includes('SMOKE-ALLFAIL')) return { status: 503, message: 'Service unavailable' }
   if (last.includes('SMOKE-EMPTY')) return { text: '' }
+  if (last.includes('SMOKE-DEFLECTION')) return { text: 'Hello! How can I assist you with your task? Please provide the details of the task and context.' }
+  if (last.includes('SMOKE-BARE')) return { text: '{"name":"read_file","args":{"path":"smoke-editor.ts"}}' }
   if (last.includes('SMOKE-TOOLS')) {
     return {
       text: [
-        'Certainly! Great question.',
-        toolBlock({ name: 'read_file', args: { path: 'missing-smoke-file.txt' } }),
+        "I'll start by inspecting the files.",
+        '<tool_call><function=tool>{"name":"read_file","args":{"path":"missing-smoke-file.txt"}}</function></tool_call>',
         toolBlock({ name: 'read_file', args: { path: 'smoke-editor.ts' } }),
         `${FENCE}tool\n{not json}\n${FENCE}`,
       ].join('\n\n'),
@@ -500,13 +504,23 @@ try {
   check('agent: a failed tool call reaches the model with the error and a hint', toolFailureOk,
     toolFailureOk ? '' : followUp ? followUp.slice(0, 400).replace(/\s+/g, ' ') : `requests: ${toolsReqs.map((r) => `${r.provider}<${lastUser(r.body).slice(0, 24).replace(/\s+/g, ' ')}>`).join(', ')}`)
   check('agent: relative tool paths resolve against the workspace', followUp.includes('Tool read_file succeeded.') && followUp.includes('SMOKE_EDITOR_MARKER'))
-  check('agent: a malformed tool block is reported to the model, not dropped', followUp.includes('Tool block 3 is not valid JSON'))
+  check('agent: a malformed tool block is reported to the model, not dropped', followUp.includes('Tool block 3 is not valid'))
   check('agent: later rounds stay on the provider that answered', firstGemini > 0 && toolsReqs.slice(firstGemini).every((r) => r.provider !== 'groq'))
   const ui1 = await c.evaluate(`document.body.innerText`)
   check('agent: the user is told once which provider answered after a fallback', (ui1.match(/so this answer came from Google Gemini/g) || []).length === 1)
   check('agent: filler is stripped from replies and next steps are kept',
-    toolsDone && !/Certainly|Great question|happy to help|I hope this helps|Let me know if you have/i.test(ui1) && ui1.includes('Next steps:'))
+    toolsDone && !/Certainly|Great question|happy to help|I hope this helps|Let me know if you have|I'll start by/i.test(ui1) && ui1.includes('Next steps:'))
   await c.screenshot('agent.png')
+
+  const bareStart = mock.requests.length
+  await sendChat(c, 'SMOKE-BARE inspect smoke-editor.ts')
+  let bareFollowUp = ''
+  for (let i = 0; i < 80 && !bareFollowUp; i++) {
+    await sleep(250)
+    bareFollowUp = lastUser(mock.requests.slice(bareStart).find((r) => lastUser(r.body).startsWith('Tool results:'))?.body)
+  }
+  check('agent: a known bare JSON tool call is executed',
+    bareFollowUp.includes('Tool read_file succeeded.') && bareFollowUp.includes('SMOKE_EDITOR_MARKER'))
 
   const emptyStart = mock.requests.length
   await sendChat(c, 'SMOKE-EMPTY where is the setting read from?')
@@ -524,6 +538,16 @@ try {
   const shownFabrication = await c.evaluate(`document.body.innerText.includes('SMOKE-FABRICATED')`)
   check('agent: claimed edits or test runs without a tool call are challenged, not shown',
     honest && claimCorrections === 1 && !shownFabrication, `corrections=${claimCorrections} shownFabrication=${shownFabrication}`)
+
+  const deflectionStart = mock.requests.length
+  await sendChat(c, 'SMOKE-DEFLECTION Is local chat history restored after restart?')
+  const direct = await waitForText(c, 'SMOKE-DIRECT')
+  const deflectionCorrections = mock.requests.slice(deflectionStart)
+    .filter((r) => lastUser(r.body).includes('generic request for information')).length
+  const deflectionShown = await c.evaluate(`document.body.innerText.includes('How can I assist you with your task?')`)
+  check('agent: generic deflection is corrected instead of shown',
+    direct && deflectionCorrections === 1 && !deflectionShown,
+    `corrections=${deflectionCorrections} shownDeflection=${deflectionShown}`)
 
   await sendChat(c, 'SMOKE-ALLFAIL anything')
   const failShown = await waitForText(c, 'failed on all 2 providers tried')

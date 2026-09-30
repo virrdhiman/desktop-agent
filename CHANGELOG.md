@@ -16,7 +16,9 @@ All notable changes to VD Agent are documented here.
 - Added agent guidance for inspecting every archive source and producing traceable, schema-checked CSV instead of blindly merging incompatible records.
 - Added an opt-in local diagnostics export containing runtime metadata and aggregate health counts while excluding keys, chats, filenames, workspace paths, and source code.
 - Hardened local persistence with unique atomic temp files and serialized writes per conversation, including stress coverage for concurrency, backups, redaction, history limits, and malformed resume metadata.
-- Expanded the golden evaluation dataset to 51 mapped cases, including the first real-user regression, and raised the release gate to 283 unit tests and 43 Electron smoke checks.
+- Expanded the golden evaluation dataset to 62 mapped cases, including 11 real-user prompts, and raised the release gate to 293 unit tests and 45 Electron smoke checks.
+- Tightened replies from live Groq/OpenRouter trials: provider-native and known bare-JSON tool calls are normalized and executed, generic task deflections and false context denial get one corrective retry, obvious action narration is removed, and handoff acknowledgements stay concise.
+- When a provider exposes strong models, tiny fallbacks are skipped so VD can move to another strong configured free provider instead of accepting a low-quality generic answer.
 
 ## [1.1.0] - 2026-09-30
 

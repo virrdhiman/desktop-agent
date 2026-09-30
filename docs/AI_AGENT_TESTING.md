@@ -29,10 +29,10 @@ It runs:
 3. `npm run build`
 4. `node scripts/smoke.mjs`
 
-The runner also validates all 51 mapped cases in `evals/agent-golden.json`,
-including one real-user archive-to-CSV failure case. It checks unique IDs and
-prompts, coverage-file paths, tier minimums, at least 283 passing Vitest tests,
-at least 43 smoke assertions, and at least 50 golden cases. If a refactor
+The runner also validates all 62 mapped cases in `evals/agent-golden.json`,
+including 11 prompts from real user conversations. It checks unique IDs and
+prompts, coverage-file paths, tier minimums, at least 293 passing Vitest tests,
+at least 45 smoke assertions, and at least 60 golden cases. If a refactor
 silently drops coverage, the command fails.
 
 ## Tier 1: Functional & component tests
@@ -90,6 +90,9 @@ Covered by `scripts/smoke.mjs` with a local mock OpenAI-compatible provider:
 - total provider failure lists every provider and next steps.
 - ZIP entries are listed before extraction and extracted files participate in
   checkpoint rollback.
+- fenced, Qwen-style native, malformed inner-wrapper, and known bare-JSON tool
+  calls all reach the same validated tool path,
+- generic deflections are corrected when the user already supplied a task.
 
 Command:
 

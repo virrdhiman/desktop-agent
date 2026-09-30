@@ -138,9 +138,10 @@ If the active provider fails for a non-auth reason, VD tries up to three other *
 The agent is instructed to lead with the answer, skip filler, ask questions only when the answer changes what it would do, explain failed tool calls, and end with concrete next steps when work remains. VD Agent also enforces a few of these itself:
 
 - Stock openers and closers ("Certainly!", "I hope this helps!") are removed from replies. Code blocks are never changed.
-- If a model returns an empty reply, the next model is tried. If a reply is still empty, only pleasantries, or stuck repeating itself, the agent is asked once to answer again. If that also fails, the chat says so and suggests what to try.
+- Obvious action narration such as "I'll start by inspecting the repo" is removed; the tool runs directly. Brief handoff/status messages do not trigger a generic "what next?" question.
+- If a model returns an empty reply, the next model is tried. If a reply is still empty, only pleasantries, stuck repeating itself, generically asks for a task already supplied, or denies restored chat context, the agent is asked once to answer again. If that also fails, the chat says so and suggests what to try.
 - If a reply says files were changed, commands were run, or tests passed, but no tool call in that request did so, the agent is asked once to do the work or say what was not done. If the claim remains, the chat adds a "Check this reply" notice.
-- Failed tools, failed commands (with exit code and output), and malformed tool calls are reported to the model so it can adapt instead of guessing.
+- Failed tools, failed commands (with exit code and output), and malformed tool calls are reported to the model so it can adapt instead of guessing. VD accepts its fenced format plus common Qwen/native and known bare-JSON tool-call variants from free models.
 
 ### What the agent can do
 

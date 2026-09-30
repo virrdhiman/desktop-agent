@@ -3,9 +3,9 @@
   "name": "VD Agent local golden evals",
   "inspiration": "Golden tasks, trace checks, and release smoke gates.",
   "minimums": {
-    "vitestPassed": 283,
-    "smokeChecks": 43,
-    "goldenCases": 50
+    "vitestPassed": 293,
+    "smokeChecks": 45,
+    "goldenCases": 60
   },
   "tiers": [
     {
@@ -191,6 +191,131 @@
         "electron/__tests__/toolPolicy.test.ts",
         "src/lib/agent.test.ts"
       ]
+    },
+    {
+      "id": "real-repo-upgrade-execution",
+      "tier": 2,
+      "source": "real-user",
+      "prompt": "First check the repo, remove the old branding, brand it VD, make responses professional and critical, improve free-API model switching and local chat history, test it, and commit the changes to main.",
+      "checks": [
+        "The agent inspects repository state before making claims.",
+        "An execution request does not stop at a plan, prompt, or progress report.",
+        "Completion and test claims require matching successful tool calls."
+      ],
+      "coveredBy": ["src/lib/agent.test.ts", "scripts/smoke.mjs"]
+    },
+    {
+      "id": "real-junk-response-and-mit",
+      "tier": 1,
+      "source": "real-user",
+      "prompt": "Will that give better results instead of the previous junk responses, and why is MIT there?",
+      "checks": [
+        "Every distinct question is answered directly.",
+        "The answer distinguishes expected improvement from a guarantee and explains licensing from repository evidence.",
+        "Generic greetings or requests to restate the supplied task trigger a correction."
+      ],
+      "coveredBy": ["src/lib/agent.test.ts"]
+    },
+    {
+      "id": "real-provenance-claim",
+      "tier": 1,
+      "source": "real-user",
+      "prompt": "I built this myself, not copied.",
+      "checks": [
+        "The reply distinguishes inspiration, adaptation, and copied source without making an unsupported accusation.",
+        "The response is brief unless repository evidence needs correction."
+      ],
+      "coveredBy": ["src/lib/agent.test.ts"]
+    },
+    {
+      "id": "real-resume-pending-work",
+      "tier": 2,
+      "source": "real-user",
+      "prompt": "If something is pending, you have to work on it because the previous agent limit was reached.",
+      "checks": [
+        "Recovered task, tool, checkpoint, and verification state is inspected before continuing.",
+        "The agent resumes from current repository state instead of restarting or merely summarizing."
+      ],
+      "coveredBy": ["src/lib/agent.test.ts", "src/__tests__/sessions.test.ts"]
+    },
+    {
+      "id": "real-reference-adoption",
+      "tier": 1,
+      "source": "real-user",
+      "prompt": "I gave that reference so we can adopt useful ideas for complex problems and make this project more efficient and successful.",
+      "checks": [
+        "The agent evaluates specific ideas against the current architecture instead of copying a project wholesale.",
+        "Licensing and provenance claims remain evidence-based."
+      ],
+      "coveredBy": ["src/lib/agent.test.ts", "docs/AI_AGENT_TESTING.md"]
+    },
+    {
+      "id": "real-dynamic-free-model-refresh",
+      "tier": 1,
+      "source": "real-user",
+      "prompt": "Make it switch free models and automatically remove deprecated models and add new models available to that API key.",
+      "checks": [
+        "Live model discovery is the source of truth when available.",
+        "Weak fallback models do not outrank strong available models, and stale IDs are removed."
+      ],
+      "coveredBy": ["src/lib/modelSelect.test.ts", "src/lib/providers.test.ts"]
+    },
+    {
+      "id": "real-completion-score-history",
+      "tier": 1,
+      "source": "real-user",
+      "prompt": "Is everything completed? Is it 10/10 or approximately 10? Can it store user history locally and continue after restart? What else can make it better and more user-friendly?",
+      "checks": [
+        "The response answers all four questions and separates verified facts from estimates.",
+        "It does not claim a 10/10 score without real-world evidence.",
+        "Local persistence and restart recovery claims name the implementation or verification evidence."
+      ],
+      "coveredBy": ["src/lib/agent.test.ts", "electron/__tests__/reliability.test.ts", "src/__tests__/sessions.test.ts"]
+    },
+    {
+      "id": "real-execute-all",
+      "tier": 2,
+      "source": "real-user",
+      "prompt": "Can you do all of that? If yes, do that.",
+      "checks": [
+        "The agent uses conversation context to execute the agreed work rather than asking the user to repeat it.",
+        "It continues until verified completion or a concrete blocker."
+      ],
+      "coveredBy": ["src/lib/agent.test.ts", "src/__tests__/sessions.test.ts"]
+    },
+    {
+      "id": "real-signing-spending-and-commit",
+      "tier": 1,
+      "source": "real-user",
+      "prompt": "Why do code signing and hosted test services require accounts, what spending is needed, how can the score improve, and why has it not been committed to GitHub main?",
+      "checks": [
+        "Every question is answered separately and costs are not invented.",
+        "Local no-cost checks are distinguished from optional paid signing or hosted services.",
+        "Git status and remote state are checked before claiming whether work was committed or pushed."
+      ],
+      "coveredBy": ["src/lib/agent.test.ts", "docs/RELEASE_CHECKLIST.md"]
+    },
+    {
+      "id": "real-colleague-handoff",
+      "tier": 1,
+      "source": "real-user",
+      "prompt": "The rest is with my colleague.",
+      "checks": [
+        "The reply acknowledges the handoff briefly.",
+        "It does not invent new work or ask a generic follow-up question."
+      ],
+      "coveredBy": ["src/lib/agent.test.ts"]
+    },
+    {
+      "id": "native-provider-tool-syntax",
+      "tier": 2,
+      "source": "synthetic",
+      "prompt": "A free Qwen model emits <tool_call><function=read_file>{...}</function></tool_call> instead of a fenced tool block.",
+      "checks": [
+        "The native provider syntax is parsed into the same validated tool call shape.",
+        "The provider-specific tags are not shown raw to the user."
+      ],
+      "coveredBy": ["src/lib/agent.test.ts", "scripts/smoke.mjs"]
     },
     {
       "id": "archive-zip-slip",

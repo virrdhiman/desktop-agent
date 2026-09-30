@@ -9,10 +9,12 @@
 
 This folder contains VD Agent's golden agent-evaluation data.
 
-The dataset currently contains 51 cases across functional, trajectory, and
-visual tiers. Scenarios use `source: "synthetic"` unless they preserve an
-actual failure reported by a user. The first real-user case covers inspecting
-all files in `order-api-raw.zip` and producing traceable, verified CSV output.
+The dataset currently contains 62 cases across functional, trajectory, and
+visual tiers. Eleven cases preserve prompts from real user conversations;
+maintained scenarios use `source: "synthetic"`. The real cases cover repository
+execution, response quality, licensing/provenance, resume behavior, dynamic
+free-model refresh, local history, release costs, handoffs, and verified
+archive-to-CSV output.
 
 The structure is inspired by public AI-agent evaluation practices, including
 commit-reconstruction benchmarks, trace/trajectory analysis, and visual smoke

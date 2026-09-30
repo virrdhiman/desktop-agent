@@ -3,7 +3,7 @@ import {
   MAX_CONTEXT_FILE_CHARS, MAX_TOOL_RESULT_CHARS, TOOL_SYSTEM_PROMPT,
   assessResponse, buildContext, buildHistory, buildSystemPrompt, classifyProviderError, cleanResponse,
   correctionMessage, describeAuthFailure, describeFallback, describeProviderFailure, followUpMessage,
-  formatToolResult, maxRoundsNotice, missingKeyNotice, noProviderNotice, parseToolCalls,
+  formatToolResult, hasToolBlock, maxRoundsNotice, missingKeyNotice, noProviderNotice, parseToolCalls,
   resolveWorkspacePath, toolFailureHint, unusableResponseNotice, unverifiedClaims, unverifiedClaimsMessage,
   unverifiedClaimsNotice,
 } from './agent'
@@ -16,6 +16,15 @@ describe('system prompt', () => {
     expect(TOOL_SYSTEM_PROMPT).toMatch(/No preamble/)
     expect(TOOL_SYSTEM_PROMPT).toContain('Great question')
     expect(TOOL_SYSTEM_PROMPT).toContain('I hope this helps')
+    expect(TOOL_SYSTEM_PROMPT).toMatch(/Do not expose internal planning or narrate the next obvious action/)
+  })
+
+  it('requires action, evidence, complete answers, and respectful provenance claims', () => {
+    expect(TOOL_SYSTEM_PROMPT).toMatch(/do not stop at a plan, audit, prompt, or progress report/i)
+    expect(TOOL_SYSTEM_PROMPT).toMatch(/Answer every distinct question/)
+    expect(TOOL_SYSTEM_PROMPT).toMatch(/never call a product "10\/10"/)
+    expect(TOOL_SYSTEM_PROMPT).toMatch(/Do not accuse a user of copying/)
+    expect(TOOL_SYSTEM_PROMPT).toMatch(/only giving a handoff or status update/)
   })
 
   it('limits questions to ones that change the work', () => {
@@ -102,13 +111,44 @@ describe('parseToolCalls', () => {
   it('reports malformed JSON and missing names instead of dropping them silently', () => {
     const { calls, errors } = parseToolCalls(`${toolBlock('{not json}')}\n${toolBlock('{"args":{}}')}`)
     expect(calls).toEqual([])
-    expect(errors[0]).toMatch(/^Tool block 1 is not valid JSON/)
-    expect(errors[1]).toMatch(/^Tool block 2 has no "name" field/)
+    expect(errors[0]).toMatch(/^Tool block 1 is not valid/)
+    expect(errors[1]).toMatch(/^Tool block 2 is not valid \(no "name" field\)/)
     for (const e of errors) expect(e).toContain('Resend it as one JSON object')
   })
 
   it('reports an unclosed tool block', () => {
     expect(parseToolCalls('```tool\n{"name":"read_file"').errors[0]).toMatch(/not closed/)
+    expect(parseToolCalls('<tool_call>{"name":"read_file"}').errors[0]).toMatch(/not closed/)
+  })
+
+  it('parses native Qwen tool blocks and function-named variants', () => {
+    const native = [
+      '<tool_call><function=tool>{"name":"git_status","args":{"path":"."}}</function></tool_call>',
+      '<tool_call><function=read_file>{"path":"README.md"}</function></tool_call>',
+      '<tool_call>{"name":"archive_list","arguments":{"archive_path":"orders.zip"}}</tool_call>',
+      '<tool_call><tool\n{"name":"git_log","args":{"count":5}}\n</tool></tool_call>',
+    ].join('\n')
+    expect(hasToolBlock(native)).toBe(true)
+    expect(parseToolCalls(native)).toEqual({
+      calls: [
+        { name: 'git_status', args: { path: '.' } },
+        { name: 'read_file', args: { path: 'README.md' } },
+        { name: 'archive_list', args: { archive_path: 'orders.zip' } },
+        { name: 'git_log', args: { count: 5 } },
+      ],
+      errors: [],
+    })
+  })
+
+  it('parses a known bare JSON tool call but leaves ordinary JSON alone', () => {
+    const bare = '{"name":"archive_list","args":{"archive_path":"orders.zip"}}'
+    expect(hasToolBlock(bare)).toBe(true)
+    expect(parseToolCalls(bare)).toEqual({
+      calls: [{ name: 'archive_list', args: { archive_path: 'orders.zip' } }],
+      errors: [],
+    })
+    expect(cleanResponse(bare)).toBe(toolBlock(bare))
+    expect(hasToolBlock('{"name":"customer","args":{"id":1}}')).toBe(false)
   })
 })
 
@@ -176,6 +216,9 @@ describe('cleanResponse', () => {
     ['Absolutely! The build fails because of a missing import.', 'The build fails because of a missing import.'],
     ['Fixed the import.\n\nFeel free to ask if anything else comes up.', 'Fixed the import.'],
     ['Done.\n\nHappy coding!', 'Done.'],
+    ["I'll start by inspecting the repository.\n\nResult follows.", 'Result follows.'],
+    ['Let me check the workspace first.\n\nThe issue is in `settings.ts`.', 'The issue is in `settings.ts`.'],
+    ['Understood. If you need anything picked up here later, send the branch.', 'Understood.'],
   ])('%s', (raw, expected) => {
     expect(cleanResponse(raw)).toBe(expected)
   })
@@ -190,6 +233,11 @@ describe('cleanResponse', () => {
     expect(cleanResponse(raw)).toBe(toolBlock('{"name":"git_status"}'))
   })
 
+  it('canonicalizes native tool blocks without exposing provider-specific tags', () => {
+    const raw = "I'll start by checking.\n\n<tool_call><function=read_file>{\"path\":\"README.md\"}</function></tool_call>"
+    expect(cleanResponse(raw)).toBe(toolBlock('{"name":"read_file","args":{"path":"README.md"}}'))
+  })
+
   it('leaves normal answers unchanged', () => {
     const raw = 'Sure-footed parsing needs a state machine. Okay-ish results come from regex.'
     expect(cleanResponse(raw)).toBe(raw)
@@ -202,6 +250,21 @@ describe('assessResponse', () => {
     expect(assessResponse('Great question! I hope this helps!')).toEqual(['filler-only'])
     const loop = Array(6).fill('I will now check the configuration file for errors.').join('\n')
     expect(assessResponse(loop)).toContain('repetition')
+  })
+
+  it('flags generic deflections when the user already supplied a request', () => {
+    const request = 'Check whether local chat history survives an application restart.'
+    expect(assessResponse('Hello! How can I assist you with your task? Please provide the details of the task and context.', request))
+      .toContain('generic-deflection')
+    expect(assessResponse('What would you like me to help with next?', 'The rest is with my colleague.'))
+      .toContain('generic-deflection')
+    expect(assessResponse('What would you like me to help with next?')).toEqual([])
+  })
+
+  it('flags denial of prior chat context only when prior context exists', () => {
+    const reply = 'I do not have previous context because this is the first message in our conversation.'
+    expect(assessResponse(reply, 'Why is MIT there?', true)).toContain('context-denial')
+    expect(assessResponse(reply, 'Why is MIT there?', false)).not.toContain('context-denial')
   })
 
   it('accepts real answers, including repeated lines inside code', () => {

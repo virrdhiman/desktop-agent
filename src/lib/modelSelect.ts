@@ -108,7 +108,11 @@ export function rankModels(ids: string[]): string[] {
   const usable = [...new Set(ids.map(normalizeModelId).filter(isUsableChatModel))]
   const free = usable.filter((id) => id.endsWith(':free'))
   const pool = free.length > 0 ? free : usable
-  return pool.sort((a, b) => scoreModel(b) - scoreModel(a) || a.localeCompare(b))
+  const ranked = pool.sort((a, b) => scoreModel(b) - scoreModel(a) || a.localeCompare(b))
+  const best = ranked.length > 0 ? scoreModel(ranked[0]) : -1000
+  // Once a provider exposes strong models, moving to tiny fallback models usually produces
+  // generic or malformed replies. Let provider fallback find another strong free model instead.
+  return best >= 100 ? ranked.filter((id) => scoreModel(id) >= 60) : ranked
 }
 
 type LearnedModelStats = Record<string, {

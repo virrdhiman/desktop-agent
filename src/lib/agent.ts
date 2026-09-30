@@ -20,6 +20,10 @@ export const MAX_HISTORY_CHARS = 40_000
 const MAX_HISTORY_MESSAGE_CHARS = 8_000
 const FENCE = '```'
 const TOOL_BLOCK = /```tool[ \t]*\r?\n([\s\S]*?)\r?\n?```/g
+const NATIVE_TOOL_BLOCK = /<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/gi
+const NATIVE_FUNCTION_BLOCK = /^<function=([^>\s]+)>\s*([\s\S]*?)\s*<\/function>$/i
+const NATIVE_INNER_TOOL_BLOCK = /^<tool\s*>?\s*([\s\S]*?)\s*<\/tool>$/i
+const KNOWN_TOOL_NAMES = new Set<string>(AGENT_TOOLS.map((tool) => tool.name))
 
 // ─── System prompt ──────────────────────────────────────────────────────────
 
@@ -31,6 +35,7 @@ If asked who made you, say VD Agent is built by ${AUTHOR_NAME} (${AUTHOR_URL}), 
 - Challenge weak requests. If an ask is ambiguous, risky, or likely to cause a regression, say what the problem is and propose a better path.
 - Prefer the smallest correct change. Never rewrite a file you have not read. Preserve the user's uncommitted work.
 - Finish the job end to end: make the change, then verify it with the project's own commands (tests, typecheck, build, or a targeted run).
+- When the user asks you to do the work, do not stop at a plan, audit, prompt, or progress report. Keep using tools until the requested work is finished or a concrete blocker remains.
 - Never say something is done, fixed, or passing unless a tool result in this conversation shows it. If you could not verify, say exactly what is unverified.
 - Never invent file contents, APIs, command output, or test results.
 - Destructive actions (deleting files, discarding changes, git reset, force push, dropping data) need the user's explicit consent first.
@@ -39,16 +44,20 @@ If asked who made you, say VD Agent is built by ${AUTHOR_NAME} (${AUTHOR_URL}), 
 ## Answer quality
 - Lead with the answer or the result in the first sentence.
 - No preamble ("Sure", "Certainly", "Great question", "I'd be happy to help"), no restating the request, and no closing pleasantries ("I hope this helps", "Let me know if you have any other questions").
+- Do not expose internal planning or narrate the next obvious action ("I'll inspect the repo", "Let me check", "Now I will..."). Call the tool directly. Report only decisions, evidence, results, blockers, and concise progress that materially helps the user.
 - Be specific: name the files, functions, commands, and exact errors. No generic advice that ignores the actual code.
 - Be critical: point out bugs, risks, wrong assumptions, and weak evidence, including in the user's request. Disagree when warranted and say why. Be critical of ideas, never of people.
 - Match length to the question. Summarize tool output; do not paste it back.
 - When there are tradeoffs, name them and recommend one option.
+- Answer every distinct question in the request. Separate verified facts from estimates, and never call a product "10/10" without meaningful real-world evidence.
+- Distinguish inspiration, adaptation, and copied source based on evidence. Do not accuse a user of copying merely because they studied another project.
 
 ## Questions
 - Ask only when the answer changes what you would do and you cannot find it with tools: a product decision, missing credentials, or a choice between valid approaches.
 - Never ask permission for read-only steps such as reading files, searching, or running tests. Do them.
 - If a reasonable assumption lets you proceed, state it and proceed.
 - Ask at most two questions at a time, each with your recommended default.
+- If the user is only giving a handoff or status update and asks for no action, acknowledge it briefly. Do not manufacture a task or ask a generic "what next?" question.
 
 ## When a tool fails
 - Say which tool failed, the error in one line, and the likely cause.
@@ -187,10 +196,20 @@ export function buildHistory(
 }
 
 function summarizeToolBlocks(content: string): string {
-  return content.replace(TOOL_BLOCK, (_block, body: string) => {
+  const bare = decodeBareToolCall(content)
+  if (bare) return `[called ${bare.name} ${shortArgs(bare.args)}]`
+  const fenced = content.replace(TOOL_BLOCK, (_block, body: string) => {
     try {
       const parsed = JSON.parse(body.trim())
       return `[called ${parsed.name} ${shortArgs(parsed.args || {})}]`
+    } catch {
+      return '[malformed tool call]'
+    }
+  })
+  return fenced.replace(NATIVE_TOOL_BLOCK, (_block, body: string) => {
+    try {
+      const call = decodeToolCall(body)
+      return `[called ${call.name} ${shortArgs(call.args)}]`
     } catch {
       return '[malformed tool call]'
     }
@@ -202,29 +221,68 @@ function summarizeToolBlocks(content: string): string {
 export type ToolCall = { name: string; args: Record<string, any> }
 
 export function hasToolBlock(content: string): boolean {
-  return content.includes(`${FENCE}tool`)
+  return content.includes(`${FENCE}tool`) || /<tool_call>/i.test(content) || decodeBareToolCall(content) !== null
+}
+
+function decodeToolCall(body: string): ToolCall {
+  const functionMatch = body.trim().match(NATIVE_FUNCTION_BLOCK)
+  const innerToolMatch = body.trim().match(NATIVE_INNER_TOOL_BLOCK)
+  const functionName = functionMatch?.[1]?.replace(/^functions\./i, '')
+  const payload = JSON.parse((functionMatch?.[2] || innerToolMatch?.[1] || body).trim())
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error('tool payload must be an object')
+
+  const wrappedName = typeof payload.name === 'string' && payload.name.trim() ? payload.name.trim() : ''
+  const name = wrappedName || (functionName && functionName.toLowerCase() !== 'tool' ? functionName : '')
+  if (!name) throw new Error('no "name" field')
+  const candidateArgs = payload.args ?? payload.arguments ?? (wrappedName ? {} : payload)
+  const args = candidateArgs && typeof candidateArgs === 'object' && !Array.isArray(candidateArgs) ? candidateArgs : {}
+  return { name, args }
+}
+
+function decodeBareToolCall(content: string): ToolCall | null {
+  const trimmed = content.trim()
+  if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) return null
+  try {
+    const call = decodeToolCall(trimmed)
+    return KNOWN_TOOL_NAMES.has(call.name) ? call : null
+  } catch {
+    return null
+  }
+}
+
+function canonicalizeNativeToolBlocks(content: string): string {
+  const native = content.replace(NATIVE_TOOL_BLOCK, (block, body: string) => {
+    try {
+      const call = decodeToolCall(body)
+      return `${FENCE}tool\n${JSON.stringify(call)}\n${FENCE}`
+    } catch {
+      return block
+    }
+  })
+  const bare = decodeBareToolCall(native)
+  return bare ? `${FENCE}tool\n${JSON.stringify(bare)}\n${FENCE}` : native
 }
 
 /** Valid calls plus a model-readable error for every block that could not be used. */
 export function parseToolCalls(content: string): { calls: ToolCall[]; errors: string[] } {
   const calls: ToolCall[] = []
   const errors: string[] = []
-  let index = 0
-  for (const match of content.matchAll(TOOL_BLOCK)) {
-    index++
+  const blocks = [
+    ...[...content.matchAll(TOOL_BLOCK)].map((match) => ({ start: match.index, body: match[1] })),
+    ...[...content.matchAll(NATIVE_TOOL_BLOCK)].map((match) => ({ start: match.index, body: match[1] })),
+  ].sort((a, b) => (a.start ?? 0) - (b.start ?? 0))
+  const bare = blocks.length === 0 ? decodeBareToolCall(content) : null
+  if (bare) blocks.push({ start: 0, body: JSON.stringify(bare) })
+
+  for (let index = 0; index < blocks.length; index++) {
     try {
-      const parsed = JSON.parse(match[1].trim())
-      if (!parsed || typeof parsed.name !== 'string' || !parsed.name) {
-        errors.push(`Tool block ${index} has no "name" field.`)
-        continue
-      }
-      const args = parsed.args && typeof parsed.args === 'object' ? parsed.args : {}
-      calls.push({ name: parsed.name, args })
+      calls.push(decodeToolCall(blocks[index].body))
     } catch (err: any) {
-      errors.push(`Tool block ${index} is not valid JSON (${String(err?.message || err).slice(0, 120)}).`)
+      errors.push(`Tool block ${index + 1} is not valid (${String(err?.message || err).slice(0, 120)}).`)
     }
   }
-  if (index === 0 && hasToolBlock(content)) errors.push('A tool block was opened but not closed with ```.')
+  if (blocks.length === 0 && content.includes(`${FENCE}tool`)) errors.push('A tool block was opened but not closed with ```.')
+  if (blocks.length === 0 && /<tool_call>/i.test(content)) errors.push('A <tool_call> block was opened but not closed with </tool_call>.')
   return {
     calls,
     errors: errors.map((e) => `${e} Resend it as one JSON object: {"name": "tool_name", "args": {...}}`),
@@ -298,6 +356,7 @@ const LEADING_FILLER = [
   /^(what a |that's a |this is a )?(great|good|excellent|fantastic|interesting) (question|idea|point|request)\s*[!.]*\s*/i,
   /^I('d| would)( be)? (happy|glad|delighted) to help( you)?( with (that|this|your request))?\s*[!.]*\s*/i,
   /^(thanks|thank you) for (asking|your question|sharing)[^.!\n]*[!.]\s*/i,
+  /^(first,?\s+|now,?\s+|next,?\s+)?(I('ll| will)|let me|I('m| am) going to)\s+(start|begin|check|inspect|review|read|look|examine|analy[sz]e|verify|open|search|run)\b[^\n]*[.!:]?\s*/i,
 ]
 
 const TRAILING_FILLER = [
@@ -307,6 +366,7 @@ const TRAILING_FILLER = [
   /\s*(Is there )?anything else (I can help|you need|you'd like)[^\n]*$/i,
   /\s*Happy coding[!.]*$/i,
   /\s*Good luck( with your project)?[!.]*$/i,
+  /\s*If you need (anything|more|help)[^\n]*$/i,
 ]
 
 function stripRepeated(text: string, patterns: RegExp[]): string {
@@ -321,6 +381,7 @@ function stripRepeated(text: string, patterns: RegExp[]): string {
 
 /** Removes stock openers and closers from the prose around code; code blocks are never touched. */
 export function cleanResponse(text: string): string {
+  text = canonicalizeNativeToolBlocks(text)
   const first = text.indexOf(FENCE)
   const last = text.lastIndexOf(FENCE)
   const fenceCount = text.split(FENCE).length - 1
@@ -332,9 +393,9 @@ export function cleanResponse(text: string): string {
   return `${head}${middle}${tail}`.trim()
 }
 
-export type ResponseProblem = 'empty' | 'filler-only' | 'repetition'
+export type ResponseProblem = 'empty' | 'filler-only' | 'repetition' | 'generic-deflection' | 'context-denial'
 
-export function assessResponse(text: string): ResponseProblem[] {
+export function assessResponse(text: string, userRequest = '', hasPriorContext = false): ResponseProblem[] {
   if (!text.trim()) return ['empty']
   const problems: ResponseProblem[] = []
   if (!cleanResponse(text)) problems.push('filler-only')
@@ -347,6 +408,13 @@ export function assessResponse(text: string): ResponseProblem[] {
     counts.set(key, (counts.get(key) || 0) + 1)
   }
   if ([...counts.values()].some((n) => n >= 5)) problems.push('repetition')
+  const requestHasSubstance = userRequest.trim().split(/\s+/).length >= 4
+  const genericDeflection = /^(hello[!.]?\s*)?(how can i (assist|help)|what would you like me to help with|please (provide|share|send) (the |more )?(task|details|context)|could you (provide|share|send) (the |more )?(task|details|context))/i.test(cleanResponse(text))
+    || /please provide the details of the task and (the )?context/i.test(text)
+  if (requestHasSubstance && genericDeflection) problems.push('generic-deflection')
+  if (hasPriorContext && /(this is|this appears to be) (the )?(first|start of (our|the)) (message|conversation)|I (do not|don't) have (the )?(prior |previous )?(context|turns)/i.test(text)) {
+    problems.push('context-denial')
+  }
   return problems
 }
 
@@ -354,6 +422,8 @@ const PROBLEM_TEXT: Record<ResponseProblem, string> = {
   'empty': 'empty',
   'filler-only': 'only pleasantries with no content',
   'repetition': 'stuck repeating the same lines',
+  'generic-deflection': 'a generic request for information the user already supplied',
+  'context-denial': 'a denial of prior conversation context that was supplied',
 }
 
 export function correctionMessage(problems: ResponseProblem[]): string {

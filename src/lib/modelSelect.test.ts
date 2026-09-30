@@ -60,14 +60,14 @@ describe('model filtering', () => {
 })
 
 describe('model ranking', () => {
-  it('ranks 70B instruct above small models and drops non-chat ids', () => {
+  it('keeps the strong 70B model and drops small and non-chat fallbacks', () => {
     const ranked = rankModels([
       'text-embedding-3-small',
       'llama-3.1-8b-instant',
       'llama-3.3-70b-versatile',
       'whisper-large-v3',
     ])
-    expect(ranked).toEqual(['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'])
+    expect(ranked).toEqual(['llama-3.3-70b-versatile'])
   })
 
   it('does not let a strong family name lift a tiny variant', () => {
@@ -87,6 +87,12 @@ describe('model ranking', () => {
       'mistralai/mistral-7b-instruct:free',
     ])
     expect(ranked).toEqual(['meta-llama/llama-3.3-70b-instruct:free', 'mistralai/mistral-7b-instruct:free'])
+  })
+
+  it('drops tiny fallback models when the same provider exposes strong models', () => {
+    expect(rankModels(['qwen/qwen3.8-27b', 'openai/gpt-oss-120b', 'allam-2-7b']))
+      .toEqual(['openai/gpt-oss-120b', 'qwen/qwen3.8-27b'])
+    expect(rankModels(['allam-2-7b'])).toEqual(['allam-2-7b'])
   })
 
   it('strips the Gemini models/ prefix and de-duplicates', () => {
