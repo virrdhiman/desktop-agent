@@ -19,7 +19,8 @@ VD Agent is an **Electron + React + TypeScript + Vite** desktop app built on Ele
 ```
 ┌──────────────────────────────────────────────────────────┐
 │ Main process (Node.js) — electron/                        │
-│  main.ts: window, CSP, registers handler modules          │
+│  main.ts: window, CSP, link handling, handler modules     │
+│  navigation.ts: which URLs open externally / in-app       │
 │  handlers/ai.ts: streaming chat, model discovery, cancel  │
 │  handlers/conversations.ts + conversationStore.ts         │
 │  handlers/settings.ts: provider catalog, encrypted keys   │
@@ -41,13 +42,26 @@ VD Agent is an **Electron + React + TypeScript + Vite** desktop app built on Ele
 │    CodeEditor (Monaco), MultiTerminal (xterm), GitPanel…  │
 │  store/index.ts: Zustand store incl. session auto-save    │
 │  lib/modelSelect.ts, lib/providers.ts: pure logic, tested │
+│  lib/brand.ts: app name, version, author and repo links   │
+│  lib/monacoEditor.ts: locally bundled Monaco + workers    │
 └──────────────────────────────────────────────────────────┘
 ```
+
+## Build output
+
+`npm run build` runs `tsc`, then Vite with `vite-plugin-electron`:
+
+- `dist/`: the renderer. Monaco and its workers are bundled locally (Vite `?worker` imports plus `loader.config({ monaco })`) because the CSP blocks CDN scripts. The editor chunk is lazy-loaded.
+- `dist-electron/main.js`: the main process as ESM (`package.json` has `"type": "module"`). `__dirname` is derived from `import.meta.url`.
+- `dist-electron/preload.cjs`: the preload as CommonJS, because sandboxed preload scripts can't be ES modules.
+
+electron-builder packages these into `release/` using the `build` section of `package.json`. `LICENSE` is shown by the NSIS installer and copied next to the app as `LICENSE.txt`. The platform scripts (`Win/build.bat`, `Mac/build.sh`, `Linux/build.sh`) wrap the whole flow; see [docs/RELEASE_CHECKLIST.md](./docs/RELEASE_CHECKLIST.md).
 
 ## Security model
 
 - `contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`. The renderer only reaches Node through `window.api`.
 - A Content-Security-Policy header is set on every response (looser in dev for Vite HMR).
+- `setWindowOpenHandler` denies every new window and opens `http(s)` links in the default browser. `will-navigate` blocks navigation away from the app page (`electron/navigation.ts`).
 - API keys live in `<userData>/settings.json`, encrypted with `safeStorage` when available. The renderer holds decrypted keys in memory so it can pass them to `ai:chat`.
 - Keys never appear in chat history. `conversationStore.redactSecrets` removes configured keys and common key formats before writing. Settings exports strip keys (`withoutApiKeys`).
 - The `/models` cache is keyed by a SHA-256 digest of the key, not the key itself. Provider error bodies have the key redacted before they reach the UI.
@@ -92,7 +106,8 @@ Anthropic uses the Messages API (`/v1/messages`) with the system prompt in the `
 
 | File | Responsibility |
 |------|----------------|
-| `electron/main.ts` | BrowserWindow, CSP, handler registration |
+| `electron/main.ts` | BrowserWindow, CSP, external link handling, handler registration |
+| `electron/navigation.ts` | `isExternalWebUrl`, `isSameAppPage` |
 | `electron/preload.ts` | `window.api` bridge and `ElectronAPI` types |
 | `electron/handlers/ai.ts` | `ai:chat`, `ai:listModels`, `ai:cancel` |
 | `electron/handlers/conversations.ts` | `conversations:save/list/delete` |
@@ -101,6 +116,10 @@ Anthropic uses the Messages API (`/v1/messages`) with the system prompt in the `
 | `electron/handlers/tools.ts` | `tool:execute` for every entry in `AGENT_TOOLS` |
 | `src/components/AgentChat.tsx` | System prompt, fallback loop, tool loop, markdown rendering |
 | `src/lib/providers.ts` | Provider categories, fallback chain, model persistence, export/import |
+| `src/lib/brand.ts` | App name, version (from `package.json`), author, repo, and license links |
+| `src/lib/monacoEditor.ts` | Monaco setup with local workers; lazy-loaded by `CodeEditor.tsx` |
+| `scripts/smoke.mjs` | End-to-end smoke test of the built or packaged app |
+| `scripts/checksums.mjs` | Writes `release/SHA256SUMS.txt` |
 | `src/types/index.ts` | Shared types and `AGENT_TOOLS` (the tool list the model sees) |
 
 ## Extending
@@ -125,7 +144,10 @@ Anthropic uses the Messages API (`/v1/messages`) with the system prompt in the `
 - `src/lib/*.test.ts`: model filtering and ranking, error classification, provider chain, model persistence, export/import.
 - `src/__tests__/sessions.test.ts`: auto-save debounce, stable session IDs, new chat, load, delete, startup restore.
 - `electron/__tests__/conversationStore.test.ts` (node environment): disk round-trip, in-place updates, delete, path safety, corrupt and legacy files, secret redaction.
+- `electron/__tests__/navigation.test.ts`: which links open externally and which navigations are allowed.
+- `electron/__tests__/tools-logic.test.ts`: file system, search, provider, and git helper logic.
 - `src/__tests__/*`: store and component tests.
+- `npm run smoke` (`scripts/smoke.mjs`): builds the app, then launches it twice with a temporary user data folder and workspace, driving it over the Chrome DevTools Protocol. It checks rendering, the preload API and sandbox, settings and conversation IPC, chat persistence across restarts, key redaction, the Monaco editor, link handling, and path-traversal rejection. It saves screenshots and never touches your real user data. Use `--exe <path>` to test a packaged build.
 
 ## Performance notes
 

@@ -36,13 +36,15 @@
 
 ## 1. Installation
 
-### Prerequisites
+Most people should download the installer from [GitHub Releases](https://github.com/virrdhiman/desktop-agent/releases). See [docs/INSTALL.md](./docs/INSTALL.md) for checksums, first-launch warnings, and uninstalling.
 
-- **Node.js 18+** and npm
+### Run from source
+
+Prerequisites:
+
+- **Node.js 20+** and npm
 - **Git**
-- Build tools for `node-pty`: Visual Studio Build Tools (Windows) or Xcode Command Line Tools (macOS)
-
-### Install
+- Build tools for `node-pty`: Visual Studio Build Tools (Windows), Xcode Command Line Tools (macOS), or `build-essential` and `python3` (Linux)
 
 ```bash
 git clone https://github.com/virrdhiman/desktop-agent.git
@@ -90,7 +92,7 @@ The layout has a **sidebar** (left) for switching panels, the **main area** for 
 2. In VD Agent: Settings → Ollama (Local) → Save and make it active.
 3. Prompts stay on your machine.
 
-See [README.md](./README.md#ai-providers) for the provider categories.
+See [docs/PROVIDERS.md](./docs/PROVIDERS.md) for the provider categories and more free options.
 
 ---
 
@@ -129,7 +131,7 @@ To pin a specific model, choose it in the **model picker** in the Agent header. 
 
 ### Provider fallback
 
-If the active provider fails for a non-auth reason, VD tries up to three other **official free** providers that have keys. The terminal panel logs each attempt. Local servers and community proxies are never used as fallbacks.
+If the active provider fails for a non-auth reason, VD tries up to three other **official free** providers that have keys, in catalog order. This happens automatically; if every provider fails, the chat shows the last error. Local servers and community proxies are never used as fallbacks.
 
 ### What the agent can do
 
@@ -158,6 +160,7 @@ After each batch of tool calls, the results go back to the model and it continue
 
 ## 5. Code Editor
 
+- The editor opens to the right of the 🤖 **Agent** panel, so you can chat and edit side by side.
 - Open files from the File Browser, the command palette (`Ctrl+P`), or when the agent reads a file.
 - Monaco editor with syntax highlighting, minimap, and find/replace (`Ctrl+F` / `Ctrl+H`).
 - `Ctrl+S` saves and `Ctrl+W` closes the tab. A dot on the tab marks unsaved changes.
@@ -221,7 +224,7 @@ Commands include panel navigation, toggling the terminal, **New Chat**, and **Go
 
 ## 11. Plan Mode
 
-Toggle **📋 Plan** in the Agent header (or in Settings). With Plan Mode on, the agent lists the files it will read or change, the intended change and its risks, and the order of steps, then waits for your approval without modifying anything.
+Toggle **📋 Plan** in the Agent header (or in Settings). With Plan Mode on, the agent lists the files it will read or change, the intended change and its risks, and the order of steps, then waits for your approval without modifying anything. Plan Mode is an instruction to the model, not a technical lock, so review tool calls as usual.
 
 Use it for multi-file refactors, architecture changes, or any time you want to review before files change.
 
@@ -268,83 +271,42 @@ Image contents are not sent to the model yet. The message lists the attached fil
 
 ## 15. Building the Desktop App
 
-### Windows
+Run the build script for your OS from the repository root. Each platform must be built on that OS.
 
-```cmd
-Win\build.bat
-```
+| Platform | Command | Output in `release/` |
+|----------|---------|----------------------|
+| Windows | `Win\build.bat` | NSIS installer and portable `.exe` |
+| macOS | `bash Mac/build.sh` | `.dmg` and `.zip` |
+| Linux | `bash Linux/build.sh` | `.AppImage` and `.deb` |
 
-The script runs from the repository root. It cleans old output, installs dependencies, runs `npm test`, `npm run lint`, and `npm run build`, then packages with electron-builder. It **stops if any step fails**. Output in `release\`:
+Each script cleans old output, installs dependencies, runs `npm test`, `npm run lint`, and `npm run build`, then packages with electron-builder and writes `SHA256SUMS.txt`. It **stops if any step fails**. Builds are unsigned unless signing certificates are configured.
 
-- `VD Agent Setup <version>.exe`: NSIS installer
-- `VD Agent <version>.exe`: portable
-
-### macOS
-
-```bash
-bash Mac/build.sh
-```
-
-Output in `release/`: `VD Agent-<version>.dmg` and `VD Agent-<version>-mac.zip`.
-
-### Linux
-
-```bash
-npm install
-npm run build
-npx electron-builder --linux
-```
-
-Output: an AppImage and a `.deb` in `release/`.
-
-Code signing is disabled by default. Set `CSC_LINK` and `CSC_KEY_PASSWORD` to sign.
+Signing, packaged-app smoke tests, and publishing are covered in [docs/RELEASE_CHECKLIST.md](./docs/RELEASE_CHECKLIST.md).
 
 ### Tests and checks
 
 ```bash
 npm test               # all unit tests
 npm run test:watch     # watch mode
-npm run test:coverage  # coverage report
 npm run lint           # TypeScript typecheck
 npm run build          # production build
+npm run smoke          # build, then launch the app and check it end to end
 ```
 
 ---
 
 ## 16. Troubleshooting
 
-### App won't start
+See [docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) for install, agent, editor, git, and build problems.
 
-| Problem | Solution |
-|---------|----------|
-| `npm install` fails on `node-pty` | Install native build tools (see Prerequisites), then reinstall |
-| Port 5173 in use | Stop the other dev server |
-| Blank screen | Open DevTools (`Ctrl+Shift+I`) and check the console |
-
-### Agent not responding
+The most common fixes:
 
 | Problem | Solution |
 |---------|----------|
 | "No API key configured" | Settings → add a key for the active provider |
 | "rejected the API key" | The key is invalid or revoked. Re-copy it from the provider. VD does not fall back on auth errors on purpose. |
-| Rate limited / all providers failed | Wait a minute, add a key for another free provider, or use a local model |
-| Wrong or weak model chosen | Pick a model in the Agent header to pin it |
-| Timeout | Check your connection or try a local provider |
-
-### Git
-
-| Problem | Solution |
-|---------|----------|
-| "Not a git repository" | Run `git init` in the workspace |
-| Push rejected | Pull first: `git pull --rebase` |
-
-### Build
-
-| Problem | Solution |
-|---------|----------|
-| Type errors | `npm run lint` |
-| Tests fail | `npm test`. The build scripts stop on failures. |
-| Missing icons warning | Add `build/icon.ico`, `build/icon.icns`, `build/icon.png` |
+| Can't see the file you opened | The editor appears beside the 🤖 Agent panel |
+| Blank screen | Open DevTools (`Ctrl+Shift+I`) and check the console |
 
 ---
 
@@ -372,4 +334,7 @@ None.
 Yes, with a local provider such as Ollama. Editing, terminal, and git work offline.
 
 **How do I update?**
-`git pull && npm install && npm run dev`.
+Download the latest installer from [Releases](https://github.com/virrdhiman/desktop-agent/releases) and install it over the old version. Your settings, keys, and chats are kept. From source: `git pull && npm install && npm run dev`.
+
+**Is my data private?**
+Chats, settings, and keys stay on your machine. Prompts and the code the agent reads go to the AI provider you choose. See [docs/PRIVACY.md](./docs/PRIVACY.md).
