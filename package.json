@@ -29,6 +29,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "lint": "tsc --noEmit",
+    "smoke": "npm run build && node scripts/smoke.mjs",
+    "checksums": "node scripts/checksums.mjs",
     "electron:dev": "vite --config vite.config.ts",
     "electron:build": "vite build && electron-builder"
   },

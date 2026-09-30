@@ -1,7 +1,7 @@
 #!/bin/bash
 # ============================================================
-# VD Agent - macOS Build Script
-# Builds a .dmg installer and a .zip archive into release/
+# VD Agent - Linux Build Script
+# Builds an AppImage and a .deb package into release/
 # ============================================================
 # @author Virender Dhiman
 # @project VD Agent
@@ -14,7 +14,7 @@ VERSION=$(node -p "require('./package.json').version")
 
 echo ""
 echo "  ========================================"
-echo "   VD Agent ${VERSION} - macOS Build"
+echo "   VD Agent ${VERSION} - Linux Build"
 echo "  ========================================"
 echo ""
 
@@ -33,17 +33,9 @@ npm run lint || { echo "ERROR: Typecheck failed. Fix errors before building."; e
 echo "[5/7] Building renderer and Electron main process..."
 npm run build || { echo "ERROR: Build failed."; exit 1; }
 
-# Signing: set CSC_LINK + CSC_KEY_PASSWORD (a Developer ID Application .p12) or CSC_NAME
-# (an identity in the keychain). Notarization needs Apple credentials; see docs/RELEASE_CHECKLIST.md.
 echo ""
-echo "[6/7] Packaging with electron-builder (DMG + ZIP)..."
-if [ -n "${CSC_LINK:-}" ] || [ -n "${CSC_NAME:-}" ]; then
-  echo "      Signing with the configured certificate."
-else
-  echo "      CSC_LINK/CSC_NAME not set: this build is UNSIGNED. Do not publish it as an official release."
-  export CSC_IDENTITY_AUTO_DISCOVERY=false
-fi
-npx electron-builder --mac --publish never || { echo "ERROR: electron-builder failed."; exit 1; }
+echo "[6/7] Packaging with electron-builder (AppImage + deb)..."
+npx electron-builder --linux --publish never || { echo "ERROR: electron-builder failed."; exit 1; }
 
 echo "[7/7] Writing SHA-256 checksums..."
 npm run checksums || { echo "ERROR: Checksum generation failed."; exit 1; }
@@ -54,11 +46,9 @@ echo "   BUILD COMPLETE"
 echo "  ========================================"
 echo ""
 echo "  Output (release/):"
-echo "    - VD Agent-${VERSION}.dmg       (installer)"
-echo "    - VD Agent-${VERSION}-mac.zip   (archive)"
-echo "    - SHA256SUMS.txt                (checksums to publish with the release)"
+echo "    - VD Agent-${VERSION}.AppImage"
+echo "    - vd-agent_${VERSION}_amd64.deb"
+echo "    - SHA256SUMS.txt   (checksums to publish with the release)"
 echo ""
 echo "  Before publishing, follow docs/RELEASE_CHECKLIST.md"
 echo ""
-
-open release

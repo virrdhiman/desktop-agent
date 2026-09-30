@@ -7,98 +7,59 @@
 
 # VD Agent
 
-> A desktop AI coding agent for your local repositories. It reads and edits files, runs commands, and manages git through tool calls, and it works with free API keys by picking the strongest chat model each key can call.
->
-> **Author:** [Virender Dhiman](https://virender.in)
-> **License:** [VD Agent License](./LICENSE). Free to download and use, credit required. VD Agent is the exclusive property of Virender Dhiman.
+**A desktop AI coding agent that works with free API keys.**
+
+VD Agent by [Virender Dhiman](https://virender.in) · [VD Agent License](./LICENSE): free to use, credit required
 
 [![GitHub stars](https://img.shields.io/github/stars/virrdhiman/desktop-agent?style=social)](https://github.com/virrdhiman/desktop-agent/stargazers)
+[![Latest release](https://img.shields.io/github/v/release/virrdhiman/desktop-agent?include_prereleases&label=release)](https://github.com/virrdhiman/desktop-agent/releases)
 ![License](https://img.shields.io/badge/license-VD%20Agent%20License-blueviolet)
-![Electron](https://img.shields.io/badge/Electron-31-blue)
-![React](https://img.shields.io/badge/React-18-61dafb)
-![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)
+![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 
-**If VD Agent is useful to you, please [star the repository](https://github.com/virrdhiman/desktop-agent) and credit [virender.in](https://virender.in) when you share it.**
+![VD Agent welcome screen](./docs/images/welcome.png)
 
 ---
+
+## What is VD Agent?
+
+VD Agent is a desktop app that pairs an AI coding assistant with a code editor, terminal, and git client for the projects on your computer. You describe a task, and the agent reads your code, edits files, runs commands, and checks its own work with your project's tests and build.
+
+It is built to work well on **free API keys**. It asks your key which models it can use, picks the strongest chat model, and moves on to the next one when a model is rate-limited or unavailable. It can also run fully offline with a local model such as Ollama.
+
+Your chats, settings, and keys stay on your machine. There is no account and no telemetry.
 
 ## Features
 
-### Agent
-- Reads, writes, and edits files, searches code, runs shell commands, and runs git operations through tool calls. The tool list lives in `src/types/index.ts` (`AGENT_TOOLS`) and is sent to the model in the system prompt.
-- Multi-round tool execution: up to 10 rounds of tool call, result, and follow-up per request. If the limit is reached, the chat says so and you can reply "continue".
-- Streaming responses, and a **Stop** button that cancels the in-flight request.
-- Senior-engineer system prompt: inspect before claiming, challenge risky requests, verify with commands before reporting success, and state risks plainly.
-- **Plan Mode**: the agent proposes a plan and waits for approval before changing anything.
-- **Custom Rules**: your own instructions appended to every system prompt.
+- **Agent that verifies its work.** Reads before it claims, pushes back on risky requests, runs your tests or build before it reports success, and asks before destructive actions.
+- **Tools.** Files, code search, shell commands, git, web search, and some media and Web3 helpers. See [TOOLS.md](./TOOLS.md).
+- **Plan Mode.** The agent proposes a plan and waits for your approval before it changes files.
+- **Automatic model selection.** Discovers and ranks the models your key can call, and falls back between models and providers. See [How model selection works](#how-model-selection-works).
+- **Chat history.** Every chat is saved locally, restored on restart, and can be reopened or deleted.
+- **Built-in tools for developers.** Monaco code editor, multi-tab terminal, git status, diff, commit, branches, and a command palette (`Ctrl+P`).
+- **Custom Rules.** Your own conventions added to every request.
 
-### Free API keys and model selection
-- For OpenAI-compatible providers, VD calls `/models` on your key, filters out non-chat models (embeddings, audio, speech, image, moderation, rerank), and ranks the rest by coding quality and then efficiency.
-- The best discovered model is tried first, then the next ones, then the model configured in Settings.
-- It moves to the next model on model-not-found, unsupported model, 404, 429 (rate limit), overload, capacity, and 503 errors.
-- An invalid key or other auth failure stops immediately. VD does not retry other models or providers, so the problem isn't hidden.
-- The model that worked is saved as that provider's model, unless you pinned a model in the Agent header.
-- If the active provider fails for a non-auth reason, VD tries up to three other **official free** providers that have keys. Local servers and community proxies are never used as automatic fallbacks.
-
-### Chat history
-- Every conversation is auto-saved shortly after each message to `<userData>/conversations/<session-id>.json` on your machine. Repeated saves update the same file.
-- The most recent chat is restored on startup. All saved chats are listed in the **Sessions** panel and the Agent **History** popover, where you can open or delete them. Deleting removes the file from disk.
-- API keys configured in Settings, and common key formats (`sk-…`, `gsk_…`, `AIza…`, `hf_…`, and others), are redacted before anything is written. Corrupt or legacy files are skipped or upgraded without crashing.
-
-### Editor, terminal, git
-- Monaco editor with tabs, `Ctrl+S` to save, and a dirty indicator.
-- Multi-tab PTY terminal (PowerShell on Windows, your login shell on macOS/Linux).
-- Git status, diff (unified and split), commit, push, pull, branches, and stash.
-- Command palette (`Ctrl+P` for files, `Ctrl+Shift+P` for commands).
-- `@` mentions for files, folders, and web search. Paste or drag images into the chat.
-
-### Keyboard shortcuts
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl+P` | File search / command palette |
-| `Ctrl+Shift+P` | Commands only |
-| `Ctrl+S` | Save current file |
-| `Ctrl+W` | Close current tab |
-| ``Ctrl+` `` | Toggle terminal |
-| `Ctrl+G` | Go to Git |
-| `Ctrl+B` | Go to Files |
-| `Ctrl+Shift+A` | Go to Agent |
+![Settings with provider list and About card](./docs/images/settings.png)
 
 ---
 
-## Agent tools
+## Download and Install
 
-| Category | Tools |
-|----------|-------|
-| **File system** | `read_file`, `write_file`, `edit_file`, `create_file`, `delete_file`, `list_files`, `search_files`, `search_code` |
-| **Commands** | `run_command` (30 s timeout) |
-| **Project** | `read_directory_tree`, `multi_file_edit`, `code_review` |
-| **Git** | `git_status`, `git_diff`, `git_commit`, `git_log`, `git_branch`, `git_stash`, `git_generate_commit`, `git_undo_last`, `git_discard_changes` |
-| **Web** | `web_search` |
-| **Media** | `generate_image`, `image_analysis`, `generate_video`, `comfyui_workflow`, `speech_to_text`, `text_to_speech` |
-| **Web3** | `web3_balance`, `web3_explorer`, `web3_ipfs`, `web3_contract`, `web3_deploy` |
+1. Open the [Releases page](https://github.com/virrdhiman/desktop-agent/releases) and download the file for your system:
 
-Some media and Web3 tools return links or setup instructions rather than doing the work locally. See [TOOLS.md](./TOOLS.md) for what each tool does.
+   | System | File |
+   |--------|------|
+   | Windows 10/11 (64-bit) | `VD Agent Setup <version>.exe` (installer) or `VD Agent <version>.exe` (portable) |
+   | macOS | `VD Agent-<version>.dmg` (Apple Silicon builds end in `-arm64`) |
+   | Linux (64-bit) | `VD Agent-<version>.AppImage` or `vd-agent_<version>_amd64.deb` |
 
----
+2. Optional but recommended: check the file against `SHA256SUMS.txt` from the same release. See [verify your download](./docs/INSTALL.md#verify-your-download).
+3. Install and launch it. If Windows SmartScreen or macOS Gatekeeper warns about an unsigned build, see [first launch](./docs/INSTALL.md#first-launch-warnings).
 
-## AI providers
+If no release is listed yet, [run from source](#run-from-source). Full instructions, updating, and uninstalling are in [docs/INSTALL.md](./docs/INSTALL.md).
 
-The provider catalog is defined in `electron/handlers/settings.ts`, and Settings shows the current count per category. New catalog entries are added to existing settings files on load.
+## Run from source
 
-| Category | Examples | Notes |
-|----------|----------|-------|
-| **Free official** | Groq, Cerebras, SambaNova, Hugging Face, Gemini, GitHub Models, OpenRouter, Mistral, and others | Eligible for automatic fallback. Free-tier limits are set by each provider and change often. |
-| **Local** | Ollama, LM Studio, llama.cpp | Runs on your machine. Prompts stay local. |
-| **Community** | gpt4free, Pollinations, and several Discord-run proxies | Unofficial third-party proxies. They receive your prompts and code. Never used automatically. |
-| **Image/Video** | FLUX, Runway, Kling, Replicate, Stability | Not chat providers. |
-| **Paid** | OpenAI, Anthropic, Cohere, Perplexity | Billed by the provider. Anthropic uses the Messages API and has no model discovery. |
-
----
-
-## Download and run
-
-VD Agent is free to download and use. Get it from the official repository, either with `git clone` or **Code → Download ZIP** on GitHub, then run it:
+You need **Node.js 20 or newer**, **git**, and native build tools for the terminal (`node-pty`). See [prerequisites](./docs/INSTALL.md#run-from-source).
 
 ```bash
 git clone https://github.com/virrdhiman/desktop-agent.git
@@ -107,95 +68,95 @@ npm install
 npm run dev
 ```
 
-To build an installer for your own machine, see [Building the desktop app](./USAGE.md#15-building-the-desktop-app). Official installers, when published, are on the [Releases](https://github.com/virrdhiman/desktop-agent/releases) page.
-
-1. Open **Settings** and pick a free provider (Groq or Gemini are good starting points).
-2. Click **Get API Key**, create a key, paste it, and click **Save**.
-3. Open a workspace folder (Files → Open, or Settings → Open).
-4. Go to **Agent** and send a message.
+To build your own installer, run `Win\build.bat`, `bash Mac/build.sh`, or `bash Linux/build.sh`. See [docs/RELEASE_CHECKLIST.md](./docs/RELEASE_CHECKLIST.md).
 
 ---
 
-## Architecture
+## Free API key setup
 
-```
-electron/
-  main.ts                  Window, CSP, link handling, handler registration
-  preload.ts               contextBridge API (window.api) and its types
-  conversationStore.ts     Chat history on disk (pure Node, unit tested)
-  navigation.ts            External links open in the browser; the window stays on the app
-  handlers/
-    ai.ts                  Streaming chat, /models discovery, per-model retry, cancel
-    conversations.ts       conversations:save / list / delete IPC
-    settings.ts            Provider catalog, encrypted API keys
-    tools.ts               Agent tool implementations
-    fs.ts, git.ts, terminal.ts, shell.ts
-src/
-  components/              AgentChat, SettingsPanel, SessionsPanel, editor, git, terminal, ...
-  lib/modelSelect.ts       Model filtering, ranking, error classification
-  lib/providers.ts         Provider categories, fallback chain, model persistence
-  lib/brand.ts             App name, version, author credit, and links
-  store/index.ts           Zustand store, including session auto-save
-  types/index.ts           Shared types and AGENT_TOOLS
-```
+You need one key to start. Groq and Google Gemini have free tiers and are good first choices.
 
-See [ARCHITECTURE.md](./ARCHITECTURE.md) for details.
+1. Open **Settings** (⚙️ in the sidebar) and select **Groq** or **Google Gemini**.
+2. Click **Get API Key**. The provider's site opens in your browser. Create a key there and copy it.
+3. Paste the key into VD Agent and click **Save**. Selecting a provider in the list also makes it the active one.
+4. Open a project folder (📁 **Files → Open**), go to 🤖 **Agent**, and send a message.
 
-### Security and privacy
-- Context isolation and sandboxing are on, and `nodeIntegration` is off. The renderer can only use the APIs exposed by the preload script.
-- API keys are stored in `<userData>/settings.json` and encrypted with Electron `safeStorage` (the OS keychain) when it is available. If it isn't, for example on Linux without a keyring, keys are stored in plain text.
-- Keys are only sent to the provider's configured base URL. They are never written to chat history, logs, or settings exports.
-- No telemetry.
-- The agent can run shell commands and edit files with your user permissions. Review what it does, especially in Plan Mode off.
+No key? Install [Ollama](https://ollama.com/download), run `ollama pull llama3.3`, and pick **Ollama (Local)** in Settings. Prompts never leave your machine.
+
+Adding keys for more than one free provider makes rate limits less of a problem, because VD Agent can fall back between them. Free-tier limits are set by each provider and change often. See [docs/PROVIDERS.md](./docs/PROVIDERS.md) for other providers and their trade-offs.
+
+### How model selection works
+
+For OpenAI-compatible providers, VD Agent:
+
+1. Lists the models your key can call and drops non-chat models such as embeddings, speech, image, and moderation models.
+2. Ranks the rest by coding quality, then efficiency, and tries the best one first. The model set in Settings is the last resort.
+3. Moves to the next model on rate limits (429), model-not-found or unsupported model errors, overload, and 503s.
+4. **Stops immediately on an invalid key**, so you can fix it instead of having the problem hidden.
+5. Saves the model that worked, unless you pinned a model in the Agent header.
+
+If the active provider fails for any reason other than an invalid key, VD Agent tries other official free providers that have keys. Local servers and community proxies are never used automatically.
 
 ---
 
-## Development
+## Privacy and local data
 
-```bash
-npm test          # Vitest (renderer, lib, and electron unit tests)
-npm run lint      # TypeScript typecheck (tsc --noEmit)
-npm run build     # tsc + vite build (renderer and Electron main/preload)
-```
+VD Agent has no server, account, telemetry, or analytics. Everything it stores stays in your user data folder:
 
-Packaging: `Win\build.bat` or `Mac/build.sh` (see [USAGE.md](./USAGE.md#15-building-the-desktop-app)).
+| OS | Folder |
+|----|--------|
+| Windows | `%APPDATA%\VD Agent` |
+| macOS | `~/Library/Application Support/VD Agent` |
+| Linux | `~/.config/VD Agent` |
+
+- **Chats**: `conversations/<id>.json`, one file per chat. API keys are redacted before a chat is written.
+- **Settings**: `settings.json`, with provider configuration, custom rules, and preferences.
+- **API keys**: stored in `settings.json` and encrypted with your OS keychain (Electron `safeStorage`) when one is available. On Linux without a keyring they are stored unencrypted. Keys are never included in settings exports.
+
+Your prompts and code go **only** to the AI provider you choose, plus any service an agent tool calls on your behalf (for example web search). Details are in [docs/PRIVACY.md](./docs/PRIVACY.md). The agent runs commands with your user permissions, so read [docs/SECURITY.md](./docs/SECURITY.md) before pointing it at important work.
+
+---
 
 ## Documentation
 
-- [USAGE.md](./USAGE.md): how-to guide
-- [TOOLS.md](./TOOLS.md): agent tools reference
-- [ARCHITECTURE.md](./ARCHITECTURE.md): technical overview
-- [CHANGELOG.md](./CHANGELOG.md)
+| Guide | What's in it |
+|-------|--------------|
+| [USAGE.md](./USAGE.md) | Using the agent, editor, terminal, git, chat history, and shortcuts |
+| [docs/INSTALL.md](./docs/INSTALL.md) | Installing, verifying downloads, updating, uninstalling, running from source |
+| [docs/PROVIDERS.md](./docs/PROVIDERS.md) | Setting up providers, local models, and how fallback works |
+| [docs/PRIVACY.md](./docs/PRIVACY.md) | What is stored, where, and what leaves your machine |
+| [docs/SECURITY.md](./docs/SECURITY.md) | Security model, safe use, and reporting vulnerabilities |
+| [docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) | Fixes for common problems |
+| [TOOLS.md](./TOOLS.md) | Reference for every agent tool |
+| [ARCHITECTURE.md](./ARCHITECTURE.md) | How the code is organized |
+| [docs/CONTRIBUTING.md](./docs/CONTRIBUTING.md) | Development setup and pull requests |
+| [docs/RELEASE_CHECKLIST.md](./docs/RELEASE_CHECKLIST.md) | Building, signing, and publishing releases |
+| [CHANGELOG.md](./CHANGELOG.md) | Release history |
 
-## Contributing
+---
 
-Bug reports and pull requests are welcome.
+## Support the project
 
-1. Fork the repository on GitHub and create a feature branch. Forks may only be used to send contributions back.
-2. Run `npm test`, `npm run lint`, and `npm run build`.
-3. Open a pull request. By contributing you agree to section 3 of the [license](./LICENSE).
+If VD Agent saves you time, starring the [GitHub repository](https://github.com/virrdhiman/desktop-agent) helps other people find it. Starring is a request, not a condition of the license.
 
-## Credit
-
-If you share, review, demo, or write about VD Agent, please credit it like this:
+If you share, review, demo, or write about VD Agent, the license asks you to credit it:
 
 ```
 VD Agent by Virender Dhiman - https://virender.in
-https://github.com/virrdhiman/desktop-agent
 ```
 
-And if it saves you time, a ⭐ on [GitHub](https://github.com/virrdhiman/desktop-agent) helps other people find it.
+Please link to https://github.com/virrdhiman/desktop-agent as well. Bug reports and pull requests are welcome; see [docs/CONTRIBUTING.md](./docs/CONTRIBUTING.md).
 
 ## License
 
 Copyright (c) 2025-2026 [Virender Dhiman](https://virender.in). All rights reserved.
 
-VD Agent is proprietary, source-available software and the exclusive property of Virender Dhiman. It is licensed under the [VD Agent License](./LICENSE). In short:
+VD Agent is proprietary, source-available software and the exclusive property of Virender Dhiman. From version 1.0.1 it is licensed under the [VD Agent License](./LICENSE):
 
 | You may | You may not |
 |---------|-------------|
-| Download it from the official repository and build it | Sell, redistribute, or republish it, modified or not |
+| Download it from the official repository or releases, and build it | Sell, redistribute, or republish it, modified or not |
 | Use it free of charge for personal and commercial work | Remove or change the name, logo, or author credits |
 | Modify your own copy for your own use | Offer it, or a service based on it, as a hosted service |
 
-Keep the copyright notices and credit intact. The [LICENSE](./LICENSE) file is the binding text. For other permissions, contact the author through [virender.in](https://virender.in).
+Credit is required when you share or showcase it. This summary is for convenience and is not legal advice; the [LICENSE](./LICENSE) file is the binding text. For permissions the license does not cover, contact the author through [virender.in](https://virender.in).

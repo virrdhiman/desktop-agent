@@ -62,6 +62,13 @@ All notable changes to VD Agent are documented here.
 - The Windows installer shows the license, and packaged builds include `LICENSE.txt`.
 - Settings has an About card, and the chat welcome screen credits the author, with links to [virender.in](https://virender.in) and the GitHub repository.
 
+### Documentation and release
+- Rewrote the README for users: download and install, running from source, free API key setup, privacy and local data, and a plain-language license summary.
+- New `docs/` folder with install, providers, privacy, security, troubleshooting, release checklist, and contributing guides. USAGE and ARCHITECTURE now point to them instead of duplicating content.
+- Added `npm run smoke`, an end-to-end check of the built or packaged app that uses a throwaway profile, and `npm run checksums`, which writes `release/SHA256SUMS.txt`.
+- Added `Linux/build.sh`. All three build scripts write checksums and warn when a build is unsigned. `Win/build.bat` enables executable signing when `CSC_LINK` is set.
+- `build/` is no longer git-ignored, so app icons can be committed.
+
 ## [1.0.0] - 2025-08-28
 
 ### Initial Release

@@ -24,8 +24,7 @@ __pycache__/
 # Python
 .next/
 
-# Build
-build/
+# Build (build/ is electron-builder's resources folder for icons, so it is tracked)
 *.tgz
 *.tar.gz
 
