@@ -17,7 +17,7 @@
  */
 import { useCallback, useEffect, useState } from 'react'
 import { lazy, Suspense } from 'react'
-const Editor = lazy(() => import('@monaco-editor/react'))
+const Editor = lazy(() => import('../lib/monacoEditor'))
 import { useStore } from '../store'
 
 function getLanguage(filePath: string): string {

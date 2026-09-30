@@ -54,6 +54,7 @@ All notable changes to VD Agent are documented here.
 - Auto-scrolling the chat no longer pushes the chat header off-screen.
 - The sidebar version is read from `package.json`.
 - External links, such as provider "Get API Key" pages, open in the system browser instead of a new app window, and the app window cannot navigate away from the app.
+- Fixed the code editor never loading. Monaco was fetched from a CDN that the Content-Security-Policy blocks. It is now bundled with the app (lazy-loaded), so the editor also works offline.
 
 ### License and credit
 - VD Agent is now proprietary, source-available software owned by Virender Dhiman, under the new VD Agent License. It is free to download and use, including for commercial work, but credit is required and it may not be resold, redistributed, rebranded, or hosted as a service.
