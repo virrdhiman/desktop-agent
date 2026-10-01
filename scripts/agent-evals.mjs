@@ -15,8 +15,10 @@ import { execSync, spawn } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { loadLocalEnv } from './local-env.mjs'
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+loadLocalEnv(repo)
 const goldenPath = path.join(repo, 'evals', 'agent-golden.json')
 const smokePath = path.join(repo, 'scripts', 'smoke.mjs')
 const pkg = JSON.parse(fs.readFileSync(path.join(repo, 'package.json'), 'utf8'))

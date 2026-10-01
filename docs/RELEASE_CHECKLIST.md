@@ -66,6 +66,10 @@ The build scripts write `release/SHA256SUMS.txt` in `sha256sum` format. To regen
 npm run checksums
 ```
 
+By default, the checksum command hashes only downloadable files whose names
+contain the current `package.json` version. Use `npm run checksums -- --all`
+only when intentionally creating a combined file from mixed-version artifacts.
+
 When you build on several machines, combine the per-platform files into one `SHA256SUMS.txt` for the release, one line per file.
 
 ## Publish on GitHub

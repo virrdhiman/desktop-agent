@@ -29,10 +29,10 @@ It runs:
 3. `npm run build`
 4. `node scripts/smoke.mjs`
 
-The runner also validates all 73 mapped cases in `evals/agent-golden.json`,
-including 12 prompts from real user conversations. It checks unique IDs and
-prompts, coverage-file paths, tier minimums, at least 299 passing Vitest tests,
-at least 48 smoke assertions, and at least 65 golden cases. If a refactor
+The runner also validates all 81 mapped cases in `evals/agent-golden.json`,
+including 20 prompts from real user conversations. It checks unique IDs and
+prompts, coverage-file paths, tier minimums, at least 302 passing Vitest tests,
+at least 49 smoke assertions, and at least 80 golden cases. If a refactor
 silently drops coverage, the command fails.
 
 ## Tier 1: Functional & component tests
@@ -152,8 +152,8 @@ code, or screenshots.
 
 ### Hosted eval export
 
-VD Agent can prepare local JSONL datasets for hosted dashboards without uploading
-anything:
+VD Agent can prepare local JSONL datasets for hosted dashboards without
+uploading anything:
 
 ```bash
 npm run agent:evals:export -- --provider generic
@@ -167,6 +167,22 @@ for the relevant dashboard variables. LangSmith exports are shaped as dataset
 examples with `inputs`, `outputs`, and `metadata`; Arize exports are shaped as
 tabular trace/eval rows that can be imported into Phoenix/AX workflows.
 
+### Hosted dashboard import
+
+Hosted imports are manual and explicit. Keep real credentials in `.env.local`,
+which is ignored by git:
+
+```bash
+npm run agent:evals:import -- --provider arize
+npm run agent:evals:import -- --provider arize --dataset-id "<existing-dataset-id>"
+npm run agent:evals:import -- --provider langsmith
+```
+
+Arize import requires `ARIZE_API_KEY` and `ARIZE_SPACE_ID` unless an existing
+dataset is supplied with `--dataset-id`. LangSmith import requires
+`LANGSMITH_API_KEY` or `LANGCHAIN_API_KEY`. Add `--dry-run` to verify the target
+and example count without uploading.
+
 To export after the full local gate:
 
 ```bash
@@ -175,6 +191,24 @@ VD_EVAL_TRACE_EXPORT=1 VD_EVAL_TRACE_PROVIDER=langsmith npm run agent:evals
 
 Do not enable upload automation until the user has explicitly approved sending
 the selected prompts, outputs, and traces to that hosted service.
+
+## Future real-user failures
+
+When a user reports a bad answer or failed workflow, capture it as a regression
+the same day:
+
+1. Sanitize the user prompt and any private paths, keys, names, or data.
+2. Add it to `evals/agent-golden.json` with `source: "real-user"` and concrete
+   acceptance checks that describe the desired behavior, not a brittle exact
+   answer.
+3. Add coverage in Vitest or `scripts/smoke.mjs`.
+4. Raise the relevant minimum when the new coverage should become a release
+   floor.
+5. Run `npm run agent:evals`.
+
+If the failure came from a hosted trace, store only the minimal case metadata in
+git. Keep raw traces, screenshots, prompts, and service exports outside the
+repository unless they have been explicitly sanitized.
 
 ## Adding a new golden case
 

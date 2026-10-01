@@ -36,7 +36,7 @@ Settings includes an optional **Export diagnostics** action for troubleshooting.
 
 ### Hosted eval exports
 
-`npm run agent:evals:export` writes JSONL files under `evals/hosted/` for optional LangSmith/Arize-style dashboard imports. The script does not upload anything. Those generated files may contain prompts and acceptance criteria, so the folder is ignored by git and should be reviewed before sharing with any hosted service.
+`npm run agent:evals:export` writes JSONL files under `evals/hosted/` for optional LangSmith/Arize-style dashboard imports. The export script does not upload anything. `npm run agent:evals:import` can upload the golden eval prompts and acceptance criteria to an explicitly configured hosted dashboard, so run it only after reviewing the dataset and confirming the target account. Generated hosted files may contain prompts and acceptance criteria, so the folder is ignored by git and should be reviewed before sharing with any hosted service.
 
 ## What leaves your machine
 

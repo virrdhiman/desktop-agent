@@ -12,8 +12,10 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { loadLocalEnv } from './local-env.mjs'
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+loadLocalEnv(repo)
 const pkg = JSON.parse(fs.readFileSync(path.join(repo, 'package.json'), 'utf8'))
 const golden = JSON.parse(fs.readFileSync(path.join(repo, 'evals', 'agent-golden.json'), 'utf8'))
 

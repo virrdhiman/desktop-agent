@@ -48,6 +48,7 @@
     "smoke": "npm run build && node scripts/smoke.mjs",
     "agent:evals": "node scripts/agent-evals.mjs",
     "agent:evals:export": "node scripts/hosted-eval-export.mjs",
+    "agent:evals:import": "node scripts/hosted-eval-import.mjs",
     "verify": "npm run lint && npm test && npm run build",
     "security:audit": "npm audit --omit=dev --audit-level=high",
     "checksums": "node scripts/checksums.mjs",

@@ -16,8 +16,11 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const releaseDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'release')
+const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const releaseDir = path.join(repo, 'release')
+const pkg = JSON.parse(fs.readFileSync(path.join(repo, 'package.json'), 'utf8'))
 const DOWNLOADABLE = /\.(exe|msi|dmg|zip|appimage|deb|rpm|tar\.gz|snap)$/i
+const includeAll = process.argv.includes('--all')
 
 if (!fs.existsSync(releaseDir)) {
   console.error('No release/ folder. Build the app first (Win\\build.bat, Mac/build.sh, or Linux/build.sh).')
@@ -26,11 +29,13 @@ if (!fs.existsSync(releaseDir)) {
 
 const files = fs.readdirSync(releaseDir, { withFileTypes: true })
   .filter((e) => e.isFile() && DOWNLOADABLE.test(e.name))
+  .filter((e) => includeAll || e.name.includes(pkg.version))
   .map((e) => e.name)
   .sort()
 
 if (files.length === 0) {
-  console.error('No installers or archives found in release/.')
+  console.error(`No ${includeAll ? '' : `${pkg.version} `}installers or archives found in release/.`)
+  if (!includeAll) console.error('Use npm run checksums -- --all to hash every downloadable file in release/.')
   process.exit(1)
 }
 

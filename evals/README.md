@@ -50,3 +50,14 @@ npm run agent:evals:export -- --provider arize
 ```
 
 Generated files live under `evals/hosted/` and are intentionally ignored by git.
+
+To import directly into a configured hosted dashboard, keep credentials in
+`.env.local` and run:
+
+```bash
+npm run agent:evals:import -- --provider arize
+npm run agent:evals:import -- --provider langsmith
+```
+
+Use `--dry-run` before uploading, and prefer `--dataset-id` when adding examples
+to an existing dashboard dataset.
