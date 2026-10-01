@@ -145,7 +145,7 @@ async function importArize() {
   const result = await requestJson(`${baseUrl}/datasets`, {
     method: 'POST',
     headers: authHeaders,
-    body: JSON.stringify({ name: datasetName, spaceId: resolvedSpaceId, examples }),
+    body: JSON.stringify({ name: datasetName, spaceId: resolvedSpaceId, space_id: resolvedSpaceId, examples }),
   })
   const createdId = result?.id || result?.dataset?.id || result?.data?.id || '<not returned>'
   console.log(`Created Arize dataset "${datasetName}" with ${examples.length} examples. Dataset id: ${createdId}`)
