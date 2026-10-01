@@ -137,9 +137,9 @@ async function importArize() {
     return
   }
 
-  const resolvedSpaceId = String(spaceId || '').trim()
+  const resolvedSpaceId = String(spaceId || await inferArizeSpaceIdFromDatasets(baseUrl, authHeaders) || '').trim()
   if (!resolvedSpaceId) {
-    fail('ARIZE_SPACE_ID is missing. Add it to .env.local, pass --space-id, or copy it from the /spaces/{SPACE_ID}/... URL in Arize.')
+    fail('ARIZE_SPACE_ID is missing and could not be inferred from existing datasets. Add it to .env.local, pass --space-id, or copy it from the /spaces/{SPACE_ID}/... URL in Arize.')
   }
 
   const result = await requestJson(`${baseUrl}/datasets`, {
@@ -149,6 +149,24 @@ async function importArize() {
   })
   const createdId = result?.id || result?.dataset?.id || result?.data?.id || '<not returned>'
   console.log(`Created Arize dataset "${datasetName}" with ${examples.length} examples. Dataset id: ${createdId}`)
+}
+
+async function inferArizeSpaceIdFromDatasets(baseUrl, authHeaders) {
+  try {
+    const result = await requestJson(`${baseUrl}/datasets?limit=100`, { headers: authHeaders })
+    const datasets = Array.isArray(result?.datasets) ? result.datasets : []
+    const spaceIds = [...new Set(datasets.map((item) => item.spaceId || item.space_id).filter(Boolean))]
+    if (spaceIds.length === 1) {
+      console.log('Inferred ARIZE_SPACE_ID from existing Arize datasets.')
+      return spaceIds[0]
+    }
+    if (spaceIds.length > 1) {
+      fail(`Multiple Arize spaces were found from existing datasets (${spaceIds.length}). Pass --space-id or set ARIZE_SPACE_ID in .env.local.`)
+    }
+    return ''
+  } catch {
+    return ''
+  }
 }
 
 async function importLangSmith() {

@@ -179,9 +179,11 @@ npm run agent:evals:import -- --provider langsmith
 ```
 
 Arize import requires `ARIZE_API_KEY` and `ARIZE_SPACE_ID` unless an existing
-dataset is supplied with `--dataset-id`. LangSmith import requires
-`LANGSMITH_API_KEY` or `LANGCHAIN_API_KEY`. Add `--dry-run` to verify the target
-and example count without uploading.
+dataset is supplied with `--dataset-id`. If `ARIZE_SPACE_ID` is not set, the
+importer tries to infer it from existing datasets when the account exposes
+exactly one unique space; otherwise pass `--space-id` or copy it from the Arize
+URL. LangSmith import requires `LANGSMITH_API_KEY` or `LANGCHAIN_API_KEY`. Add
+`--dry-run` to verify the target and example count without uploading.
 
 To export after the full local gate:
 
