@@ -3,9 +3,9 @@
   "name": "VD Agent local golden evals",
   "inspiration": "Golden tasks, trace checks, and release smoke gates.",
   "minimums": {
-    "vitestPassed": 293,
-    "smokeChecks": 45,
-    "goldenCases": 60
+    "vitestPassed": 299,
+    "smokeChecks": 48,
+    "goldenCases": 65
   },
   "tiers": [
     {
@@ -316,6 +316,52 @@
         "The provider-specific tags are not shown raw to the user."
       ],
       "coveredBy": ["src/lib/agent.test.ts", "scripts/smoke.mjs"]
+    },
+    {
+      "id": "real-multi-agent-normal-chat",
+      "tier": 2,
+      "source": "real-user",
+      "prompt": "Can a normal chat query use several agents where one works, another analyzes, another enhances, and the cycle produces the final result?",
+      "checks": [
+        "Substantial requests can route through distinct analyst, executor, reviewer, repair, and verifier stages.",
+        "The user receives one final answer rather than internal drafts or review JSON.",
+        "Simple chat can remain single-agent to preserve free-tier quota."
+      ],
+      "coveredBy": ["src/lib/multiAgent.test.ts", "scripts/smoke.mjs", "docs/MULTI_AGENT.md"]
+    },
+    {
+      "id": "team-role-tool-isolation",
+      "tier": 2,
+      "source": "synthetic",
+      "prompt": "A reviewer emits a tool call while checking the executor's answer.",
+      "checks": [
+        "The reviewer tool request is rejected and never reaches the workspace.",
+        "Only the executor can mutate files or run commands."
+      ],
+      "coveredBy": ["src/components/AgentChat.tsx", "scripts/smoke.mjs"]
+    },
+    {
+      "id": "team-bounded-review-repair",
+      "tier": 2,
+      "source": "synthetic",
+      "prompt": "The first independent review finds that the executor did not inspect a required file.",
+      "checks": [
+        "The executor receives specific findings and can use tools to repair the work.",
+        "Review is capped at two passes with at most one repair cycle.",
+        "The final verifier receives bounded tool-result evidence."
+      ],
+      "coveredBy": ["src/lib/multiAgent.test.ts", "scripts/smoke.mjs"]
+    },
+    {
+      "id": "team-malformed-specialist-fallback",
+      "tier": 1,
+      "source": "synthetic",
+      "prompt": "A weak free model returns prose instead of the review JSON schema.",
+      "checks": [
+        "Malformed review output does not trigger an uncontrolled repair loop.",
+        "A bad synthesis is discarded in favor of the evidence-backed executor answer."
+      ],
+      "coveredBy": ["src/lib/multiAgent.test.ts", "src/components/AgentChat.tsx"]
     },
     {
       "id": "archive-zip-slip",

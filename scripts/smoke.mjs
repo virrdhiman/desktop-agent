@@ -217,6 +217,8 @@ async function launch(label) {
 const FENCE = '```'
 const toolBlock = (obj) => `${FENCE}tool\n${JSON.stringify(obj)}\n${FENCE}`
 const lastUser = (body) => [...(body?.messages || [])].reverse().find((m) => m.role === 'user')?.content || ''
+const systemText = (body) => (body?.messages || []).filter((m) => m.role === 'system').map((m) => m.content).join('\n')
+const containsMessage = (body, marker) => (body?.messages || []).some((m) => m.content?.includes(marker))
 
 /**
  * OpenAI-compatible mock at /<provider>/v1. "groq" is always rate limited, so every chat
@@ -225,7 +227,25 @@ const lastUser = (body) => [...(body?.messages || [])].reverse().find((m) => m.r
 function mockReply(provider, body) {
   if (provider === 'groq') return { status: 429, message: 'Rate limit reached for model mock-model. Please try again in 20s.' }
   const last = lastUser(body)
+  const system = systemText(body)
+  const teamRun = containsMessage(body, 'SMOKE-TEAM')
+  if (system.includes('Analyst in a bounded engineering team') && teamRun) {
+    return { text: toolBlock({ name: 'read_file', args: { path: 'smoke-editor.ts' } }) }
+  }
+  if (system.includes('independent Reviewer in a bounded engineering team') && teamRun) {
+    const secondPass = last.includes('Review pass: 2')
+    return { text: secondPass
+      ? '{"verdict":"approve","score":92,"issues":[],"repairInstructions":""}'
+      : '{"verdict":"revise","score":55,"issues":["The executor did not inspect smoke-editor.ts."],"repairInstructions":"Read smoke-editor.ts and ground the answer in that result."}' }
+  }
+  if (system.includes('Verifier and Synthesizer in a bounded engineering team') && teamRun) {
+    return { text: 'SMOKE-TEAM-FINAL `smoke-editor.ts` was read successfully and exports `SMOKE_EDITOR_MARKER`.' }
+  }
+  if (last.startsWith('The independent reviewer found material gaps') && teamRun) {
+    return { text: toolBlock({ name: 'read_file', args: { path: 'smoke-editor.ts' } }) }
+  }
   if (last.startsWith('Tool results:')) {
+    if (teamRun) return { text: 'SMOKE-TEAM-REPAIRED `smoke-editor.ts` exports `SMOKE_EDITOR_MARKER`.' }
     return { text: "Sure! I'd be happy to help.\n\n`read_file` failed for `missing-smoke-file.txt` because it does not exist; `smoke-editor.ts` exports `SMOKE_EDITOR_MARKER`.\n\nNext steps:\n1. SMOKE-NEXT-STEP create `missing-smoke-file.txt` or give the correct path.\n\nI hope this helps! Let me know if you have any other questions." }
   }
   if (last.startsWith('Your previous reply was')) {
@@ -239,6 +259,7 @@ function mockReply(provider, body) {
   if (last.includes('SMOKE-EMPTY')) return { text: '' }
   if (last.includes('SMOKE-DEFLECTION')) return { text: 'Hello! How can I assist you with your task? Please provide the details of the task and context.' }
   if (last.includes('SMOKE-BARE')) return { text: '{"name":"read_file","args":{"path":"smoke-editor.ts"}}' }
+  if (last.includes('SMOKE-TEAM')) return { text: 'SMOKE-TEAM-DRAFT I have not inspected the requested file yet.' }
   if (last.includes('SMOKE-TOOLS')) {
     return {
       text: [
@@ -271,6 +292,11 @@ function startMockProvider() {
       if (reply.status) {
         res.writeHead(reply.status, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ error: { message: reply.message } }))
+        return
+      }
+      if (!body.stream) {
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ choices: [{ message: { content: reply.text } }] }))
         return
       }
       res.writeHead(200, { 'Content-Type': 'text/event-stream' })
@@ -470,6 +496,7 @@ try {
   const settingsFile = path.join(userData, 'settings.json')
   const s3 = JSON.parse(fs.readFileSync(settingsFile, 'utf8'))
   s3.activeProvider = 'groq'
+  s3.teamMode = 'off'
   s3.providers = s3.providers.map((p) => (p.id === 'groq' || p.id === 'gemini'
     ? { ...p, baseUrl: `${mock.url}/${p.id}/v1`, apiKey: `smoke-mock-${p.id}-key-000000` }
     : { ...p, apiKey: '' }))
@@ -478,6 +505,22 @@ try {
   c = await launch('launch-3')
   await c.evaluate(`document.querySelector('[aria-label^="Agent"]')?.click()`)
   await sleep(500)
+  const headerLayout = await c.evaluate(`(() => {
+    const team = document.querySelector('select[aria-label="Team mode"]')
+    const header = team?.closest('.panel-header')
+    const controls = header ? [...header.querySelectorAll('button, select, .badge')] : []
+    const bounds = header?.getBoundingClientRect()
+    return {
+      count: controls.length,
+      fit: !!bounds && controls.every((control) => {
+        const rect = control.getBoundingClientRect()
+        return rect.left >= bounds.left && rect.right <= bounds.right && rect.top >= bounds.top && rect.bottom <= bounds.bottom
+      }),
+      height: bounds?.height || 0,
+    }
+  })()`)
+  check('agent header keeps model, team, plan, and session controls visible',
+    headerLayout.fit && headerLayout.count >= 5, JSON.stringify(headerLayout))
 
   const toolsStart = mock.requests.length
   await sendChat(c, 'SMOKE-TOOLS read missing-smoke-file.txt and smoke-editor.ts')
@@ -548,6 +591,33 @@ try {
   check('agent: generic deflection is corrected instead of shown',
     direct && deflectionCorrections === 1 && !deflectionShown,
     `corrections=${deflectionCorrections} shownDeflection=${deflectionShown}`)
+
+  await c.evaluate(`(() => {
+    const select = document.querySelector('select[aria-label="Team mode"]')
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(select, 'always')
+    select.dispatchEvent(new Event('change', { bubbles: true }))
+  })()`)
+  const teamStart = mock.requests.length
+  await sendChat(c, 'SMOKE-TEAM implement a verified answer from smoke-editor.ts')
+  const teamDone = await waitForText(c, 'SMOKE-TEAM-FINAL')
+  const teamRequests = mock.requests.slice(teamStart).filter((request) => request.provider === 'gemini')
+  const analystRequest = teamRequests.find((request) => systemText(request.body).includes('Analyst in a bounded engineering team'))
+  const reviewerPasses = teamRequests.filter((request) => systemText(request.body).includes('independent Reviewer in a bounded engineering team')).length
+  const repairRequest = teamRequests.find((request) => lastUser(request.body).startsWith('The independent reviewer found material gaps'))
+  const verifierRequest = teamRequests.find((request) => systemText(request.body).includes('Verifier and Synthesizer in a bounded engineering team'))
+  const teamToolFollowUps = teamRequests.filter((request) => lastUser(request.body).startsWith('Tool results:')).length
+  const teamUi = await c.evaluate(`document.body.innerText`)
+  check('agent team: analyst, executor, reviewer, repair, and verifier run in one normal chat query',
+    teamDone && !!analystRequest && reviewerPasses === 2 && !!repairRequest && !!verifierRequest,
+    `done=${teamDone} analyst=${!!analystRequest} reviews=${reviewerPasses} repair=${!!repairRequest} verifier=${!!verifierRequest}`)
+  check('agent team: only the executor runs tools and the draft stays hidden',
+    teamToolFollowUps === 1 && !!repairRequest && !systemText(repairRequest.body).includes('Reviewer in a bounded engineering team')
+      && !teamUi.includes('SMOKE-TEAM-DRAFT') && teamUi.includes('SMOKE-TEAM-FINAL'))
+  await c.evaluate(`(() => {
+    const select = document.querySelector('select[aria-label="Team mode"]')
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(select, 'off')
+    select.dispatchEvent(new Event('change', { bubbles: true }))
+  })()`)
 
   await sendChat(c, 'SMOKE-ALLFAIL anything')
   const failShown = await waitForText(c, 'failed on all 2 providers tried')

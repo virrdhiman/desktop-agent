@@ -487,6 +487,33 @@ export default function SettingsPanel() {
               </div>
             </div>
 
+            <div style={{ marginTop: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>Team Mode</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                    Analyst, executor, reviewer, and verifier passes for stronger answers. Auto reserves extra calls for substantial work; configured specialist providers receive the request and bounded evidence.
+                  </div>
+                </div>
+                <select
+                  className="input"
+                  value={settings.teamMode || 'auto'}
+                  onChange={(event) => {
+                    const teamMode = event.target.value as 'off' | 'auto' | 'always'
+                    const next = { ...settings, teamMode }
+                    setSettings(next)
+                    void window.api.saveSettings(next)
+                  }}
+                  aria-label="Team mode"
+                  style={{ width: 120, flex: '0 0 120px' }}
+                >
+                  <option value="off">Off</option>
+                  <option value="auto">Auto</option>
+                  <option value="always">Always</option>
+                </select>
+              </div>
+            </div>
+
             <div style={{ marginTop: 18, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Tool permissions</div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10, lineHeight: 1.5 }}>

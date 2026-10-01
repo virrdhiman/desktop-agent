@@ -442,7 +442,7 @@ export function unusableResponseNotice(problems: ResponseProblem[], providerName
 
 // ─── Unverified claims ──────────────────────────────────────────────────────
 
-export type ToolRun = { name: string; ok: boolean }
+export type ToolRun = { name: string; ok: boolean; summary?: string }
 export type UnverifiedClaim = 'edit' | 'command' | 'passing'
 
 const FILE_CHANGE_TOOLS = new Set(['write_file', 'edit_file', 'create_file', 'delete_file', 'multi_file_edit', 'archive_extract'])

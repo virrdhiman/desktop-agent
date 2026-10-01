@@ -78,6 +78,8 @@ electron-builder does not rebuild native dependencies a second time. `node-pty` 
 AgentChat.sendMessage
   → buildSystemPrompt(rules + buildContext(workspace, open file, project memory, resume state))
       + buildHistory(budgeted, tool blocks collapsed)
+  → shouldUseTeamMode(Off / Auto / Always)
+      when enabled: Analyst read-only call → advisory brief for Executor
   → buildProviderChain(active first, then locally ranked official free providers with keys, max 4;
                        the provider that already answered this request moves to the front)
   → for each provider: window.api.aiChat({ ..., autoSelect: !pinnedModel })
@@ -104,6 +106,10 @@ AgentChat.sendMessage
   → final reply: assessResponse (empty / filler-only / repetition → one correctionMessage retry)
                  unverifiedClaims (claims edits, commands, or passing tests with no matching
                    tool run this request → one unverifiedClaimsMessage retry, else a notice)
+                 when Team Mode is enabled:
+                   Reviewer receives candidate + bounded tool-result evidence
+                   → optional single Executor repair → second review
+                   → Verifier synthesis (discarded if it is unusable or adds unverified claims)
                  → cleanResponse (strips stock openers and closers outside code) → chat
 ```
 
@@ -151,6 +157,7 @@ Anthropic uses the Messages API (`/v1/messages`) with the system prompt in the `
 | `src/components/AgentChat.tsx` | System prompt, fallback loop, tool loop, markdown rendering |
 | `src/lib/providers.ts` | Provider categories, fallback chain, model persistence, export/import |
 | `src/lib/agent.ts` | System prompt, context, history, tool-call parsing and result formatting, response cleanup, user-facing failure messages |
+| `src/lib/multiAgent.ts` | Adaptive team routing, isolated role prompts, review parsing, bounded repair, and evidence-aware synthesis |
 | `src/lib/highlight.ts` | Single-pass syntax highlighter for chat code blocks |
 | `electron/toolSupport.ts` | Workspace-relative tool paths, `run_command` result formatting |
 | `src/lib/brand.ts` | App name, version (from `package.json`), author, repo, and license links |
@@ -193,11 +200,12 @@ Anthropic uses the Messages API (`/v1/messages`) with the system prompt in the `
 - `electron/__tests__/navigation.test.ts`: which links open externally and which navigations are allowed.
 - `electron/__tests__/tools-logic.test.ts`: file system, search, provider, and git helper logic.
 - `src/__tests__/*`: store and component tests.
-- `npm run smoke` (`scripts/smoke.mjs`): builds the app, then launches it three times with a temporary user data folder and workspace, driving it over the Chrome DevTools Protocol. It checks rendering and viewport geometry, the preload API and sandbox, native PTY startup, updater IPC, project memory, pre-edit checkpoint restore/deletion, rich restart state, key redaction, safe ZIP listing/extraction and rollback, Monaco, link handling, and path-traversal rejection. The third launch points two providers at a local mock server (one always rate limited) and checks the agent end to end: prompt rules, tool failures and malformed calls, workspace-relative paths, sticky fallback, filler stripping, empty-response recovery, unverified-claim challenges, and total-provider-failure guidance. It never touches real user data; screenshots are opt-in. Use `--exe <path>` to test a packaged build.
+- `npm run smoke` (`scripts/smoke.mjs`): builds the app, then launches it three times with a temporary user data folder and workspace, driving it over the Chrome DevTools Protocol. It checks rendering and viewport geometry, the preload API and sandbox, native PTY startup, updater IPC, project memory, pre-edit checkpoint restore/deletion, rich restart state, key redaction, safe ZIP listing/extraction and rollback, Monaco, link handling, and path-traversal rejection. The third launch points two providers at a local mock server (one always rate limited) and checks the agent end to end: prompt rules, tool failures and malformed calls, workspace-relative paths, sticky fallback, filler stripping, empty-response recovery, unverified-claim challenges, the complete team review/repair/verifier loop, and total-provider-failure guidance. It never touches real user data; screenshots are opt-in. Use `--exe <path>` to test a packaged build.
 
 ## Performance notes
 
 - Each request sends at most the last 20 non-system messages and about 40,000 characters of history. Old tool blocks are collapsed to one-line notes, and tool results are capped at about 12,000 characters.
+- Team Mode bounds role inputs separately: request 12,000 characters, context 6,000, executor candidate 14,000, and tool evidence 8,000. Auto avoids these extra calls for short chat.
 - Streaming tokens are appended to store state as they arrive.
 - `/models` results are cached for 10 minutes per provider and key.
 - Chat saves are debounced so a burst of messages produces one write.

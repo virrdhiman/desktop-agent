@@ -15,6 +15,7 @@
  * - Image paste (Ctrl+V) and drag-and-drop support
  * - Per-provider model picker in the header (auto-select by default)
  * - Provider fallback across official free providers; stops on auth errors
+ * - Adaptive multi-agent analysis, evidence review, repair, and final verification
  * - Plan Mode toggle (plan before executing)
  * - Stop button that cancels the in-flight request
  * - Chat history auto-saved to disk
@@ -36,6 +37,11 @@ import {
   resolveWorkspacePath, unusableResponseNotice, unverifiedClaims, unverifiedClaimsMessage, unverifiedClaimsNotice,
   type ProviderAttempt, type ToolRun,
 } from '../lib/agent'
+import {
+  TEAM_MAX_REVIEW_PASSES, analystBriefForExecutor, buildAnalystMessages, buildRepairMessage,
+  buildReviewerMessages, buildSynthesizerMessages, describeToolEvidence, parseTeamReview, shouldUseTeamMode,
+  type TeamReview,
+} from '../lib/multiAgent'
 
 type ChatOutcome =
   | { content: string; provider: ProviderConfig; failed: ProviderAttempt[] }
@@ -412,9 +418,9 @@ export default function AgentChat() {
 
       const result = await executeTool(toolCall.name, toolCall.args, taskId)
       addToolExecution(settings.activeProvider)
-      runs.push({ name: toolCall.name, ok: !!result && typeof result.error !== 'string' })
       const ok = !!result && typeof result.error !== 'string'
       const resultText = ok ? (result?.result || 'Done') : result?.error || 'No result'
+      runs.push({ name: toolCall.name, ok, summary: resultText.slice(0, 1_000) })
       recordToolExecution({
         name: toolCall.name,
         ok,
@@ -462,7 +468,7 @@ export default function AgentChat() {
    * tool rounds don't keep hitting a provider that is rate limited.
    */
   const callWithFallback = useCallback(async (
-    apiMessages: any[], preferredId?: string, taskKind: AgentTaskKind = 'analysis'
+    apiMessages: any[], preferredId?: string, taskKind: AgentTaskKind = 'analysis', stream = true
   ): Promise<ChatOutcome> => {
     const current = useStore.getState().settings
     const base = buildProviderChain(current.providers, current.activeProvider, undefined, taskKind)
@@ -486,7 +492,7 @@ export default function AgentChat() {
           baseUrl: p.baseUrl,
           model: override || p.model,
           messages: apiMessages,
-          stream: true,
+          stream,
           autoSelect: !override,
           modelPerformance: p.performance?.models,
           taskKind,
@@ -575,23 +581,25 @@ export default function AgentChat() {
       userContent = text + '\n\n[Attached images: ' + pendingImages.map(img => img.name).join(', ') + ']'
     }
 
+    const workspaceContext = buildContext({
+      workspacePath,
+      selectedFile,
+      fileContent,
+      projectMemory,
+      conversationSummary: buildConversationSummary(messages),
+      resumeNote: [
+        latestCheckpoint ? `Latest recovery checkpoint: ${latestCheckpoint.label} (${latestCheckpoint.files.join(', ')})` : '',
+        lastVerification ? `Last verification: ${lastVerification.ok ? 'passed' : 'failed'} ${lastVerification.command}\n${lastVerification.summary}` : '',
+        tasks.length ? `Task state:\n${tasks.slice(-5).map((task) => `- ${task.status}: ${task.title}`).join('\n')}` : '',
+        toolExecutions.length ? `Recent tool outcomes:\n${toolExecutions.slice(-8).map((run) => `- ${run.ok ? 'OK' : 'FAILED'} ${run.name}: ${run.resultSummary}`).join('\n')}` : '',
+      ].filter(Boolean).join('\n'),
+    })
     const systemPrompt = buildSystemPrompt({
       planMode,
-      context: buildContext({
-        workspacePath,
-        selectedFile,
-        fileContent,
-        projectMemory,
-        conversationSummary: buildConversationSummary(messages),
-        resumeNote: [
-          latestCheckpoint ? `Latest recovery checkpoint: ${latestCheckpoint.label} (${latestCheckpoint.files.join(', ')})` : '',
-          lastVerification ? `Last verification: ${lastVerification.ok ? 'passed' : 'failed'} ${lastVerification.command}\n${lastVerification.summary}` : '',
-          tasks.length ? `Task state:\n${tasks.slice(-5).map((task) => `- ${task.status}: ${task.title}`).join('\n')}` : '',
-          toolExecutions.length ? `Recent tool outcomes:\n${toolExecutions.slice(-8).map((run) => `- ${run.ok ? 'OK' : 'FAILED'} ${run.name}: ${run.resultSummary}`).join('\n')}` : '',
-        ].filter(Boolean).join('\n'),
-      }),
+      context: workspaceContext,
       customRules: appSettings.customRules,
     })
+    const teamEnabled = shouldUseTeamMode(appSettings.teamMode, userContent, taskKind)
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -643,12 +651,53 @@ export default function AgentChat() {
       return outcome
     }
 
+    const teamProviderIds = buildProviderChain(
+      useStore.getState().settings.providers,
+      useStore.getState().settings.activeProvider,
+      3,
+      taskKind
+    ).map((candidate) => candidate.id)
+    const callRole = async (
+      label: string,
+      roleMessages: Array<{ role: string; content: string }>,
+      preferredId: string | undefined,
+      roleTaskKind: AgentTaskKind = 'analysis'
+    ): Promise<string | null> => {
+      addStepToTask(taskId, { id: `${Date.now()}-${label}`, type: 'thought', content: `${label}: working`, timestamp: Date.now() })
+      const roleOutcome = await callWithFallback(roleMessages, preferredId, roleTaskKind, false)
+      if ('error' in roleOutcome) {
+        addStepToTask(taskId, { id: `${Date.now()}-${label}-error`, type: 'error', content: `${label}: ${roleOutcome.error}`, timestamp: Date.now() })
+        return null
+      }
+      if (hasToolBlock(roleOutcome.content)) {
+        addStepToTask(taskId, { id: `${Date.now()}-${label}-blocked`, type: 'error', content: `${label}: ignored an unauthorized tool request`, timestamp: Date.now() })
+        return null
+      }
+      addTokens(Math.ceil(roleMessages.reduce((total, message) => total + message.content.length, 0) / 4), Math.ceil(roleOutcome.content.length / 4))
+      addStepToTask(taskId, { id: `${Date.now()}-${label}-done`, type: 'observation', content: `${label}: complete via ${roleOutcome.provider.name}`, timestamp: Date.now() })
+      return cleanResponse(roleOutcome.content)
+    }
+
+    if (teamEnabled) {
+      const analyst = await callRole(
+        'Analyst',
+        buildAnalystMessages(userContent, workspaceContext),
+        teamProviderIds[1] || teamProviderIds[0]
+      )
+      if (useStore.getState().cancelRequested) { finish('done', 'Generation stopped.'); return }
+      if (analyst) apiMessages[0] = { role: 'system', content: `${systemPrompt}\n\n${analystBriefForExecutor(analyst)}` }
+      addStepToTask(taskId, { id: `${Date.now()}-executor`, type: 'thought', content: 'Executor: acting on the request', timestamp: Date.now() })
+    }
+
     let outcome = await call()
     if (!outcome) return
     addTokens(Math.ceil((userContent.length + systemPrompt.length) / 4), Math.ceil(outcome.content.length / 4))
 
     let round = 0
     let retried = false
+    let reviewPass = 0
+    let repairAttempted = false
+    let latestReview: TeamReview = { verdict: 'approve', score: 0, issues: [], repairInstructions: '', usable: false }
     const toolRuns: ToolRun[] = []
     while (true) {
       const responseContent = outcome.content
@@ -670,6 +719,52 @@ export default function AgentChat() {
           continue
         }
         const cleaned = cleanResponse(responseContent)
+        if (teamEnabled && cleaned && problems.length === 0 && claims.length === 0) {
+          const evidence = describeToolEvidence(toolRuns)
+          reviewPass++
+          const reviewerText = await callRole(
+            'Reviewer',
+            buildReviewerMessages({ request: userContent, candidate: cleaned, evidence, pass: reviewPass }),
+            teamProviderIds[2] || teamProviderIds[1] || teamProviderIds[0]
+          )
+          if (useStore.getState().cancelRequested) { finish('done', 'Generation stopped.'); return }
+          if (reviewerText) {
+            const parsedReview = parseTeamReview(reviewerText)
+            if (parsedReview.usable || !latestReview.usable) latestReview = parsedReview
+          }
+
+          if (latestReview.usable && latestReview.verdict === 'revise' && !repairAttempted && reviewPass < TEAM_MAX_REVIEW_PASSES) {
+            repairAttempted = true
+            addStepToTask(taskId, { id: `${Date.now()}-repair`, type: 'thought', content: 'Executor: applying reviewer findings', timestamp: Date.now() })
+            apiMessages = [
+              ...apiMessages,
+              { role: 'assistant', content: responseContent },
+              { role: 'user', content: buildRepairMessage(latestReview) },
+            ]
+            outcome = await call()
+            if (!outcome) return
+            addTokens(0, Math.ceil(outcome.content.length / 4))
+            continue
+          }
+
+          const synthesized = await callRole(
+            'Verifier',
+            buildSynthesizerMessages({ request: userContent, candidate: cleaned, evidence, review: latestReview }),
+            teamProviderIds[1] || teamProviderIds[0],
+            'quick'
+          )
+          if (useStore.getState().cancelRequested) { finish('done', 'Generation stopped.'); return }
+          let finalContent = cleaned
+          if (synthesized) {
+            const finalProblems = assessResponse(synthesized, userContent, messages.some((message) => message.role === 'user' || message.role === 'assistant'))
+            const finalClaims = finalProblems.length === 0 ? unverifiedClaims(synthesized, toolRuns) : []
+            if (finalProblems.length === 0 && finalClaims.length === 0) finalContent = synthesized
+            else addStepToTask(taskId, { id: `${Date.now()}-verifier-fallback`, type: 'error', content: 'Verifier: unusable synthesis discarded; kept the executor answer', timestamp: Date.now() })
+          }
+          addMessage({ id: `${Date.now()}-a${round}`, role: 'assistant', content: finalContent, timestamp: Date.now() })
+          finish('done')
+          return
+        }
         if (cleaned) addMessage({ id: `${Date.now()}-a${round}`, role: 'assistant', content: cleaned, timestamp: Date.now() })
         finish('done', problems.length > 0
           ? unusableResponseNotice(problems, outcome.provider.name)
@@ -695,7 +790,7 @@ export default function AgentChat() {
       if (!outcome) return
       addTokens(0, Math.ceil(outcome.content.length / 4))
     }
-  }, [input, chatLoading, messages, getActiveProvider, workspacePath, selectedFile, fileContent, pendingImages, planMode, appSettings.customRules, callWithFallback, processToolCalls, setCancelRequested, projectMemory, latestCheckpoint, lastVerification, toolExecutions, tasks])
+  }, [input, chatLoading, messages, getActiveProvider, workspacePath, selectedFile, fileContent, pendingImages, planMode, appSettings.customRules, appSettings.teamMode, callWithFallback, processToolCalls, setCancelRequested, projectMemory, latestCheckpoint, lastVerification, toolExecutions, tasks])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -754,15 +849,15 @@ export default function AgentChat() {
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <div className="panel-header">
-        <h2>🤖 Agent</h2>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+      <div className="panel-header" style={{ flexWrap: 'wrap', gap: 8, padding: '8px 12px' }}>
+        <h2 style={{ flex: '0 0 auto' }}>🤖 Agent</h2>
+        <div style={{ display: 'flex', flex: '1 1 520px', minWidth: 0, flexWrap: 'wrap', gap: 6, alignItems: 'center', justifyContent: 'flex-end' }}>
           {/* Model quick-switch */}
           <select
             value={modelOverride || ''}
             onChange={(e) => setModelOverride(e.target.value || null)}
             style={{
-              padding: '3px 8px', borderRadius: 6, fontSize: 11, maxWidth: 220,
+              padding: '3px 8px', borderRadius: 6, fontSize: 11, maxWidth: 180,
               background: 'var(--bg-tertiary)', color: 'var(--text-secondary)',
               border: '1px solid var(--border)', cursor: 'pointer', outline: 'none',
             }}
@@ -789,6 +884,27 @@ export default function AgentChat() {
           >
             📋 {planMode ? 'Plan ON' : 'Plan'}
           </button>
+
+          <select
+            value={appSettings.teamMode || 'auto'}
+            onChange={(event) => {
+              const teamMode = event.target.value as 'off' | 'auto' | 'always'
+              const next = { ...appSettings, teamMode }
+              setAppSettings(next)
+              void window.api.saveSettings(next)
+            }}
+            style={{
+              padding: '3px 8px', borderRadius: 6, fontSize: 11,
+              background: 'var(--bg-tertiary)', color: 'var(--text-secondary)',
+              border: '1px solid var(--border)', cursor: 'pointer', outline: 'none',
+            }}
+            title="Team mode: Auto uses multiple specialist passes for substantial requests; Always uses them for every message."
+            aria-label="Team mode"
+          >
+            <option value="off">Team: Off</option>
+            <option value="auto">Team: Auto</option>
+            <option value="always">Team: Always</option>
+          </select>
 
           {/* Stop button */}
           {chatLoading && (

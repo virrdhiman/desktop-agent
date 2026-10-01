@@ -115,6 +115,18 @@ The agent is prompted to act like a senior engineer:
 
 You can add your own conventions in Settings → **Custom Rules**.
 
+### Multi-agent Team Mode
+
+Use the **Team** selector in the Agent header or Settings:
+
+- **Off** sends the request through the standard executor.
+- **Auto** uses the team for substantial coding, documentation, and analysis work while keeping short chat on one model call. This is the recommended mode for free API keys.
+- **Always** uses the team for every message.
+
+The team runs sequentially: an Analyst frames the task, the Executor uses tools and performs the work, a Reviewer checks the answer against tool evidence, the Executor gets one repair pass when needed, and a Verifier writes the final response. Only the Executor can call tools or edit files. Drafts and internal review output stay out of chat; role progress appears in the task timeline.
+
+Team Mode works with one provider, but separate configured official free providers allow more independent review and better rate-limit fallback. It makes more API calls than standard chat, so provider free-tier limits can be reached sooner. See [docs/MULTI_AGENT.md](./docs/MULTI_AGENT.md) for the full workflow and limits.
+
 ### Free keys and automatic model selection
 
 For OpenAI-compatible providers, on each request VD does the following:

@@ -123,6 +123,7 @@ export function registerSettingsHandlers() {
       }
       parsed.permissionMode ??= 'ask-risky'
       parsed.autoUpdate ??= false
+      parsed.teamMode ??= 'auto'
       return parsed
     } catch {
       return {
@@ -131,6 +132,7 @@ export function registerSettingsHandlers() {
         workspacePath: '',
         permissionMode: 'ask-risky',
         autoUpdate: false,
+        teamMode: 'auto',
       }
     }
   })

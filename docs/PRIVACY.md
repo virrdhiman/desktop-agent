@@ -41,6 +41,7 @@ VD Agent only sends data when you use a feature that needs a network service:
 | When | Where | What is sent |
 |------|-------|--------------|
 | You chat with the agent | The active provider's base URL, and fallback providers with keys | Your messages, recent chat history, the system prompt with your custom rules, and file contents or command output the agent reads |
+| Team Mode handles a substantial query | The selected provider plus configured official free fallbacks, or repeated isolated calls to one provider | The request and bounded workspace context; reviewers and the verifier also receive the executor answer and bounded tool-result evidence |
 | Model discovery | The same provider's `/models` endpoint | Your API key |
 | `web_search` tool | DuckDuckGo | The search query |
 | `speech_to_text` tool | Groq or Hugging Face, with your key | The audio file |
@@ -53,6 +54,8 @@ VD Agent only sends data when you use a feature that needs a network service:
 Tools only run when the agent calls them. Tool calls appear in the agent's reply, and each call and its result is recorded in the **Tasks** panel. With a local provider such as Ollama and no web tools, nothing leaves your machine.
 
 Each AI provider handles your data under its own terms and privacy policy. **Community proxies are run by unknown third parties and see everything you send.**
+
+Team Mode never routes implicitly to community proxies, paid providers, or unconfigured local servers. Set Team Mode to **Off** or use one local provider when a request must not be distributed across configured providers.
 
 ## The agent can read your files
 

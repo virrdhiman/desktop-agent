@@ -227,6 +227,7 @@ type Settings = {
   workspacePath: string
   customRules?: string
   planMode?: boolean
+  teamMode?: 'off' | 'auto' | 'always'
   permissionMode?: 'ask-risky' | 'ask-all-writes' | 'trusted'
   autoUpdate?: boolean
 }
