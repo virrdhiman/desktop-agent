@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   analystBriefForExecutor, buildAnalystMessages, buildRepairMessage, buildReviewerMessages,
-  buildSynthesizerMessages, describeToolEvidence, hasCustomTeamProfile, parseTeamReview, shouldUseTeamMode,
+  buildSpecialistMessages, buildSynthesizerMessages, describeToolEvidence, hasCustomTeamProfile,
+  maxReviewPassesForBudget, parseTeamReview, resolveTeamProfile, selectDynamicSpecialists, shouldUseTeamMode,
 } from './multiAgent'
 
 describe('team routing', () => {
@@ -9,9 +10,13 @@ describe('team routing', () => {
     expect(shouldUseTeamMode('auto', 'Hello', 'quick')).toBe(false)
     expect(shouldUseTeamMode('auto', 'x'.repeat(320), 'quick')).toBe(false)
     expect(shouldUseTeamMode('auto', 'x'.repeat(380), 'quick')).toBe(true)
+    expect(shouldUseTeamMode('auto', 'x'.repeat(380), 'quick', 'cheap')).toBe(false)
+    expect(shouldUseTeamMode('auto', 'x'.repeat(380), 'quick', 'strong')).toBe(true)
     expect(shouldUseTeamMode('auto', 'Review the architecture and investigate security risks.', 'analysis')).toBe(true)
     expect(shouldUseTeamMode('always', 'Hello', 'quick')).toBe(true)
     expect(shouldUseTeamMode('off', 'Implement and test this feature', 'coding')).toBe(false)
+    expect(maxReviewPassesForBudget('cheap')).toBe(1)
+    expect(maxReviewPassesForBudget('balanced')).toBe(2)
   })
 })
 
@@ -61,6 +66,42 @@ describe('team prompts', () => {
     expect(verifier[0].content).toContain('Never claim a file changed')
   })
 
+  it('merges saved presets with custom role overrides', () => {
+    const profile = resolveTeamProfile('security', { reviewer: 'Also check desktop permission bypasses.' })
+    expect(profile.analyst).toMatch(/trust boundaries/)
+    expect(profile.reviewer).toBe('Also check desktop permission bypasses.')
+  })
+
+  it('selects bounded dynamic specialists and keeps them read-only', () => {
+    expect(selectDynamicSpecialists({
+      request: 'Implement CSV extraction and check security risks with tests',
+      taskKind: 'coding',
+      preset: 'default',
+      budget: 'balanced',
+      enabled: true,
+    }).map((role) => role.label)).toEqual(['Security Specialist'])
+
+    const strong = selectDynamicSpecialists({
+      request: 'Implement CSV extraction and check security risks with tests',
+      taskKind: 'coding',
+      preset: 'csv',
+      budget: 'strong',
+      enabled: true,
+    })
+    expect(strong.map((role) => role.label)).toEqual(['Security Specialist', 'Data Specialist'])
+
+    const messages = buildSpecialistMessages({
+      specialist: strong[0],
+      request: 'Check auth',
+      context: 'Workspace',
+      analystBrief: 'Need review',
+      budget: 'cheap',
+    })
+    expect(messages[0].content).toContain('Do not call tools')
+    expect(messages[0].content).toContain('under 160 words')
+    expect(selectDynamicSpecialists({ request: 'security', taskKind: 'analysis', budget: 'strong', enabled: false })).toEqual([])
+  })
+
   it('instructs the synthesizer not to invent execution evidence', () => {
     const messages = buildSynthesizerMessages({
       request: 'Fix it', candidate: 'Done', evidence: '',
@@ -90,5 +131,6 @@ describe('team review parsing', () => {
       { name: 'read_file', ok: true, summary: 'export const value = 1' },
       { name: 'run_command', ok: false, summary: 'exit code 1' },
     ])).toBe('1. SUCCEEDED read_file: export const value = 1\n2. FAILED run_command: exit code 1')
+    expect(describeToolEvidence([{ name: 'read_file', ok: true, summary: 'x'.repeat(800) }], 'cheap')).toContain('[truncated]')
   })
 })

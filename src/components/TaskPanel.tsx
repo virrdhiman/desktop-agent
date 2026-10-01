@@ -21,6 +21,7 @@ export default function TaskPanel() {
   const [expandedTask, setExpandedTask] = useState<string | null>(
     tasks.length > 0 ? tasks[tasks.length - 1].id : null
   )
+  const [expandedTrace, setExpandedTrace] = useState<string | null>(null)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -46,6 +47,7 @@ export default function TaskPanel() {
               const isExpanded = expandedTask === task.id
               const toolSteps = task.steps.filter(s => s.type === 'action')
               const errorSteps = task.steps.filter(s => s.type === 'error')
+              const traceSteps = task.steps.filter(s => s.trace)
 
               return (
                 <div key={task.id} className="card" style={{ overflow: 'hidden' }}>
@@ -90,6 +92,64 @@ export default function TaskPanel() {
                   {/* Task steps (expanded) */}
                   {isExpanded && (
                     <div style={{ marginTop: 8, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
+                      {traceSteps.length > 0 && (
+                        <div style={{ marginBottom: 10, padding: 8, borderRadius: 6, background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700 }}>Agent trace</div>
+                            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{traceSteps.length} role events</span>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {traceSteps.map((step) => {
+                              const trace = step.trace!
+                              const traceId = `${task.id}:${step.id}`
+                              const traceOpen = expandedTrace === traceId
+                              const statusColor = trace.status === 'done' ? 'var(--success)' :
+                                trace.status === 'error' || trace.status === 'blocked' ? 'var(--error)' : 'var(--warning)'
+                              return (
+                                <div key={traceId} style={{ borderRadius: 6, background: 'var(--bg-primary)', border: '1px solid var(--border)' }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => setExpandedTrace(traceOpen ? null : traceId)}
+                                    style={{
+                                      width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                      gap: 8, padding: '7px 9px', background: 'transparent', border: 'none',
+                                      color: 'var(--text-primary)', cursor: 'pointer', textAlign: 'left',
+                                    }}
+                                    aria-expanded={traceOpen}
+                                  >
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+                                      <span style={{ fontSize: 11, transform: traceOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>▶</span>
+                                      <span style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{trace.role}</span>
+                                    </span>
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                                      {trace.provider && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{trace.provider}</span>}
+                                      <span style={{ fontSize: 10, color: statusColor, textTransform: 'uppercase' }}>{trace.status}</span>
+                                    </span>
+                                  </button>
+                                  {traceOpen && (
+                                    <div style={{ padding: '0 9px 9px', display: 'grid', gap: 7 }}>
+                                      {([
+                                        ['Input', trace.input],
+                                        ['Output', trace.output],
+                                        ['Evidence', trace.evidence],
+                                      ] as const).filter(([, value]) => value && value.trim()).map(([label, value]) => (
+                                        <div key={label}>
+                                          <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 3 }}>{label}</div>
+                                          <pre style={{
+                                            margin: 0, padding: 8, maxHeight: 220, overflow: 'auto',
+                                            borderRadius: 4, background: 'var(--bg-tertiary)', whiteSpace: 'pre-wrap',
+                                            fontFamily: 'monospace', fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.45,
+                                          }}>{value}</pre>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
                       {task.steps.map((step, i) => (
                         <div key={step.id} style={{
                           padding: '6px 8px',

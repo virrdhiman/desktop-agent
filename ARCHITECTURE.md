@@ -79,7 +79,9 @@ AgentChat.sendMessage
   → buildSystemPrompt(rules + buildContext(workspace, open file, project memory, resume state))
       + buildHistory(budgeted, tool blocks collapsed)
   → shouldUseTeamMode(Normal / Smart / Agentic)
-      when enabled: Prompt Analyst read-only call → optimized prompt + advisory brief for Executor
+      when enabled: Prompt Analyst read-only call
+                    → optional dynamic specialist calls (budget/preset-capped)
+                    → optimized prompt + advisory brief for Executor
   → buildProviderChain(active first, then locally ranked official free providers with keys, max 4;
                        the provider that already answered this request moves to the front)
   → for each provider: window.api.aiChat({ ..., autoSelect: !pinnedModel })
@@ -114,6 +116,8 @@ AgentChat.sendMessage
 ```
 
 The reply shown and sent back to the model is the complete content returned by `ai:chat`, not the streamed copy, which can still be missing its last tokens when the IPC reply arrives.
+
+Each role pass also writes a structured trace entry into the active task. The Tasks panel renders those entries as an expandable Agent trace with role input, output, provider, status, and bounded evidence.
 
 Anthropic uses the Messages API (`/v1/messages`) with the system prompt in the `system` field. There is no model discovery for it.
 
@@ -205,7 +209,7 @@ Anthropic uses the Messages API (`/v1/messages`) with the system prompt in the `
 ## Performance notes
 
 - Each request sends at most the last 20 non-system messages and about 40,000 characters of history. Old tool blocks are collapsed to one-line notes, and tool results are capped at about 12,000 characters.
-- Agentic environments bound role inputs separately: request 10,000 characters, context 4,000, executor candidate 10,000, and tool evidence 5,000. Smart avoids these extra calls for short chat.
+- Agentic environments bind role inputs to the selected token budget. Balanced uses request 10,000 characters, context 4,000, executor candidate 10,000, and tool evidence 5,000. Cheap is tighter and disables dynamic specialists; Strong allows more context and up to two read-only specialists.
 - Streaming tokens are appended to store state as they arrive.
 - `/models` results are cached for 10 minutes per provider and key.
 - Chat saves are debounced so a burst of messages produces one write.

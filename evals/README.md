@@ -9,13 +9,14 @@
 
 This folder contains VD Agent's golden agent-evaluation data.
 
-The dataset currently contains 66 cases across functional, trajectory, and
+The dataset currently contains 73 cases across functional, trajectory, and
 visual tiers. Twelve cases preserve prompts from real user conversations;
 maintained scenarios use `source: "synthetic"`. The real cases cover repository
 execution, response quality, licensing/provenance, resume behavior, dynamic
 free-model refresh, local history, release costs, handoffs, and verified
 archive-to-CSV output.
-It also covers adaptive multi-agent routing, role isolation, bounded repair,
+It also covers adaptive multi-agent routing, role isolation, dynamic specialists,
+saved team presets, token budgets, visual trace panels, bounded repair,
 evidence-aware synthesis, and safe fallback when a specialist returns junk.
 
 The structure is inspired by public AI-agent evaluation practices, including

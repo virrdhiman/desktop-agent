@@ -388,6 +388,66 @@
       "coveredBy": ["src/lib/multiAgent.test.ts", "docs/MULTI_AGENT.md"]
     },
     {
+      "id": "team-visual-trace-panel",
+      "tier": 2,
+      "source": "synthetic",
+      "prompt": "Show how each agentic role contributed to a finished task.",
+      "checks": [
+        "The Tasks panel exposes an expandable Agent trace after an agentic run.",
+        "Trace entries include role status, provider, bounded input, bounded output, and evidence where applicable.",
+        "Trace entries stay local with the saved chat and are not added as assistant chat messages."
+      ],
+      "coveredBy": ["src/components/TaskPanel.tsx", "src/components/AgentChat.tsx", "scripts/smoke.mjs", "docs/MULTI_AGENT.md"]
+    },
+    {
+      "id": "team-presets-coding",
+      "tier": 2,
+      "source": "synthetic",
+      "prompt": "Use the Coding Team preset for an implementation task.",
+      "checks": [
+        "The preset focuses analyst, executor, reviewer, and verifier behavior on implementation and verification.",
+        "The Test Planner can be selected as a read-only specialist when budget allows.",
+        "Only the executor can call tools or mutate files."
+      ],
+      "coveredBy": ["src/lib/multiAgent.test.ts", "docs/MULTI_AGENT.md"]
+    },
+    {
+      "id": "team-presets-research",
+      "tier": 2,
+      "source": "synthetic",
+      "prompt": "Use the Research Team preset for a source-sensitive comparison.",
+      "checks": [
+        "The preset emphasizes source freshness, primary evidence, and uncertainty.",
+        "The Research Specialist can be selected as a read-only specialist when budget allows.",
+        "The final answer must preserve caveats rather than overclaiming."
+      ],
+      "coveredBy": ["src/lib/multiAgent.test.ts", "docs/MULTI_AGENT.md"]
+    },
+    {
+      "id": "team-presets-csv-data",
+      "tier": 2,
+      "source": "synthetic",
+      "prompt": "Use the CSV/Data Team preset for archive-to-CSV extraction.",
+      "checks": [
+        "The preset emphasizes source inspection, common fields, provenance, and validation.",
+        "The Data Specialist can be selected as a read-only specialist when budget allows.",
+        "CSV outputs should report schema and row/column validation."
+      ],
+      "coveredBy": ["src/lib/multiAgent.test.ts", "docs/MULTI_AGENT.md", "scripts/smoke.mjs"]
+    },
+    {
+      "id": "team-presets-security",
+      "tier": 2,
+      "source": "synthetic",
+      "prompt": "Use the Security Review Team preset for defensive code review.",
+      "checks": [
+        "The preset emphasizes trust boundaries, evidence, severity, and mitigation.",
+        "The Security Specialist can be selected as a read-only specialist when budget allows.",
+        "The workflow must stay defensive and evidence-backed."
+      ],
+      "coveredBy": ["src/lib/multiAgent.test.ts", "docs/MULTI_AGENT.md"]
+    },
+    {
       "id": "archive-zip-slip",
       "tier": 1,
       "source": "synthetic",

@@ -29,7 +29,7 @@ It runs:
 3. `npm run build`
 4. `node scripts/smoke.mjs`
 
-The runner also validates all 66 mapped cases in `evals/agent-golden.json`,
+The runner also validates all 73 mapped cases in `evals/agent-golden.json`,
 including 12 prompts from real user conversations. It checks unique IDs and
 prompts, coverage-file paths, tier minimums, at least 299 passing Vitest tests,
 at least 48 smoke assertions, and at least 65 golden cases. If a refactor

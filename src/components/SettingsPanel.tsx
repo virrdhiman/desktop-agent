@@ -21,9 +21,10 @@
  */
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useStore } from '../store'
-import type { ProviderConfig, TeamRoleProfile } from '../types'
+import type { ProviderConfig, TeamPreset, TeamRoleProfile, TeamTokenBudget } from '../types'
 import { getProviderCategory, mergeImportedSettings, refreshProviderModelCatalog, withoutApiKeys } from '../lib/providers'
 import { APP_NAME, APP_VERSION, AUTHOR_NAME, AUTHOR_URL, COPYRIGHT, LICENSE_URL, REPO_URL } from '../lib/brand'
+import { TEAM_PRESET_LABELS } from '../lib/multiAgent'
 
 type Category = 'all' | 'free' | 'local' | 'community' | 'image_video' | 'paid'
 
@@ -519,10 +520,60 @@ export default function SettingsPanel() {
                   <option value="always">Agentic</option>
                 </select>
               </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 12 }}>
+                <div>
+                  <label className="input-label">Team preset</label>
+                  <select
+                    className="input"
+                    value={settings.teamPreset || 'default'}
+                    onChange={(event) => {
+                      const teamPreset = event.target.value as TeamPreset
+                      const next = { ...settings, teamPreset }
+                      setSettings(next)
+                      void window.api.saveSettings(next)
+                    }}
+                    aria-label="Team preset"
+                  >
+                    {(Object.keys(TEAM_PRESET_LABELS) as TeamPreset[]).map((preset) => (
+                      <option key={preset} value={preset}>{TEAM_PRESET_LABELS[preset]}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="input-label">Token budget</label>
+                  <select
+                    className="input"
+                    value={settings.teamTokenBudget || 'balanced'}
+                    onChange={(event) => {
+                      const teamTokenBudget = event.target.value as TeamTokenBudget
+                      const next = { ...settings, teamTokenBudget }
+                      setSettings(next)
+                      void window.api.saveSettings(next)
+                    }}
+                    aria-label="Agentic token budget"
+                  >
+                    <option value="cheap">Cheap</option>
+                    <option value="balanced">Balanced</option>
+                    <option value="strong">Strong</option>
+                  </select>
+                </div>
+              </div>
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10, fontSize: 12 }}>
+                <input
+                  type="checkbox"
+                  checked={settings.dynamicTeam !== false}
+                  onChange={(event) => {
+                    const next = { ...settings, dynamicTeam: event.target.checked }
+                    setSettings(next)
+                    void window.api.saveSettings(next)
+                  }}
+                />
+                Let VD add read-only specialist agents when the task calls for them
+              </label>
               <div style={{ marginTop: 12, padding: 12, borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--bg-secondary)' }}>
                 <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Custom agent roles</div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: 10 }}>
-                  Optional. Leave these blank to use VD's default analyst, executor, reviewer, and verifier. Custom text guides each role, while tool isolation and evidence checks still stay enforced.
+                  Optional. Presets fill the baseline roles; custom text overrides only the role you edit. Tool isolation, token limits, and evidence checks still stay enforced.
                 </div>
                 {([
                   ['analyst', 'Prompt analyst', 'How should the first agent improve and frame the user request?'],

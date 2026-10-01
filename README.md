@@ -31,7 +31,7 @@ Your chats, settings, and keys stay on your machine. There is no account and no 
 ## Features
 
 - **Agent that verifies its work.** Reads before it claims, pushes back on risky requests, runs your tests or build before it reports success, and asks before destructive actions.
-- **Modern agentic environments.** Choose Normal, Smart, or Agentic. Substantial chat requests can move through a prompt analyst, tool-enabled worker, independent reviewer, bounded repair, and final verifier. You can customize each role while VD keeps tool isolation, evidence checks, and token caps enforced. See [Agentic Environments](./docs/MULTI_AGENT.md).
+- **Modern agentic environments.** Choose Normal, Smart, or Agentic. Substantial chat requests can move through a prompt analyst, optional specialists, tool-enabled worker, independent reviewer, bounded repair, and final verifier. Team presets, token budgets, custom roles, and a visual trace panel keep the workflow strong without wasting tokens. See [Agentic Environments](./docs/MULTI_AGENT.md).
 - **Tools.** Files, code search, shell commands, git, web search, and some media and Web3 helpers. See [TOOLS.md](./TOOLS.md).
 - **Safe archive-to-CSV workflows.** Inventories ZIP files before extraction, rejects unsafe entries, and guides the agent to inspect every source, preserve provenance, and verify structured CSV output.
 - **Plan Mode.** The agent proposes a plan and waits for your approval before it changes files.

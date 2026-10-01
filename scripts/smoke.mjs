@@ -232,6 +232,9 @@ function mockReply(provider, body) {
   if (system.includes('Analyst in a bounded engineering team') && teamRun) {
     return { text: toolBlock({ name: 'read_file', args: { path: 'smoke-editor.ts' } }) }
   }
+  if (system.includes('Test Planner in a bounded engineering team') && teamRun) {
+    return { text: 'SMOKE-TEAM-SPECIALIST verify smoke-editor.ts with a read_file tool result before finalizing.' }
+  }
   if (system.includes('independent Reviewer in a bounded engineering team') && teamRun) {
     const secondPass = last.includes('Review pass: 2')
     return { text: secondPass
@@ -613,6 +616,13 @@ try {
   check('agent team: only the executor runs tools and the draft stays hidden',
     teamToolFollowUps === 1 && !!repairRequest && !systemText(repairRequest.body).includes('Reviewer in a bounded engineering team')
       && !teamUi.includes('SMOKE-TEAM-DRAFT') && teamUi.includes('SMOKE-TEAM-FINAL'))
+  await c.evaluate(`document.querySelector('[aria-label^="Tasks"]')?.click()`)
+  const traceVisible = await waitForText(c, 'Agent trace', 5000)
+  const specialistVisible = await c.evaluate(`document.body.innerText.includes('Test Planner')`)
+  check('agent team: trace panel shows role inputs and dynamic specialist events',
+    traceVisible && specialistVisible,
+    `trace=${traceVisible} specialist=${specialistVisible}`)
+  await c.evaluate(`document.querySelector('[aria-label^="Agent"]')?.click()`)
   await c.evaluate(`(() => {
     const select = document.querySelector('select[aria-label="Agent environment"]')
     Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(select, 'off')

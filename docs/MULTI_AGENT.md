@@ -17,6 +17,7 @@ New and existing installations default to **Smart**.
 ```text
 User request
   -> Analyst: clarifies intent and rewrites the request into an optimized executor prompt
+  -> Optional specialists: read-only task-specific guidance selected by preset and request
   -> Executor: inspects the workspace, uses tools, makes changes, and verifies them
   -> Reviewer: checks the original request, optimized prompt, and tool evidence
   -> Executor repair: one bounded repair prompt and work pass when the review finds a material gap
@@ -25,9 +26,25 @@ User request
 
 The app shows role progress in the task timeline, but only the final verified response is added to chat. Drafts and internal review JSON are not displayed.
 
-## Custom agents
+## Visual trace
 
-Settings includes optional custom instructions for the Prompt Analyst, Worker, Reviewer, and Final Verifier. Leave them blank to use VD's default roles. Custom role text is additive: it guides the specialist, but it does not remove the built-in tool isolation, workspace permissions, evidence checks, review limit, or final-response guardrails.
+Every specialist pass writes a structured trace entry to the active task. Open **Tasks** after a run to expand **Agent trace** and inspect each role's bounded input, output, provider, status, and the evidence supplied to review/verifier passes. These traces are local session data and are restored with the chat.
+
+## Presets and custom agents
+
+Settings includes saved team presets:
+
+- **Default Team**: general-purpose prompt analyst, worker, reviewer, and verifier.
+- **Coding Team**: implementation, regression risk, and verification focus.
+- **Research Team**: source freshness, primary evidence, and uncertainty focus.
+- **CSV/Data Team**: schema, provenance, archive safety, and validation focus.
+- **Security Review Team**: defensive security review, severity, evidence, and mitigation focus.
+
+Custom instructions for the Prompt Analyst, Worker, Reviewer, and Final Verifier override the selected preset role by role. Custom role text is additive in power but bounded in authority: it guides the specialist, but it does not remove tool isolation, workspace permissions, evidence checks, review limits, token caps, or final-response guardrails.
+
+## Dynamic specialists
+
+When enabled, VD can add read-only specialists based on the request and selected preset. Examples include a Security Specialist, Data Specialist, Research Specialist, or Test Planner. Dynamic specialists never call tools or edit files; they provide compact guidance to the Executor. The selected token budget caps how many can run.
 
 ## Safety and evidence
 
@@ -52,4 +69,10 @@ This follows the current production pattern used by modern agent frameworks: bou
 
 ## Token efficiency
 
-The team is deliberately compact. Smart mode only invokes specialists for substantial work, analyst output is capped, reviewer issues are limited, evidence summaries are shortened before being sent to specialist roles, and the loop is capped at two reviews plus one repair. Agentic mode gives the strongest workflow, but Normal and Smart remain available when token use matters more than extra review.
+The team is deliberately compact. Smart mode only invokes specialists for substantial work, analyst output is capped, reviewer issues are limited, evidence summaries are shortened before being sent to specialist roles, and the loop is capped.
+
+- **Cheap**: highest savings, no dynamic specialists, tight context/evidence caps, one review pass.
+- **Balanced**: default, one dynamic specialist, medium caps, one repair opportunity.
+- **Strong**: largest context/evidence caps, up to two dynamic specialists, strongest review context.
+
+Agentic mode gives the strongest workflow, but Normal and Smart remain available when token use matters more than extra review.

@@ -64,6 +64,8 @@ export interface ProviderConfig {
 
 export type AgentTaskKind = 'coding' | 'analysis' | 'documentation' | 'quick'
 export type TeamMode = 'off' | 'auto' | 'always'
+export type TeamPreset = 'default' | 'coding' | 'research' | 'csv' | 'security'
+export type TeamTokenBudget = 'cheap' | 'balanced' | 'strong'
 
 export interface TeamRoleProfile {
   analyst?: string
@@ -93,6 +95,9 @@ export interface Settings {
   customRules?: string
   planMode?: boolean
   teamMode?: TeamMode
+  teamPreset?: TeamPreset
+  teamTokenBudget?: TeamTokenBudget
+  dynamicTeam?: boolean
   teamProfile?: TeamRoleProfile
   permissionMode?: 'ask-risky' | 'ask-all-writes' | 'trusted'
   autoUpdate?: boolean
@@ -182,6 +187,16 @@ export interface AgentStep {
   content: string
   timestamp: number
   toolCall?: ToolCall
+  trace?: AgentTraceEntry
+}
+
+export interface AgentTraceEntry {
+  role: string
+  status: 'running' | 'done' | 'error' | 'blocked'
+  input: string
+  output?: string
+  evidence?: string
+  provider?: string
 }
 
 export interface TerminalEntry {

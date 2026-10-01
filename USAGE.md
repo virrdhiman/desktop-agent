@@ -123,11 +123,17 @@ Use the **Env** selector in the Agent header or Settings:
 - **Smart** uses the team for substantial coding, documentation, and analysis work while keeping short chat on one model call. This is the recommended mode for free API keys.
 - **Agentic** uses the team for every message.
 
-The team runs sequentially: a Prompt Analyst clarifies intent and writes an optimized worker prompt, the Worker/Executor uses tools and performs the work, a Reviewer checks the original request plus the optimized prompt against tool evidence, the Worker gets one focused repair pass when needed, and a Verifier writes the final response. Only the Worker can call tools or edit files. Drafts and internal review output stay out of chat; role progress appears in the task timeline.
+The team runs sequentially: a Prompt Analyst clarifies intent and writes an optimized worker prompt, optional read-only specialists add task-specific guidance, the Worker/Executor uses tools and performs the work, a Reviewer checks the original request plus the optimized prompt against tool evidence, the Worker gets one focused repair pass when needed, and a Verifier writes the final response. Only the Worker can call tools or edit files. Drafts and internal review output stay out of chat; role progress appears in the task timeline.
 
-Settings also includes optional custom instructions for the Prompt Analyst, Worker, Reviewer, and Final Verifier. Leave them blank to use VD's defaults. Custom roles guide the team, but the built-in tool restrictions, review cap, evidence checks, and token caps still apply.
+Settings includes saved team presets: **Default Team**, **Coding Team**, **Research Team**, **CSV/Data Team**, and **Security Review Team**. Custom instructions can override the Prompt Analyst, Worker, Reviewer, and Final Verifier for your own workflow. Presets and custom roles guide the team, but the built-in tool restrictions, review cap, evidence checks, and token caps still apply.
 
-Agentic mode works with one provider, but separate configured official free providers allow more independent review and better rate-limit fallback. It makes more API calls than standard chat, so provider free-tier limits can be reached sooner. Smart mode is designed to avoid using the full team for small chat. See [docs/MULTI_AGENT.md](./docs/MULTI_AGENT.md) for the full workflow and limits.
+The token budget controls specialist cost:
+
+- **Cheap** keeps small chat single-agent for longer, skips dynamic specialists, and uses the tightest context/evidence caps.
+- **Balanced** is the default and allows one dynamic specialist when useful.
+- **Strong** allows more context and up to two dynamic specialists for harder work.
+
+Agentic mode works with one provider, but separate configured official free providers allow more independent review and better rate-limit fallback. It makes more API calls than standard chat, so provider free-tier limits can be reached sooner. Smart mode is designed to avoid using the full team for small chat. Open **Tasks** after a run to inspect the visual agent trace with role input, output, provider, and evidence. See [docs/MULTI_AGENT.md](./docs/MULTI_AGENT.md) for the full workflow and limits.
 
 ### Free keys and automatic model selection
 

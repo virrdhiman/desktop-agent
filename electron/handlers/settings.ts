@@ -124,6 +124,9 @@ export function registerSettingsHandlers() {
       parsed.permissionMode ??= 'ask-risky'
       parsed.autoUpdate ??= false
       parsed.teamMode ??= 'auto'
+      parsed.teamPreset ??= 'default'
+      parsed.teamTokenBudget ??= 'balanced'
+      parsed.dynamicTeam ??= true
       if (!parsed.teamProfile || typeof parsed.teamProfile !== 'object') parsed.teamProfile = {}
       return parsed
     } catch {
@@ -134,6 +137,9 @@ export function registerSettingsHandlers() {
         permissionMode: 'ask-risky',
         autoUpdate: false,
         teamMode: 'auto',
+        teamPreset: 'default',
+        teamTokenBudget: 'balanced',
+        dynamicTeam: true,
         teamProfile: {},
       }
     }

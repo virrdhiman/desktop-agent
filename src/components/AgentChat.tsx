@@ -38,15 +38,21 @@ import {
   type ProviderAttempt, type ToolRun,
 } from '../lib/agent'
 import {
-  TEAM_MAX_REVIEW_PASSES, analystBriefForExecutor, buildAnalystMessages, buildRepairMessage,
-  buildReviewerMessages, buildSynthesizerMessages, describeToolEvidence, parseTeamReview, shouldUseTeamMode,
-  hasCustomTeamProfile, type TeamReview,
+  analystBriefForExecutor, buildAnalystMessages, buildRepairMessage, buildReviewerMessages,
+  buildSpecialistMessages, buildSynthesizerMessages, describeToolEvidence, hasCustomTeamProfile,
+  maxReviewPassesForBudget, parseTeamReview, resolveTeamProfile, selectDynamicSpecialists, shouldUseTeamMode,
+  type TeamReview,
 } from '../lib/multiAgent'
 
 type ChatOutcome =
   | { content: string; provider: ProviderConfig; failed: ProviderAttempt[] }
   | { error: string; cancelled?: boolean }
 
+function traceText(value: string, max = 6_000): string {
+  const text = value.trim()
+  if (text.length <= max) return text
+  return `${text.slice(0, max)}\n[truncated]`
+}
 
 // Simple markdown renderer component
 function MarkdownContent({ content }: { content: string }) {
@@ -599,7 +605,9 @@ export default function AgentChat() {
       context: workspaceContext,
       customRules: appSettings.customRules,
     })
-    const teamEnabled = shouldUseTeamMode(appSettings.teamMode, userContent, taskKind)
+    const teamBudget = appSettings.teamTokenBudget || 'balanced'
+    const teamProfile = resolveTeamProfile(appSettings.teamPreset, appSettings.teamProfile)
+    const teamEnabled = shouldUseTeamMode(appSettings.teamMode, userContent, taskKind, teamBudget)
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -663,30 +671,80 @@ export default function AgentChat() {
       preferredId: string | undefined,
       roleTaskKind: AgentTaskKind = 'analysis'
     ): Promise<string | null> => {
+      const traceInput = traceText(roleMessages.map((message) => `${message.role.toUpperCase()}:\n${message.content}`).join('\n\n'))
       addStepToTask(taskId, { id: `${Date.now()}-${label}`, type: 'thought', content: `${label}: working`, timestamp: Date.now() })
       const roleOutcome = await callWithFallback(roleMessages, preferredId, roleTaskKind, false)
       if ('error' in roleOutcome) {
         addStepToTask(taskId, { id: `${Date.now()}-${label}-error`, type: 'error', content: `${label}: ${roleOutcome.error}`, timestamp: Date.now() })
+        addStepToTask(taskId, {
+          id: `${Date.now()}-${label}-trace-error`,
+          type: 'error',
+          content: `${label} trace: failed`,
+          timestamp: Date.now(),
+          trace: { role: label, status: 'error', input: traceInput, output: traceText(roleOutcome.error) },
+        })
         return null
       }
       if (hasToolBlock(roleOutcome.content)) {
         addStepToTask(taskId, { id: `${Date.now()}-${label}-blocked`, type: 'error', content: `${label}: ignored an unauthorized tool request`, timestamp: Date.now() })
+        addStepToTask(taskId, {
+          id: `${Date.now()}-${label}-trace-blocked`,
+          type: 'error',
+          content: `${label} trace: unauthorized tool request blocked`,
+          timestamp: Date.now(),
+          trace: { role: label, status: 'blocked', input: traceInput, output: traceText(roleOutcome.content), provider: roleOutcome.provider.name },
+        })
         return null
       }
       addTokens(Math.ceil(roleMessages.reduce((total, message) => total + message.content.length, 0) / 4), Math.ceil(roleOutcome.content.length / 4))
       addStepToTask(taskId, { id: `${Date.now()}-${label}-done`, type: 'observation', content: `${label}: complete via ${roleOutcome.provider.name}`, timestamp: Date.now() })
-      return cleanResponse(roleOutcome.content)
+      const cleanedRole = cleanResponse(roleOutcome.content)
+      addStepToTask(taskId, {
+        id: `${Date.now()}-${label}-trace`,
+        type: 'observation',
+        content: `${label} trace: complete`,
+        timestamp: Date.now(),
+        trace: { role: label, status: 'done', input: traceInput, output: traceText(cleanedRole), provider: roleOutcome.provider.name },
+      })
+      return cleanedRole
     }
 
     let analyst = ''
+    let specialistBriefs: string[] = []
     if (teamEnabled) {
       analyst = await callRole(
         'Analyst',
-        buildAnalystMessages(userContent, workspaceContext, appSettings.teamProfile),
+        buildAnalystMessages(userContent, workspaceContext, teamProfile, teamBudget),
         teamProviderIds[1] || teamProviderIds[0]
       ) || ''
       if (useStore.getState().cancelRequested) { finish('done', 'Generation stopped.'); return }
-      if (analyst) apiMessages[0] = { role: 'system', content: `${systemPrompt}\n\n${analystBriefForExecutor(analyst, appSettings.teamProfile)}` }
+      const specialists = selectDynamicSpecialists({
+        request: userContent,
+        taskKind,
+        preset: appSettings.teamPreset,
+        budget: teamBudget,
+        enabled: appSettings.dynamicTeam !== false,
+      })
+      if (specialists.length > 0) {
+        addStepToTask(taskId, {
+          id: `${Date.now()}-specialists`,
+          type: 'thought',
+          content: `Dynamic specialists: ${specialists.map((specialist) => specialist.label).join(', ')}`,
+          timestamp: Date.now(),
+        })
+      }
+      for (const specialist of specialists) {
+        if (useStore.getState().cancelRequested) break
+        const brief = await callRole(
+          specialist.label,
+          buildSpecialistMessages({ specialist, request: userContent, context: workspaceContext, analystBrief: analyst, budget: teamBudget }),
+          teamProviderIds[1] || teamProviderIds[0],
+          specialist.taskKind
+        )
+        if (brief) specialistBriefs.push(`${specialist.label}: ${brief}`)
+      }
+      if (useStore.getState().cancelRequested) { finish('done', 'Generation stopped.'); return }
+      if (analyst || specialistBriefs.length > 0) apiMessages[0] = { role: 'system', content: `${systemPrompt}\n\n${analystBriefForExecutor(analyst, teamProfile, specialistBriefs, teamBudget)}` }
       addStepToTask(taskId, { id: `${Date.now()}-executor`, type: 'thought', content: 'Executor: acting on the request', timestamp: Date.now() })
     }
 
@@ -721,20 +779,34 @@ export default function AgentChat() {
         }
         const cleaned = cleanResponse(responseContent)
         if (teamEnabled && cleaned && problems.length === 0 && claims.length === 0) {
-          const evidence = describeToolEvidence(toolRuns)
+          const evidence = describeToolEvidence(toolRuns, teamBudget)
+          addStepToTask(taskId, {
+            id: `${Date.now()}-executor-trace`,
+            type: 'observation',
+            content: 'Executor trace: candidate ready for review',
+            timestamp: Date.now(),
+            trace: {
+              role: 'Executor',
+              status: 'done',
+              input: traceText(analystBriefForExecutor(analyst, teamProfile, specialistBriefs, teamBudget)),
+              output: traceText(cleaned),
+              evidence: traceText(evidence),
+              provider: outcome.provider.name,
+            },
+          })
           reviewPass++
           const reviewerText = await callRole(
             'Reviewer',
-            buildReviewerMessages({ request: userContent, candidate: cleaned, evidence, pass: reviewPass, analystBrief: analyst || '', profile: appSettings.teamProfile }),
+            buildReviewerMessages({ request: userContent, candidate: cleaned, evidence, pass: reviewPass, analystBrief: [analyst, ...specialistBriefs].filter(Boolean).join('\n\n'), profile: teamProfile, budget: teamBudget }),
             teamProviderIds[2] || teamProviderIds[1] || teamProviderIds[0]
           )
           if (useStore.getState().cancelRequested) { finish('done', 'Generation stopped.'); return }
           if (reviewerText) {
-            const parsedReview = parseTeamReview(reviewerText)
+            const parsedReview = parseTeamReview(reviewerText, teamBudget)
             if (parsedReview.usable || !latestReview.usable) latestReview = parsedReview
           }
 
-          if (latestReview.usable && latestReview.verdict === 'revise' && !repairAttempted && reviewPass < TEAM_MAX_REVIEW_PASSES) {
+          if (latestReview.usable && latestReview.verdict === 'revise' && !repairAttempted && reviewPass < maxReviewPassesForBudget(teamBudget)) {
             repairAttempted = true
             addStepToTask(taskId, { id: `${Date.now()}-repair`, type: 'thought', content: 'Executor: applying reviewer findings', timestamp: Date.now() })
             apiMessages = [
@@ -750,7 +822,7 @@ export default function AgentChat() {
 
           const synthesized = await callRole(
             'Verifier',
-            buildSynthesizerMessages({ request: userContent, candidate: cleaned, evidence, review: latestReview, analystBrief: analyst || '', profile: appSettings.teamProfile }),
+            buildSynthesizerMessages({ request: userContent, candidate: cleaned, evidence, review: latestReview, analystBrief: [analyst, ...specialistBriefs].filter(Boolean).join('\n\n'), profile: teamProfile, budget: teamBudget }),
             teamProviderIds[1] || teamProviderIds[0],
             'quick'
           )
@@ -909,6 +981,27 @@ export default function AgentChat() {
           {hasCustomTeamProfile(appSettings.teamProfile) && (
             <span className="badge badge-green" title="Custom agent role instructions are active">Custom team</span>
           )}
+
+          <select
+            value={appSettings.teamTokenBudget || 'balanced'}
+            onChange={(event) => {
+              const teamTokenBudget = event.target.value as 'cheap' | 'balanced' | 'strong'
+              const next = { ...appSettings, teamTokenBudget }
+              setAppSettings(next)
+              void window.api.saveSettings(next)
+            }}
+            style={{
+              padding: '3px 8px', borderRadius: 6, fontSize: 11,
+              background: 'var(--bg-tertiary)', color: 'var(--text-secondary)',
+              border: '1px solid var(--border)', cursor: 'pointer', outline: 'none',
+            }}
+            title="Agentic token budget: Cheap saves calls, Balanced is the default, Strong allows more context and specialists."
+            aria-label="Agentic token budget"
+          >
+            <option value="cheap">Budget: Cheap</option>
+            <option value="balanced">Budget: Balanced</option>
+            <option value="strong">Budget: Strong</option>
+          </select>
 
           {/* Stop button */}
           {chatLoading && (
