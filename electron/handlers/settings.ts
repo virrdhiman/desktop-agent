@@ -16,6 +16,13 @@ import { randomUUID } from 'crypto'
 /** Path to settings JSON on disk */
 export const SETTINGS_PATH = path.join(app.getPath('userData'), 'settings.json')
 
+const ENV_PROVIDER_KEYS: Record<string, string[]> = {
+  groq: ['GROQ_API_KEY'],
+  openrouter: ['OPENROUTER_API_KEY'],
+  gemini: ['GEMINI_API_KEY', 'GOOGLE_API_KEY'],
+  ollama: ['OLLAMA_API_KEY_OR_URL'],
+}
+
 /** Default provider catalog. Free-tier terms change often; notes stay deliberately generic. */
 const DEFAULT_PROVIDERS = [
   // ═══ FREE OFFICIAL ═══
@@ -91,6 +98,51 @@ function decryptApiKey(key: string): string {
   } catch { return key }
 }
 
+function parseDotEnv(text: string): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim()
+    if (!line || line.startsWith('#')) continue
+    const match = /^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line)
+    if (!match) continue
+    let value = match[2].trim()
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1).replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\\\/g, '\\')
+    }
+    out[match[1]] = value
+  }
+  return out
+}
+
+function loadPrivateEnv(): Record<string, string> {
+  if (process.env.VD_AGENT_DISABLE_ENV_IMPORT === '1') return {}
+  const candidates = [
+    path.join(app.getPath('userData'), '.env.local'),
+    path.join(path.dirname(app.getPath('exe')), '.env.local'),
+    path.join(process.resourcesPath || '', '.env.local'),
+    path.join(app.getAppPath(), '.env.local'),
+  ]
+  const merged: Record<string, string> = {}
+  for (const file of candidates) {
+    try {
+      if (!fs.existsSync(file)) continue
+      Object.assign(merged, parseDotEnv(fs.readFileSync(file, 'utf-8')))
+    } catch {}
+  }
+  return merged
+}
+
+function withEnvProviderKeys(providers: any[]): any[] {
+  const env = loadPrivateEnv()
+  if (Object.keys(env).length === 0) return providers
+  return providers.map((provider) => {
+    if (provider.apiKey) return provider
+    const keys = ENV_PROVIDER_KEYS[provider.id] || []
+    const apiKey = keys.map((key) => env[key]).find((value) => typeof value === 'string' && value.trim())
+    return apiKey ? { ...provider, apiKey } : provider
+  })
+}
+
 /** Add providers introduced after the user's settings file was first written. */
 function withNewDefaults(providers: any[]): any[] {
   const known = new Set(providers.map((p) => p.id))
@@ -115,11 +167,11 @@ export function registerSettingsHandlers() {
       const data = await fs.promises.readFile(SETTINGS_PATH, 'utf-8')
       const parsed = JSON.parse(data)
       if (Array.isArray(parsed.providers)) {
-        parsed.providers = withNewDefaults(
+        parsed.providers = withEnvProviderKeys(withNewDefaults(
           parsed.providers.map((p: any) => ({ ...p, apiKey: decryptApiKey(p.apiKey) }))
-        )
+        ))
       } else {
-        parsed.providers = DEFAULT_PROVIDERS
+        parsed.providers = withEnvProviderKeys(DEFAULT_PROVIDERS)
       }
       parsed.permissionMode ??= 'ask-risky'
       parsed.autoUpdate ??= false
@@ -131,7 +183,7 @@ export function registerSettingsHandlers() {
       return parsed
     } catch {
       return {
-        providers: DEFAULT_PROVIDERS,
+        providers: withEnvProviderKeys(DEFAULT_PROVIDERS),
         activeProvider: 'groq',
         workspacePath: '',
         permissionMode: 'ask-risky',

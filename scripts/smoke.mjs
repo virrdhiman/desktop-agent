@@ -100,6 +100,7 @@ function stamp(dir) {
 async function launch(label) {
   const env = { ...process.env }
   env.VD_AGENT_AUTO_APPROVE_TOOLS = '1'
+  env.VD_AGENT_DISABLE_ENV_IMPORT = '1'
   delete env.VITE_DEV_SERVER_URL
   delete env.ELECTRON_RUN_AS_NODE
   const portFile = path.join(userData, 'DevToolsActivePort')

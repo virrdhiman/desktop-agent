@@ -38,6 +38,14 @@ Settings includes an optional **Export diagnostics** action for troubleshooting.
 
 `npm run agent:evals:export` writes JSONL files under `evals/hosted/` for optional LangSmith/Arize-style dashboard imports. The export script does not upload anything. `npm run agent:evals:import` can upload the golden eval prompts and acceptance criteria to an explicitly configured hosted dashboard, so run it only after reviewing the dataset and confirming the target account. Generated hosted files may contain prompts and acceptance criteria, so the folder is ignored by git and should be reviewed before sharing with any hosted service.
 
+### Private env files
+
+For a private local build, VD Agent can read `.env.local` from the app user-data
+folder, beside the executable, or inside app resources. It only fills provider
+API keys that are still blank in Settings and never uploads the file by itself.
+Do not place `.env.local` in a shared installer, public release, support bundle,
+or synced folder.
+
 ## What leaves your machine
 
 VD Agent only sends data when you use a feature that needs a network service:
