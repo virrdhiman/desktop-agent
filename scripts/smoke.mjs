@@ -425,8 +425,9 @@ try {
     : null
   check('checkpoint restore returns the previous file content', restoredCheckpoint?.success && fs.readFileSync(path.join(workspace, 'checkpoint-smoke.txt'), 'utf8') === 'before checkpoint\n')
 
-  const saved = await a.evaluate(`window.api.saveConversation({ id: 'smoke-session', title: 'Smoke test chat', pinned: true, summary: 'SMOKE-SUMMARY', resume: { workspacePath: ${JSON.stringify(workspace)}, selectedFile: 'smoke-editor.ts', projectMemory: 'SMOKE-PROJECT-MEMORY', checkpoint: ${JSON.stringify(checkpointSummary)}, lastVerification: { command: 'npm test', ok: true, timestamp: Date.now(), summary: 'SMOKE-VERIFIED' } }, messages: ${smokeMessages} })`)
-  const resaved = await a.evaluate(`window.api.saveConversation({ id: 'smoke-session', title: 'Smoke test chat', pinned: true, summary: 'SMOKE-SUMMARY', resume: { workspacePath: ${JSON.stringify(workspace)}, selectedFile: 'smoke-editor.ts', projectMemory: 'SMOKE-PROJECT-MEMORY', checkpoint: ${JSON.stringify(checkpointSummary)}, lastVerification: { command: 'npm test', ok: true, timestamp: Date.now(), summary: 'SMOKE-VERIFIED' } }, messages: ${smokeMessages} })`)
+  const projectMemory = memory?.content || 'SMOKE-PROJECT-MEMORY'
+  const saved = await a.evaluate(`window.api.saveConversation({ id: 'smoke-session', title: 'Smoke test chat', pinned: true, summary: 'SMOKE-SUMMARY', resume: { workspacePath: ${JSON.stringify(workspace)}, selectedFile: 'smoke-editor.ts', projectMemory: ${JSON.stringify(projectMemory)}, checkpoint: ${JSON.stringify(checkpointSummary)}, lastVerification: { command: 'npm test', ok: true, timestamp: Date.now(), summary: 'SMOKE-VERIFIED' } }, messages: ${smokeMessages} })`)
+  const resaved = await a.evaluate(`window.api.saveConversation({ id: 'smoke-session', title: 'Smoke test chat', pinned: true, summary: 'SMOKE-SUMMARY', resume: { workspacePath: ${JSON.stringify(workspace)}, selectedFile: 'smoke-editor.ts', projectMemory: ${JSON.stringify(projectMemory)}, checkpoint: ${JSON.stringify(checkpointSummary)}, lastVerification: { command: 'npm test', ok: true, timestamp: Date.now(), summary: 'SMOKE-VERIFIED' } }, messages: ${smokeMessages} })`)
   const files = fs.existsSync(convDir) ? fs.readdirSync(convDir).filter((f) => f.endsWith('.json')) : []
   check('chat saves to userData/conversations; re-save updates the same file', saved?.success && resaved?.success && files.length === 1 && files[0] === 'smoke-session.json', files.join(','))
   const raw = files.length ? fs.readFileSync(path.join(convDir, files[0]), 'utf8') : ''
@@ -480,13 +481,29 @@ try {
   await sleep(500)
   await b.screenshot('editor.png')
 
-  const del = await b.evaluate(`window.api.deleteConversation('smoke-session')`)
-  const after = await b.evaluate(`window.api.listConversations()`)
-  check('delete removes the chat, backup, checkpoints, and list entry', del?.success
+  await b.evaluate(`document.querySelector('[aria-label^="Sessions panel"]')?.click()`)
+  await sleep(300)
+  const del = await b.evaluate(`(() => {
+    window.confirm = () => true
+    const btn = [...document.querySelectorAll('button')].find(x => (x.getAttribute('aria-label') || '').startsWith('Delete chat '))
+    btn?.click()
+    return !!btn
+  })()`)
+  let after = []
+  for (let i = 0; i < 40; i++) {
+    await sleep(250)
+    after = await b.evaluate(`window.api.listConversations()`)
+    if (Array.isArray(after) && !after.some((item) => item.id === 'smoke-session')
+      && !fs.existsSync(path.join(convDir, 'smoke-session.json'))
+      && !fs.existsSync(path.join(convDir, 'smoke-session.json.bak'))
+      && !fs.existsSync(path.join(userData, 'checkpoints', 'smoke-session'))) break
+  }
+  check('delete removes the chat, backup, checkpoints, and list entry', del === true
     && !fs.existsSync(path.join(convDir, 'smoke-session.json'))
     && !fs.existsSync(path.join(convDir, 'smoke-session.json.bak'))
     && !fs.existsSync(path.join(userData, 'checkpoints', 'smoke-session'))
-    && after.length === 0)
+    && Array.isArray(after) && !after.some((item) => item.id === 'smoke-session'),
+    JSON.stringify({ del, after: Array.isArray(after) ? after.map((item) => item.id) : after }))
   const traversal = await b.evaluate(`window.api.deleteConversation('../settings')`)
   check('path-traversal session id is rejected', !traversal?.success)
   const errors2 = [...b.errors]
