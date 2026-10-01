@@ -78,8 +78,8 @@ electron-builder does not rebuild native dependencies a second time. `node-pty` 
 AgentChat.sendMessage
   → buildSystemPrompt(rules + buildContext(workspace, open file, project memory, resume state))
       + buildHistory(budgeted, tool blocks collapsed)
-  → shouldUseTeamMode(Off / Auto / Always)
-      when enabled: Analyst read-only call → advisory brief for Executor
+  → shouldUseTeamMode(Normal / Smart / Agentic)
+      when enabled: Prompt Analyst read-only call → optimized prompt + advisory brief for Executor
   → buildProviderChain(active first, then locally ranked official free providers with keys, max 4;
                        the provider that already answered this request moves to the front)
   → for each provider: window.api.aiChat({ ..., autoSelect: !pinnedModel })
@@ -106,9 +106,9 @@ AgentChat.sendMessage
   → final reply: assessResponse (empty / filler-only / repetition → one correctionMessage retry)
                  unverifiedClaims (claims edits, commands, or passing tests with no matching
                    tool run this request → one unverifiedClaimsMessage retry, else a notice)
-                 when Team Mode is enabled:
-                   Reviewer receives candidate + bounded tool-result evidence
-                   → optional single Executor repair → second review
+                 when Agentic environment is enabled:
+                   Reviewer receives original request + analyst brief + bounded tool-result evidence
+                   → optional focused Executor repair prompt → second review
                    → Verifier synthesis (discarded if it is unusable or adds unverified claims)
                  → cleanResponse (strips stock openers and closers outside code) → chat
 ```
@@ -205,7 +205,7 @@ Anthropic uses the Messages API (`/v1/messages`) with the system prompt in the `
 ## Performance notes
 
 - Each request sends at most the last 20 non-system messages and about 40,000 characters of history. Old tool blocks are collapsed to one-line notes, and tool results are capped at about 12,000 characters.
-- Team Mode bounds role inputs separately: request 12,000 characters, context 6,000, executor candidate 14,000, and tool evidence 8,000. Auto avoids these extra calls for short chat.
+- Agentic environments bound role inputs separately: request 10,000 characters, context 4,000, executor candidate 10,000, and tool evidence 5,000. Smart avoids these extra calls for short chat.
 - Streaming tokens are appended to store state as they arrive.
 - `/models` results are cached for 10 minutes per provider and key.
 - Chat saves are debounced so a burst of messages produces one write.

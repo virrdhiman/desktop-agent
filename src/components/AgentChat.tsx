@@ -40,7 +40,7 @@ import {
 import {
   TEAM_MAX_REVIEW_PASSES, analystBriefForExecutor, buildAnalystMessages, buildRepairMessage,
   buildReviewerMessages, buildSynthesizerMessages, describeToolEvidence, parseTeamReview, shouldUseTeamMode,
-  type TeamReview,
+  hasCustomTeamProfile, type TeamReview,
 } from '../lib/multiAgent'
 
 type ChatOutcome =
@@ -678,14 +678,15 @@ export default function AgentChat() {
       return cleanResponse(roleOutcome.content)
     }
 
+    let analyst = ''
     if (teamEnabled) {
-      const analyst = await callRole(
+      analyst = await callRole(
         'Analyst',
-        buildAnalystMessages(userContent, workspaceContext),
+        buildAnalystMessages(userContent, workspaceContext, appSettings.teamProfile),
         teamProviderIds[1] || teamProviderIds[0]
-      )
+      ) || ''
       if (useStore.getState().cancelRequested) { finish('done', 'Generation stopped.'); return }
-      if (analyst) apiMessages[0] = { role: 'system', content: `${systemPrompt}\n\n${analystBriefForExecutor(analyst)}` }
+      if (analyst) apiMessages[0] = { role: 'system', content: `${systemPrompt}\n\n${analystBriefForExecutor(analyst, appSettings.teamProfile)}` }
       addStepToTask(taskId, { id: `${Date.now()}-executor`, type: 'thought', content: 'Executor: acting on the request', timestamp: Date.now() })
     }
 
@@ -724,7 +725,7 @@ export default function AgentChat() {
           reviewPass++
           const reviewerText = await callRole(
             'Reviewer',
-            buildReviewerMessages({ request: userContent, candidate: cleaned, evidence, pass: reviewPass }),
+            buildReviewerMessages({ request: userContent, candidate: cleaned, evidence, pass: reviewPass, analystBrief: analyst || '', profile: appSettings.teamProfile }),
             teamProviderIds[2] || teamProviderIds[1] || teamProviderIds[0]
           )
           if (useStore.getState().cancelRequested) { finish('done', 'Generation stopped.'); return }
@@ -749,7 +750,7 @@ export default function AgentChat() {
 
           const synthesized = await callRole(
             'Verifier',
-            buildSynthesizerMessages({ request: userContent, candidate: cleaned, evidence, review: latestReview }),
+            buildSynthesizerMessages({ request: userContent, candidate: cleaned, evidence, review: latestReview, analystBrief: analyst || '', profile: appSettings.teamProfile }),
             teamProviderIds[1] || teamProviderIds[0],
             'quick'
           )
@@ -898,13 +899,16 @@ export default function AgentChat() {
               background: 'var(--bg-tertiary)', color: 'var(--text-secondary)',
               border: '1px solid var(--border)', cursor: 'pointer', outline: 'none',
             }}
-            title="Team mode: Auto uses multiple specialist passes for substantial requests; Always uses them for every message."
-            aria-label="Team mode"
+            title="Environment: Normal uses one executor, Smart chooses per request, Agentic forces planner, worker, reviewer, repair, and verifier."
+            aria-label="Agent environment"
           >
-            <option value="off">Team: Off</option>
-            <option value="auto">Team: Auto</option>
-            <option value="always">Team: Always</option>
+            <option value="off">Env: Normal</option>
+            <option value="auto">Env: Smart</option>
+            <option value="always">Env: Agentic</option>
           </select>
+          {hasCustomTeamProfile(appSettings.teamProfile) && (
+            <span className="badge badge-green" title="Custom agent role instructions are active">Custom team</span>
+          )}
 
           {/* Stop button */}
           {chatLoading && (

@@ -364,6 +364,30 @@
       "coveredBy": ["src/lib/multiAgent.test.ts", "src/components/AgentChat.tsx"]
     },
     {
+      "id": "team-custom-role-profile",
+      "tier": 2,
+      "source": "synthetic",
+      "prompt": "Let the user customize the analyst, worker, reviewer, and verifier for the agentic environment.",
+      "checks": [
+        "Blank custom roles keep the default analyst, executor, reviewer, and verifier behavior.",
+        "Custom role text is additive and cannot remove tool isolation, loop limits, or evidence checks.",
+        "Reviewer and verifier receive the analyst's optimized prompt as well as the original request."
+      ],
+      "coveredBy": ["src/lib/multiAgent.test.ts", "src/components/SettingsPanel.tsx", "docs/MULTI_AGENT.md"]
+    },
+    {
+      "id": "team-token-efficient-routing",
+      "tier": 2,
+      "source": "synthetic",
+      "prompt": "Keep agentic work strong without spending unnecessary tokens on small chat.",
+      "checks": [
+        "Smart mode leaves short quick chat on the standard executor.",
+        "Role input, custom role text, reviewer issues, repair instructions, and tool evidence are bounded.",
+        "Agentic mode still forces the full team when the user explicitly selects it."
+      ],
+      "coveredBy": ["src/lib/multiAgent.test.ts", "docs/MULTI_AGENT.md"]
+    },
+    {
       "id": "archive-zip-slip",
       "tier": 1,
       "source": "synthetic",

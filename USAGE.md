@@ -115,17 +115,19 @@ The agent is prompted to act like a senior engineer:
 
 You can add your own conventions in Settings → **Custom Rules**.
 
-### Multi-agent Team Mode
+### Agent environments
 
-Use the **Team** selector in the Agent header or Settings:
+Use the **Env** selector in the Agent header or Settings:
 
-- **Off** sends the request through the standard executor.
-- **Auto** uses the team for substantial coding, documentation, and analysis work while keeping short chat on one model call. This is the recommended mode for free API keys.
-- **Always** uses the team for every message.
+- **Normal** sends the request through the standard executor.
+- **Smart** uses the team for substantial coding, documentation, and analysis work while keeping short chat on one model call. This is the recommended mode for free API keys.
+- **Agentic** uses the team for every message.
 
-The team runs sequentially: an Analyst frames the task, the Executor uses tools and performs the work, a Reviewer checks the answer against tool evidence, the Executor gets one repair pass when needed, and a Verifier writes the final response. Only the Executor can call tools or edit files. Drafts and internal review output stay out of chat; role progress appears in the task timeline.
+The team runs sequentially: a Prompt Analyst clarifies intent and writes an optimized worker prompt, the Worker/Executor uses tools and performs the work, a Reviewer checks the original request plus the optimized prompt against tool evidence, the Worker gets one focused repair pass when needed, and a Verifier writes the final response. Only the Worker can call tools or edit files. Drafts and internal review output stay out of chat; role progress appears in the task timeline.
 
-Team Mode works with one provider, but separate configured official free providers allow more independent review and better rate-limit fallback. It makes more API calls than standard chat, so provider free-tier limits can be reached sooner. See [docs/MULTI_AGENT.md](./docs/MULTI_AGENT.md) for the full workflow and limits.
+Settings also includes optional custom instructions for the Prompt Analyst, Worker, Reviewer, and Final Verifier. Leave them blank to use VD's defaults. Custom roles guide the team, but the built-in tool restrictions, review cap, evidence checks, and token caps still apply.
+
+Agentic mode works with one provider, but separate configured official free providers allow more independent review and better rate-limit fallback. It makes more API calls than standard chat, so provider free-tier limits can be reached sooner. Smart mode is designed to avoid using the full team for small chat. See [docs/MULTI_AGENT.md](./docs/MULTI_AGENT.md) for the full workflow and limits.
 
 ### Free keys and automatic model selection
 

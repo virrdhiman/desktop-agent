@@ -65,6 +65,13 @@ export interface ProviderConfig {
 export type AgentTaskKind = 'coding' | 'analysis' | 'documentation' | 'quick'
 export type TeamMode = 'off' | 'auto' | 'always'
 
+export interface TeamRoleProfile {
+  analyst?: string
+  executor?: string
+  reviewer?: string
+  verifier?: string
+}
+
 export interface ModelPerformance {
   successes: number
   failures: number
@@ -86,6 +93,7 @@ export interface Settings {
   customRules?: string
   planMode?: boolean
   teamMode?: TeamMode
+  teamProfile?: TeamRoleProfile
   permissionMode?: 'ask-risky' | 'ask-all-writes' | 'trusted'
   autoUpdate?: boolean
 }

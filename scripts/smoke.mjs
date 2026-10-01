@@ -506,7 +506,7 @@ try {
   await c.evaluate(`document.querySelector('[aria-label^="Agent"]')?.click()`)
   await sleep(500)
   const headerLayout = await c.evaluate(`(() => {
-    const team = document.querySelector('select[aria-label="Team mode"]')
+    const team = document.querySelector('select[aria-label="Agent environment"]')
     const header = team?.closest('.panel-header')
     const controls = header ? [...header.querySelectorAll('button, select, .badge')] : []
     const bounds = header?.getBoundingClientRect()
@@ -593,7 +593,7 @@ try {
     `corrections=${deflectionCorrections} shownDeflection=${deflectionShown}`)
 
   await c.evaluate(`(() => {
-    const select = document.querySelector('select[aria-label="Team mode"]')
+    const select = document.querySelector('select[aria-label="Agent environment"]')
     Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(select, 'always')
     select.dispatchEvent(new Event('change', { bubbles: true }))
   })()`)
@@ -614,7 +614,7 @@ try {
     teamToolFollowUps === 1 && !!repairRequest && !systemText(repairRequest.body).includes('Reviewer in a bounded engineering team')
       && !teamUi.includes('SMOKE-TEAM-DRAFT') && teamUi.includes('SMOKE-TEAM-FINAL'))
   await c.evaluate(`(() => {
-    const select = document.querySelector('select[aria-label="Team mode"]')
+    const select = document.querySelector('select[aria-label="Agent environment"]')
     Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(select, 'off')
     select.dispatchEvent(new Event('change', { bubbles: true }))
   })()`)

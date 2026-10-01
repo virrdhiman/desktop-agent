@@ -21,7 +21,7 @@
  */
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useStore } from '../store'
-import type { ProviderConfig } from '../types'
+import type { ProviderConfig, TeamRoleProfile } from '../types'
 import { getProviderCategory, mergeImportedSettings, refreshProviderModelCatalog, withoutApiKeys } from '../lib/providers'
 import { APP_NAME, APP_VERSION, AUTHOR_NAME, AUTHOR_URL, COPYRIGHT, LICENSE_URL, REPO_URL } from '../lib/brand'
 
@@ -48,6 +48,13 @@ export default function SettingsPanel() {
   const [refreshMessage, setRefreshMessage] = useState('')
   const [updateStatus, setUpdateStatus] = useState<Awaited<ReturnType<typeof window.api.updateStatus>> | null>(null)
   const [diagnosticsMessage, setDiagnosticsMessage] = useState('')
+
+  const saveTeamProfile = useCallback((role: keyof TeamRoleProfile, value: string) => {
+    const nextProfile = { ...(settings.teamProfile || {}), [role]: value }
+    const next = { ...settings, teamProfile: nextProfile }
+    setSettings(next)
+    void window.api.saveSettings(next)
+  }, [settings, setSettings])
 
   useEffect(() => {
     void window.api.updateStatus().then(setUpdateStatus)
@@ -490,9 +497,9 @@ export default function SettingsPanel() {
             <div style={{ marginTop: 16 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
                 <div>
-                  <div style={{ fontSize: 14, fontWeight: 600 }}>Team Mode</div>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>Agent Environment</div>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                    Analyst, executor, reviewer, and verifier passes for stronger answers. Auto reserves extra calls for substantial work; configured specialist providers receive the request and bounded evidence.
+                    Normal uses one executor. Smart chooses the team for substantial work. Agentic runs planner, worker, reviewer, repair, and verifier for every chat query.
                   </div>
                 </div>
                 <select
@@ -504,13 +511,37 @@ export default function SettingsPanel() {
                     setSettings(next)
                     void window.api.saveSettings(next)
                   }}
-                  aria-label="Team mode"
+                  aria-label="Agent environment"
                   style={{ width: 120, flex: '0 0 120px' }}
                 >
-                  <option value="off">Off</option>
-                  <option value="auto">Auto</option>
-                  <option value="always">Always</option>
+                  <option value="off">Normal</option>
+                  <option value="auto">Smart</option>
+                  <option value="always">Agentic</option>
                 </select>
+              </div>
+              <div style={{ marginTop: 12, padding: 12, borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--bg-secondary)' }}>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Custom agent roles</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: 10 }}>
+                  Optional. Leave these blank to use VD's default analyst, executor, reviewer, and verifier. Custom text guides each role, while tool isolation and evidence checks still stay enforced.
+                </div>
+                {([
+                  ['analyst', 'Prompt analyst', 'How should the first agent improve and frame the user request?'],
+                  ['executor', 'Worker', 'How should the tool-enabled worker approach execution?'],
+                  ['reviewer', 'Reviewer', 'What should the reviewer be strict about before approving?'],
+                  ['verifier', 'Final verifier', 'How should the final response be shaped for the user?'],
+                ] as const).map(([role, label, placeholder]) => (
+                  <div key={role} style={{ marginTop: 8 }}>
+                    <label className="input-label">{label}</label>
+                    <textarea
+                      className="input"
+                      value={settings.teamProfile?.[role] || ''}
+                      onChange={(event) => saveTeamProfile(role, event.target.value)}
+                      placeholder={placeholder}
+                      rows={2}
+                      style={{ fontSize: 12, resize: 'vertical' }}
+                    />
+                  </div>
+                ))}
               </div>
             </div>
 

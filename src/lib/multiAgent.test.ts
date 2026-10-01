@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
   analystBriefForExecutor, buildAnalystMessages, buildRepairMessage, buildReviewerMessages,
-  buildSynthesizerMessages, describeToolEvidence, parseTeamReview, shouldUseTeamMode,
+  buildSynthesizerMessages, describeToolEvidence, hasCustomTeamProfile, parseTeamReview, shouldUseTeamMode,
 } from './multiAgent'
 
 describe('team routing', () => {
   it('keeps quick chat cheap in auto mode and routes substantial work to the team', () => {
     expect(shouldUseTeamMode('auto', 'Hello', 'quick')).toBe(false)
+    expect(shouldUseTeamMode('auto', 'x'.repeat(320), 'quick')).toBe(false)
+    expect(shouldUseTeamMode('auto', 'x'.repeat(380), 'quick')).toBe(true)
     expect(shouldUseTeamMode('auto', 'Review the architecture and investigate security risks.', 'analysis')).toBe(true)
     expect(shouldUseTeamMode('always', 'Hello', 'quick')).toBe(true)
     expect(shouldUseTeamMode('off', 'Implement and test this feature', 'coding')).toBe(false)
@@ -17,12 +19,46 @@ describe('team prompts', () => {
   it('keeps analyst and reviewer roles read-only and evidence oriented', () => {
     const analyst = buildAnalystMessages('Fix the bug', 'Workspace: C:/repo')
     expect(analyst[0].content).toMatch(/Do not answer the user, call tools, write code/)
+    expect(analyst[0].content).toMatch(/optimized prompt for the Executor/)
     expect(analyst[1].content).toContain('Fix the bug')
     expect(analystBriefForExecutor('Check the parser')).toMatch(/advisory[\s\S]*Check the parser/)
 
     const reviewer = buildReviewerMessages({ request: 'Fix it', candidate: 'Done', evidence: '', pass: 1 })
     expect(reviewer[0].content).toContain('evidence-based')
     expect(reviewer[0].content).toContain('Return only one JSON object')
+  })
+
+  it('layers custom roles without removing enforced safety instructions', () => {
+    const profile = {
+      analyst: 'Prefer root-cause framing.',
+      executor: 'Favor tests before refactors.',
+      reviewer: 'Block vague completion claims.',
+      verifier: 'Use concise release-note style.',
+    }
+    expect(hasCustomTeamProfile(profile)).toBe(true)
+    expect(hasCustomTeamProfile({ analyst: '   ' })).toBe(false)
+
+    const analyst = buildAnalystMessages('Improve the app', '', profile)
+    expect(analyst[0].content).toContain('Prefer root-cause framing.')
+    expect(analyst[0].content).toContain('Do not answer the user')
+
+    const executor = analystBriefForExecutor('Optimized prompt', profile)
+    expect(executor).toContain('Favor tests before refactors.')
+
+    const reviewer = buildReviewerMessages({ request: 'Improve it', candidate: 'Done', evidence: '', pass: 1, analystBrief: 'Optimized prompt', profile })
+    expect(reviewer[0].content).toContain('Block vague completion claims.')
+    expect(reviewer[1].content).toContain('Optimized analyst brief')
+
+    const verifier = buildSynthesizerMessages({
+      request: 'Improve it',
+      candidate: 'Done',
+      evidence: '',
+      analystBrief: 'Optimized prompt',
+      review: { verdict: 'approve', score: 90, issues: [], repairInstructions: '', usable: true },
+      profile,
+    })
+    expect(verifier[0].content).toContain('Use concise release-note style.')
+    expect(verifier[0].content).toContain('Never claim a file changed')
   })
 
   it('instructs the synthesizer not to invent execution evidence', () => {

@@ -228,6 +228,7 @@ type Settings = {
   customRules?: string
   planMode?: boolean
   teamMode?: 'off' | 'auto' | 'always'
+  teamProfile?: { analyst?: string; executor?: string; reviewer?: string; verifier?: string }
   permissionMode?: 'ask-risky' | 'ask-all-writes' | 'trusted'
   autoUpdate?: boolean
 }

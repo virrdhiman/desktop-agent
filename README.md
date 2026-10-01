@@ -31,7 +31,7 @@ Your chats, settings, and keys stay on your machine. There is no account and no 
 ## Features
 
 - **Agent that verifies its work.** Reads before it claims, pushes back on risky requests, runs your tests or build before it reports success, and asks before destructive actions.
-- **Multi-agent Team Mode.** Substantial chat requests can move through an analyst, tool-enabled executor, independent reviewer, bounded repair, and final verifier. Only the executor may change files. See [Multi-Agent Team Mode](./docs/MULTI_AGENT.md).
+- **Modern agentic environments.** Choose Normal, Smart, or Agentic. Substantial chat requests can move through a prompt analyst, tool-enabled worker, independent reviewer, bounded repair, and final verifier. You can customize each role while VD keeps tool isolation, evidence checks, and token caps enforced. See [Agentic Environments](./docs/MULTI_AGENT.md).
 - **Tools.** Files, code search, shell commands, git, web search, and some media and Web3 helpers. See [TOOLS.md](./TOOLS.md).
 - **Safe archive-to-CSV workflows.** Inventories ZIP files before extraction, rejects unsafe entries, and guides the agent to inspect every source, preserve provenance, and verify structured CSV output.
 - **Plan Mode.** The agent proposes a plan and waits for your approval before it changes files.
@@ -134,7 +134,7 @@ Your prompts and code go **only** to the AI provider you choose, plus any servic
 | [docs/PRIVACY.md](./docs/PRIVACY.md) | What is stored, where, and what leaves your machine |
 | [docs/SECURITY.md](./docs/SECURITY.md) | Security model, safe use, and reporting vulnerabilities |
 | [docs/AI_AGENT_TESTING.md](./docs/AI_AGENT_TESTING.md) | Functional, trajectory, and visual testing for the agent |
-| [docs/MULTI_AGENT.md](./docs/MULTI_AGENT.md) | Team Mode roles, safety boundaries, provider use, and limits |
+| [docs/MULTI_AGENT.md](./docs/MULTI_AGENT.md) | Agentic environments, custom roles, safety boundaries, provider use, and limits |
 | [docs/RESUME_AND_RECOVERY.md](./docs/RESUME_AND_RECOVERY.md) | Restart resume state, local project memory, checkpoints, and rollback limits |
 | [docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) | Fixes for common problems |
 | [TOOLS.md](./TOOLS.md) | Reference for every agent tool |

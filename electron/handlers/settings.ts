@@ -124,6 +124,7 @@ export function registerSettingsHandlers() {
       parsed.permissionMode ??= 'ask-risky'
       parsed.autoUpdate ??= false
       parsed.teamMode ??= 'auto'
+      if (!parsed.teamProfile || typeof parsed.teamProfile !== 'object') parsed.teamProfile = {}
       return parsed
     } catch {
       return {
@@ -133,6 +134,7 @@ export function registerSettingsHandlers() {
         permissionMode: 'ask-risky',
         autoUpdate: false,
         teamMode: 'auto',
+        teamProfile: {},
       }
     }
   })
