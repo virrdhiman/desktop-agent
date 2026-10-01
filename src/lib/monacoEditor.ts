@@ -9,7 +9,14 @@
  * Monaco from a CDN, which the app's Content-Security-Policy blocks (and which
  * would not work offline). Lazy-loaded by CodeEditor so it stays out of startup.
  */
-import * as monaco from 'monaco-editor'
+import 'monaco-editor/esm/vs/editor/edcore.main'
+import * as monaco from 'monaco-editor/esm/vs/editor/editor.api'
+import 'monaco-editor/esm/vs/basic-languages/css/css.contribution'
+import 'monaco-editor/esm/vs/basic-languages/html/html.contribution'
+import 'monaco-editor/esm/vs/basic-languages/javascript/javascript.contribution'
+import 'monaco-editor/esm/vs/basic-languages/markdown/markdown.contribution'
+import 'monaco-editor/esm/vs/language/json/monaco.contribution'
+import 'monaco-editor/esm/vs/language/typescript/monaco.contribution'
 import { loader } from '@monaco-editor/react'
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import JsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'

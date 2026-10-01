@@ -3,9 +3,9 @@
   "name": "VD Agent local golden evals",
   "inspiration": "Golden tasks, trace checks, and release smoke gates.",
   "minimums": {
-    "vitestPassed": 299,
-    "smokeChecks": 48,
-    "goldenCases": 65
+    "vitestPassed": 302,
+    "smokeChecks": 49,
+    "goldenCases": 80
   },
   "tiers": [
     {
@@ -446,6 +446,102 @@
         "The workflow must stay defensive and evidence-backed."
       ],
       "coveredBy": ["src/lib/multiAgent.test.ts", "docs/MULTI_AGENT.md"]
+    },
+    {
+      "id": "real-user-hosted-evals-no-spend",
+      "tier": 1,
+      "source": "real-user",
+      "prompt": "Add hosted eval and trace dashboard support like LangSmith or Arize, but do it without spending money or leaking local data.",
+      "checks": [
+        "Hosted export stays opt-in and never uploads prompts, traces, code, or screenshots by default.",
+        "The repo documents required environment variables without committing real API keys.",
+        "The local release gate remains usable without external accounts."
+      ],
+      "coveredBy": ["scripts/hosted-eval-export.mjs", "scripts/agent-evals.mjs", "docs/AI_AGENT_TESTING.md", ".env.example"]
+    },
+    {
+      "id": "real-user-more-golden-examples",
+      "tier": 1,
+      "source": "real-user",
+      "prompt": "Add richer eval datasets for each custom team type using real requests, not just synthetic happy paths.",
+      "checks": [
+        "Golden cases include real-user prompts for coding, research, CSV/data, security, hosted evals, token budget, release, and persistence workflows.",
+        "Every case has deterministic coverage mapped to existing code, docs, or smoke tests.",
+        "The eval gate validates duplicate prompts, tier coverage, and coveredBy file existence."
+      ],
+      "coveredBy": ["evals/agent-golden.json", "scripts/agent-evals.mjs"]
+    },
+    {
+      "id": "real-user-release-polish",
+      "tier": 1,
+      "source": "real-user",
+      "prompt": "Improve packaging and release polish with installer QA and versioned release notes.",
+      "checks": [
+        "Release notes can be extracted from a specific CHANGELOG section.",
+        "The release checklist covers portable app QA, installer QA, update QA, checksums, and signing status.",
+        "The workflow remains compatible with private repositories and unsigned local builds."
+      ],
+      "coveredBy": ["scripts/release-notes.mjs", "docs/RELEASE_CHECKLIST.md", ".github/workflows/release.yml"]
+    },
+    {
+      "id": "real-user-bundle-performance",
+      "tier": 1,
+      "source": "real-user",
+      "prompt": "Do a performance pass on bundle size, mostly Monaco/editor chunk optimization.",
+      "checks": [
+        "The code editor stays lazy-loaded outside startup.",
+        "Monaco imports use the ESM editor API and selected language contributions instead of the broad package import.",
+        "Smoke still verifies that the bundled editor opens a workspace file."
+      ],
+      "coveredBy": ["src/lib/monacoEditor.ts", "src/components/CodeEditor.tsx", "scripts/smoke.mjs"]
+    },
+    {
+      "id": "real-user-csv-common-fields",
+      "tier": 2,
+      "source": "real-user",
+      "prompt": "Check all files in an order API ZIP and provide the relevant and common fields/data in CSV.",
+      "checks": [
+        "The agent inventories every archive entry before extraction.",
+        "CSV/data guidance distinguishes common fields from merely relevant fields and keeps source traceability.",
+        "Archive extraction is checkpointed and constrained to the workspace."
+      ],
+      "coveredBy": ["scripts/smoke.mjs", "electron/__tests__/archiveStore.test.ts", "src/lib/agent.ts"]
+    },
+    {
+      "id": "real-user-agentic-loop",
+      "tier": 2,
+      "source": "real-user",
+      "prompt": "Let users choose normal chat or an agentic environment where analyst, worker, reviewer, and verifier loop until the result matches the original request.",
+      "checks": [
+        "Normal, Smart, and Agentic environments are user-selectable.",
+        "The reviewer compares the worker result against the original request and sends bounded repair instructions when needed.",
+        "The loop has a hard pass limit and a verifier gives the final response."
+      ],
+      "coveredBy": ["src/components/AgentChat.tsx", "src/lib/multiAgent.ts", "docs/MULTI_AGENT.md", "scripts/smoke.mjs"]
+    },
+    {
+      "id": "real-user-token-budget",
+      "tier": 2,
+      "source": "real-user",
+      "prompt": "Make the program efficient so it uses fewer tokens but still gives the best result.",
+      "checks": [
+        "Cheap, Balanced, and Strong budgets change role caps, dynamic specialist count, and review passes.",
+        "Smart mode avoids team orchestration for small low-risk prompts.",
+        "Trace text and evidence are bounded before being saved or passed between roles."
+      ],
+      "coveredBy": ["src/lib/multiAgent.ts", "src/components/AgentChat.tsx", "src/lib/multiAgent.test.ts", "docs/MULTI_AGENT.md"]
+    },
+    {
+      "id": "real-user-local-history-resume",
+      "tier": 3,
+      "source": "real-user",
+      "prompt": "Store user chats locally so after restart the user can continue from the last known changes.",
+      "checks": [
+        "Conversation history and rich resume state are saved under local userData.",
+        "Startup restores the latest chat, workspace, tasks, checkpoints, verification, and Agent trace state.",
+        "Configured API keys are redacted from saved conversations."
+      ],
+      "coveredBy": ["electron/conversationStore.ts", "src/store/index.ts", "scripts/smoke.mjs", "docs/RESUME_AND_RECOVERY.md"]
     },
     {
       "id": "archive-zip-slip",

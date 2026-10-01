@@ -150,6 +150,32 @@ Keep external eval exports opt-in. VD Agent's default promise is local storage,
 no telemetry, and no account, so tests must not silently upload prompts, traces,
 code, or screenshots.
 
+### Hosted eval export
+
+VD Agent can prepare local JSONL datasets for hosted dashboards without uploading
+anything:
+
+```bash
+npm run agent:evals:export -- --provider generic
+npm run agent:evals:export -- --provider langsmith
+npm run agent:evals:export -- --provider arize
+```
+
+The files are written under `evals/hosted/`, which is ignored by git because
+real prompts and traces may be sensitive. Use `.env.example` as the safe template
+for the relevant dashboard variables. LangSmith exports are shaped as dataset
+examples with `inputs`, `outputs`, and `metadata`; Arize exports are shaped as
+tabular trace/eval rows that can be imported into Phoenix/AX workflows.
+
+To export after the full local gate:
+
+```bash
+VD_EVAL_TRACE_EXPORT=1 VD_EVAL_TRACE_PROVIDER=langsmith npm run agent:evals
+```
+
+Do not enable upload automation until the user has explicitly approved sending
+the selected prompts, outputs, and traces to that hosted service.
+
 ## Adding a new golden case
 
 1. Add a case to `evals/agent-golden.json`.

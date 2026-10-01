@@ -47,9 +47,11 @@
     "lint": "tsc --noEmit",
     "smoke": "npm run build && node scripts/smoke.mjs",
     "agent:evals": "node scripts/agent-evals.mjs",
+    "agent:evals:export": "node scripts/hosted-eval-export.mjs",
     "verify": "npm run lint && npm test && npm run build",
     "security:audit": "npm audit --omit=dev --audit-level=high",
     "checksums": "node scripts/checksums.mjs",
+    "release:notes": "node scripts/release-notes.mjs",
     "electron:dev": "vite --config vite.config.ts",
     "electron:build": "vite build && electron-builder"
   },

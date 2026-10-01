@@ -36,6 +36,7 @@ Never commit certificates, passwords, or `.env` files.
 - [ ] `main` is clean and up to date: `git status`, `git pull`
 - [ ] Version bumped in `package.json`: `npm version <x.y.z> --no-git-tag-version`
 - [ ] `CHANGELOG.md` has a section for the version, with the release date
+- [ ] Release notes render cleanly: `npm run release:notes -- --version <x.y.z> --out release-notes.md`
 - [ ] Docs match the release: README, USAGE, `docs/`
 - [ ] App icons exist: `build/icon.ico` (Windows), `build/icon.icns` (macOS), `build/icon.png` 512×512 (Linux). Without them, electron-builder uses the default Electron icon.
 - [ ] Signing certificates are available on each build machine (see above)
@@ -52,6 +53,9 @@ Never commit certificates, passwords, or `.env` files.
   - macOS: `npm run smoke -- --exe "release/mac/VD Agent.app/Contents/MacOS/VD Agent"` (`mac-arm64` on Apple Silicon)
   - Linux: `npm run smoke -- --exe release/linux-unpacked/vd-agent`
 - [ ] Install from the installer on a clean machine or VM. Check that the license page appears, the app launches, a chat works with a real key, the app restarts with history intact, and it uninstalls cleanly.
+- [ ] Portable QA on Windows: run the portable `.exe`, confirm it does not require installation, open a workspace, send one normal query, send one agentic query, restart the app, and confirm the saved chat resumes with Tasks and Agent trace intact.
+- [ ] Installer QA on Windows: install to a non-default folder, launch from Start Menu and desktop shortcut, verify terminal startup, uninstall, and confirm user data is not removed unless manually deleted.
+- [ ] Update QA if publishing updates: install the previous release first, enable update checks, publish the draft update metadata, and verify that the app detects, downloads, and asks before restart.
 - [ ] If signed, check the signature: file Properties → Digital Signatures on Windows, `codesign --verify --deep --strict` and `spctl -a -vv` on macOS
 
 ## Checksums
@@ -79,7 +83,7 @@ When you build on several machines, combine the per-platform files into one `SHA
      "release/VD Agent-<x.y.z>.AppImage" "release/vd-agent_<x.y.z>_amd64.deb" \
      SHA256SUMS.txt
    ```
-   Use the version's `CHANGELOG.md` section as `notes.md`, and say whether each build is signed.
+   Generate `notes.md` with `npm run release:notes -- --version <x.y.z> --out notes.md`, review it, and say whether each build is signed.
 3. Upload the installer artifacts, `latest*.yml`, and blockmaps produced by electron-builder. Installed builds use the metadata's SHA-512 hashes to verify downloads; code signing protects supported platform packages separately. Do not upload unpacked application directories or `builder-debug.yml`.
 4. Download each file from the draft, check it against `SHA256SUMS.txt`, and publish the release.
 

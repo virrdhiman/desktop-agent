@@ -162,8 +162,18 @@ const smokeOutput = await run('Tier 2+3: trajectory and visual smoke', 'node', [
 })
 const smokeChecks = parseSmoke(smokeOutput, golden.minimums.smokeChecks)
 
+if (process.env.VD_EVAL_TRACE_EXPORT === '1') {
+  await run('Optional hosted-eval JSONL export', 'node', [
+    'scripts/hosted-eval-export.mjs',
+    '--provider',
+    process.env.VD_EVAL_TRACE_PROVIDER || 'generic',
+    '--out',
+    process.env.VD_EVAL_TRACE_OUT || `evals/hosted/${process.env.VD_EVAL_TRACE_PROVIDER || 'generic'}-golden-evals.jsonl`,
+  ])
+}
+
 console.log('\nAgent eval summary')
 console.log(`- Tier 1 functional/component: ${passedTests} Vitest tests passed`)
 console.log(`- Tier 2 trajectory/tool: covered by smoke mock-provider scenarios`)
 console.log(`- Tier 3 visual/end-to-end: ${smokeChecks} smoke checks passed`)
-console.log('- External hosted/vision frameworks: optional, documented but not required for release')
+console.log('- External hosted/vision frameworks: optional, documented/exportable but not required for release')

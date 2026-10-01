@@ -16,7 +16,10 @@ All notable changes to VD Agent are documented here.
 - Added agent guidance for inspecting every archive source and producing traceable, schema-checked CSV instead of blindly merging incompatible records.
 - Added an opt-in local diagnostics export containing runtime metadata and aggregate health counts while excluding keys, chats, filenames, workspace paths, and source code.
 - Hardened local persistence with unique atomic temp files and serialized writes per conversation, including stress coverage for concurrency, backups, redaction, history limits, and malformed resume metadata.
-- Expanded the golden evaluation dataset to 66 mapped cases, including 12 real-user prompts, and raised the release gate to 299 unit tests and 48 Electron smoke checks.
+- Expanded the golden evaluation dataset to 81 mapped cases, including 20 real-user prompts, and raised the release gate to 302 unit tests and 49 Electron smoke checks.
+- Added opt-in hosted eval JSONL export for LangSmith/Arize-style dashboards. It never uploads by default, writes ignored local artifacts, and documents safe environment variables without committing secrets.
+- Added versioned release-note extraction plus stronger release checklist coverage for portable app QA, installer QA, update QA, checksums, and signing status.
+- Reduced the lazy Monaco editor bundle by importing Monaco's ESM editor API with selected language contributions instead of the broad all-language package import.
 - Tightened replies from live Groq/OpenRouter trials: provider-native and known bare-JSON tool calls are normalized and executed, generic task deflections and false context denial get one corrective retry, obvious action narration is removed, and handoff acknowledgements stay concise.
 - When a provider exposes strong models, tiny fallbacks are skipped so VD can move to another strong configured free provider instead of accepting a low-quality generic answer.
 - Added adaptive Multi-Agent Team Mode for normal chat: Analyst, tool-enabled Executor, evidence-based Reviewer, one bounded repair pass, and final Verifier. Specialist calls can use different configured free providers, only the Executor may mutate the workspace, malformed reviews fail safely to the executor answer, Stop is honored between roles, and the Agent header wraps its controls cleanly in split view.

@@ -34,6 +34,10 @@ Settings exports never include API keys. Imports keep the keys already stored on
 
 Settings includes an optional **Export diagnostics** action for troubleshooting. The report is generated locally and is saved only to the path you choose. It contains app, OS, runtime, provider health/model counts, and aggregate conversation/checkpoint/project-memory file statistics. It explicitly excludes API keys, chat content, filenames, workspace paths, and source code. VD Agent does not upload the report; inspect it before choosing to share it with anyone.
 
+### Hosted eval exports
+
+`npm run agent:evals:export` writes JSONL files under `evals/hosted/` for optional LangSmith/Arize-style dashboard imports. The script does not upload anything. Those generated files may contain prompts and acceptance criteria, so the folder is ignored by git and should be reviewed before sharing with any hosted service.
+
 ## What leaves your machine
 
 VD Agent only sends data when you use a feature that needs a network service:
