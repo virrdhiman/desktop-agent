@@ -35,6 +35,7 @@ import { registerShellHandlers } from './handlers/shell'
 import { registerWorkspaceStateHandlers } from './handlers/workspaceState'
 import { registerUpdateHandlers } from './handlers/updates'
 import { registerDiagnosticsHandlers } from './handlers/diagnostics'
+import { registerLspHandlers } from './handlers/lsp'
 
 // package.json has "type": "module", so the main bundle is ESM and has no CommonJS __dirname.
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -142,6 +143,7 @@ app.whenReady().then(() => {
   registerWorkspaceStateHandlers()
   registerUpdateHandlers(getMainWindow)
   registerDiagnosticsHandlers()
+  registerLspHandlers()
   registerAiHandlers(getMainWindow)
   registerShellHandlers()
 

@@ -118,7 +118,8 @@
     },
     "files": [
       "dist/**/*",
-      "dist-electron/**/*"
+      "dist-electron/**/*",
+      "node_modules/typescript/**/*"
     ],
     "extraFiles": [
       {

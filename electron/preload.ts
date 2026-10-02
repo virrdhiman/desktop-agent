@@ -118,6 +118,12 @@ contextBridge.exposeInMainWorld('api', {
   // Privacy-redacted support metadata; excludes chats, code, filenames, paths, and API keys.
   exportDiagnostics: () => invokeWithTimeout('diagnostics:export'),
 
+  // TypeScript/JavaScript language service.
+  lspDiagnostics: (root: string, file: string) => invokeWithTimeout('lsp:diagnostics', root, file),
+  lspDefinition: (root: string, file: string, line: number, column: number) => invokeWithTimeout('lsp:definition', root, file, line, column),
+  lspReferences: (root: string, file: string, line: number, column: number) => invokeWithTimeout('lsp:references', root, file, line, column),
+  lspRename: (root: string, file: string, line: number, column: number, newName: string) => invokeWithTimeout('lsp:rename', root, file, line, column, newName),
+
   // Local project memory and file recovery checkpoints
   projectMemoryLoad: (workspace: string, force = false) => invokeWithTimeout('projectMemory:load', workspace, force),
   listCheckpoints: (sessionId: string) => invokeWithTimeout('checkpoints:list', sessionId),
@@ -139,6 +145,9 @@ export type CheckpointSummary = { id: string; sessionId: string; createdAt: numb
 export type UpdateStatus = { state: 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'current' | 'error' | 'unavailable'; message: string; version?: string; percent?: number }
 export type ConversationInput = { id: string; title?: string; createdAt?: number; messages: ConversationMessage[]; pinned?: boolean; summary?: string; resume?: Record<string, unknown> }
 export type ConversationRecord = ConversationInput & { version: number; title: string; createdAt: number; updatedAt: number }
+export type LspLocation = { path: string; line: number; column: number; preview: string }
+export type LspDiagnostic = LspLocation & { message: string; severity: 'error' | 'warning' | 'info' }
+export type LspRenameResult = { replacements: number; updatedFiles: string[]; errors: { path: string; error: string }[] }
 export type AiChatResult =
   | { content: string; model?: string; models?: string[] }
   | { error: string; kind?: 'auth' | 'retry-model' | 'other' | 'cancelled'; status?: number; models?: string[] }
@@ -197,6 +206,10 @@ export type ElectronAPI = {
   exportConversation: (id: string) => Promise<{ success?: boolean; cancelled?: boolean; path?: string; error?: string }>
   importConversations: () => Promise<ConversationRecord[] | { error: string }>
   exportDiagnostics: () => Promise<{ success?: boolean; cancelled?: boolean; path?: string; error?: string }>
+  lspDiagnostics: (root: string, file: string) => Promise<LspDiagnostic[] | { error: string }>
+  lspDefinition: (root: string, file: string, line: number, column: number) => Promise<LspLocation | null | { error: string }>
+  lspReferences: (root: string, file: string, line: number, column: number) => Promise<LspLocation[] | { error: string }>
+  lspRename: (root: string, file: string, line: number, column: number, newName: string) => Promise<LspRenameResult | { error: string }>
   projectMemoryLoad: (workspace: string, force?: boolean) => Promise<{ content: string; updatedAt: number; fingerprint: string } | { error: string }>
   listCheckpoints: (sessionId: string) => Promise<Array<CheckpointSummary & { workspace: string }> | { error: string }>
   restoreCheckpoint: (sessionId: string, checkpointId: string) => Promise<{ success: boolean; restored: string[]; removed: string[]; skipped: string[]; workspace: string } | { error: string }>

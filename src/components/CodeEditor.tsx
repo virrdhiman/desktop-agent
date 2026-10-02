@@ -59,17 +59,19 @@ export default function CodeEditor() {
   const {
     selectedFile, setSelectedFile, fileContent, setFileContent,
     fileDirty, setFileDirty, openFiles, addOpenFile, closeOpenFile,
-    allFiles, addTerminalEntry,
+    allFiles, addTerminalEntry, workspacePath,
   } = useStore()
 
   const [editorContent, setEditorContent] = useState('')
   const [languageReady, setLanguageReady] = useState(false)
   const [references, setReferences] = useState<WorkspaceReference[]>([])
+  const [diagnostics, setDiagnostics] = useState<Array<WorkspaceReference & { message: string; severity: 'error' | 'warning' | 'info' }>>([])
   const [referenceWord, setReferenceWord] = useState('')
   const [pendingReveal, setPendingReveal] = useState<WorkspaceReference | null>(null)
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null)
 
   const language = useMemo(() => selectedFile ? getLanguage(selectedFile) : 'plaintext', [selectedFile])
+  const hasTsLanguageService = language === 'typescript' || language === 'javascript'
 
   // Load file when selected changes
   useEffect(() => {
@@ -101,9 +103,13 @@ export default function CodeEditor() {
       const result = await window.api.writeFile(selectedFile, editorContent)
       if ('success' in result) {
         setFileContent(editorContent)
+        if (workspacePath && hasTsLanguageService) {
+          const next = await window.api.lspDiagnostics(workspacePath, selectedFile)
+          if (Array.isArray(next)) setDiagnostics(next)
+        }
       }
     } catch (err) { console.error('Failed to save file:', err) }
-  }, [selectedFile, editorContent])
+  }, [selectedFile, editorContent, workspacePath, hasTsLanguageService])
 
   // Ctrl+S handler
   useEffect(() => {
@@ -147,6 +153,11 @@ export default function CodeEditor() {
     return model.getWordAtPosition(position)?.word || ''
   }, [])
 
+  const currentPosition = useCallback(() => {
+    const position = editorRef.current?.getPosition()
+    return position ? { line: position.lineNumber, column: position.column } : null
+  }, [])
+
   const openReference = useCallback((ref: WorkspaceReference) => {
     setPendingReveal(ref)
     setSelectedFile(ref.path)
@@ -165,21 +176,38 @@ export default function CodeEditor() {
   const collectReferences = useCallback(async (word?: string) => {
     const identifier = word || currentIdentifier()
     if (!isValidIdentifier(identifier)) return []
+    const position = currentPosition()
+    if (workspacePath && selectedFile && hasTsLanguageService && position) {
+      const exact = await window.api.lspReferences(workspacePath, selectedFile, position.line, position.column)
+      if (Array.isArray(exact) && exact.length > 0) {
+        setReferenceWord(identifier)
+        setReferences(exact)
+        return exact
+      }
+    }
     const refs = await findWorkspaceReferences(allFiles, window.api.readFile, identifier)
     setReferenceWord(identifier)
     setReferences(refs)
     return refs
-  }, [allFiles, currentIdentifier])
+  }, [allFiles, currentIdentifier, currentPosition, hasTsLanguageService, selectedFile, workspacePath])
 
   const handleGoToDefinition = useCallback(async () => {
     const editor = editorRef.current
     const word = currentIdentifier()
     if (!editor || !word) return
+    const position = currentPosition()
+    if (workspacePath && selectedFile && hasTsLanguageService && position) {
+      const exact = await window.api.lspDefinition(workspacePath, selectedFile, position.line, position.column)
+      if (exact && !('error' in exact)) {
+        openReference(exact)
+        return
+      }
+    }
     await editor.getAction('editor.action.revealDefinition')?.run()
     const refs = await collectReferences(word)
     const target = pickLikelyDefinition(refs, word)
     if (target) openReference(target)
-  }, [collectReferences, currentIdentifier, openReference])
+  }, [collectReferences, currentIdentifier, currentPosition, hasTsLanguageService, openReference, selectedFile, workspacePath])
 
   const handleFindReferences = useCallback(async () => {
     const word = currentIdentifier()
@@ -204,9 +232,17 @@ export default function CodeEditor() {
       return
     }
     const refs = await collectReferences(from)
-    const ok = window.confirm(`Rename ${refs.length} occurrence(s) of "${from}" to "${to}" across workspace text files?`)
+    const position = currentPosition()
+    const exactRename = workspacePath && selectedFile && hasTsLanguageService && position
+    const ok = window.confirm(`Rename ${refs.length} occurrence(s) of "${from}" to "${to}"${exactRename ? ' using TypeScript language service' : ' across workspace text files'}?`)
     if (!ok) return
-    const result = await renameWorkspaceIdentifier(allFiles, window.api.readFile, window.api.writeFile, from, to)
+    const result = exactRename
+      ? await window.api.lspRename(workspacePath, selectedFile, position.line, position.column, to)
+      : await renameWorkspaceIdentifier(allFiles, window.api.readFile, window.api.writeFile, from, to)
+    if ('error' in result) {
+      addTerminalEntry({ id: Date.now().toString(), type: 'error', content: `Rename failed: ${result.error}`, timestamp: Date.now() })
+      return
+    }
     if (selectedFile && result.updatedFiles.includes(selectedFile)) {
       const reloaded = await window.api.readFile(selectedFile)
       if ('content' in reloaded) {
@@ -221,7 +257,24 @@ export default function CodeEditor() {
       content: `Renamed ${result.replacements} occurrence(s) in ${result.updatedFiles.length} file(s).${result.errors.length ? ` ${result.errors.length} file(s) failed.` : ''}`,
       timestamp: Date.now(),
     })
-  }, [addTerminalEntry, allFiles, collectReferences, currentIdentifier, selectedFile, setFileContent])
+  }, [addTerminalEntry, allFiles, collectReferences, currentIdentifier, currentPosition, hasTsLanguageService, selectedFile, setFileContent, workspacePath])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!workspacePath || !selectedFile || !hasTsLanguageService) {
+      setDiagnostics([])
+      return
+    }
+    const timer = window.setTimeout(() => {
+      window.api.lspDiagnostics(workspacePath, selectedFile).then((next) => {
+        if (!cancelled && Array.isArray(next)) setDiagnostics(next)
+      })
+    }, 300)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [fileContent, hasTsLanguageService, selectedFile, workspacePath])
 
   const handleEditorMount = useCallback((editor: Monaco.editor.IStandaloneCodeEditor, monaco: typeof Monaco) => {
     editorRef.current = editor
@@ -382,6 +435,42 @@ export default function CodeEditor() {
             >
               <span style={{ color: 'var(--accent)' }}>{ref.path}:{ref.line}:{ref.column}</span>
               <span style={{ marginLeft: 8, fontFamily: 'monospace' }}>{ref.preview}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {diagnostics.length > 0 && (
+        <div style={{
+          maxHeight: 130,
+          overflow: 'auto',
+          background: 'var(--bg-secondary)',
+          borderBottom: '1px solid var(--border)',
+          flexShrink: 0,
+        }}>
+          <div style={{ padding: '6px 10px', fontSize: 12, color: 'var(--text-muted)', borderBottom: '1px solid var(--border)' }}>
+            TypeScript diagnostics
+          </div>
+          {diagnostics.slice(0, 40).map((diag, index) => (
+            <button
+              key={`${diag.path}:${diag.line}:${diag.column}:${index}`}
+              onClick={() => openReference(diag)}
+              style={{
+                display: 'block',
+                width: '100%',
+                textAlign: 'left',
+                padding: '6px 10px',
+                border: 'none',
+                borderBottom: '1px solid var(--border)',
+                background: 'transparent',
+                color: diag.severity === 'error' ? '#f87171' : diag.severity === 'warning' ? '#fbbf24' : 'var(--text-secondary)',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                fontSize: 12,
+              }}
+            >
+              <span>{diag.line}:{diag.column}</span>
+              <span style={{ marginLeft: 8 }}>{diag.message}</span>
             </button>
           ))}
         </div>
