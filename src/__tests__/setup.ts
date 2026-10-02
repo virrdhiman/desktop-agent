@@ -23,6 +23,7 @@ if (typeof window !== 'undefined') Object.defineProperty(window, 'api', {
     gitStatus: vi.fn(),
     gitDiff: vi.fn(),
     gitDiffStaged: vi.fn(),
+    gitApplyPatch: vi.fn(),
     gitCommit: vi.fn(),
     gitCommitStaged: vi.fn(),
     gitPush: vi.fn(),

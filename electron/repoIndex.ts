@@ -35,8 +35,31 @@ function isTextFile(file: string): boolean {
   return TEXT_EXTS.has(ext)
 }
 
+function normalizeText(text: string): string {
+  return text
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[_.$/-]+/g, ' ')
+    .toLowerCase()
+}
+
 function tokenize(text: string): string[] {
-  return [...new Set(text.toLowerCase().split(/[^a-z0-9_.$/-]+/).filter((token) => token.length >= 2))]
+  return [...new Set(normalizeText(text).split(/[^a-z0-9]+/).filter((token) => token.length >= 2))]
+}
+
+function vector(tokens: string[]): Map<string, number> {
+  const out = new Map<string, number>()
+  for (const token of tokens) out.set(token, (out.get(token) || 0) + 1)
+  return out
+}
+
+function cosine(query: Map<string, number>, doc: Map<string, number>): number {
+  let dot = 0
+  let qNorm = 0
+  let dNorm = 0
+  for (const value of query.values()) qNorm += value * value
+  for (const value of doc.values()) dNorm += value * value
+  for (const [token, q] of query) dot += q * (doc.get(token) || 0)
+  return qNorm > 0 && dNorm > 0 ? dot / (Math.sqrt(qNorm) * Math.sqrt(dNorm)) : 0
 }
 
 function relative(root: string, file: string): string {
@@ -102,28 +125,30 @@ export async function searchRepo(root: string, query: string, limit = 30): Promi
   const workspace = path.resolve(root)
   const tokens = tokenize(query)
   if (tokens.length === 0) return []
+  const queryVector = vector(tokens)
   const hits: RepoSearchHit[] = []
   for (const file of await walkTextFiles(workspace)) {
     const rel = relative(workspace, file)
-    const relLower = rel.toLowerCase()
+    const relLower = normalizeText(rel)
     const text = await fs.promises.readFile(file, 'utf-8').catch(() => '')
     const symbols = extractSymbols(text)
-    const symbolText = symbols.join(' ').toLowerCase()
+    const symbolText = normalizeText(symbols.join(' '))
+    const semanticScore = Math.round(cosine(queryVector, vector(tokenize(`${rel} ${symbols.join(' ')} ${text.slice(0, 40_000)}`))) * 25)
     const pathScore = tokens.filter((token) => relLower.includes(token)).length * 12
     const symbolScore = tokens.filter((token) => symbolText.includes(token)).length * 10
     const lines = text.split(/\r?\n/)
     let bestLine = 1
-    let bestScore = pathScore + symbolScore
-    let bestReason = [pathScore ? 'path' : '', symbolScore ? 'symbol' : ''].filter(Boolean).join('+')
+    let bestScore = pathScore + symbolScore + semanticScore
+    let bestReason = [pathScore ? 'path' : '', symbolScore ? 'symbol' : '', semanticScore ? 'semantic' : ''].filter(Boolean).join('+')
     for (let i = 0; i < lines.length; i++) {
-      const lineLower = lines[i].toLowerCase()
+      const lineLower = normalizeText(lines[i])
       const matched = tokens.filter((token) => lineLower.includes(token)).length
       if (matched === 0) continue
-      const score = pathScore + symbolScore + matched * 5 + Math.max(0, 4 - Math.floor(lines[i].length / 80))
+      const score = pathScore + symbolScore + semanticScore + matched * 5 + Math.max(0, 4 - Math.floor(lines[i].length / 80))
       if (score > bestScore) {
         bestScore = score
         bestLine = i + 1
-        bestReason = [pathScore ? 'path' : '', symbolScore ? 'symbol' : '', 'content'].filter(Boolean).join('+')
+        bestReason = [pathScore ? 'path' : '', symbolScore ? 'symbol' : '', semanticScore ? 'semantic' : '', 'content'].filter(Boolean).join('+')
       }
     }
     if (bestScore > 0) {

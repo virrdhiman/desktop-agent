@@ -45,6 +45,7 @@ contextBridge.exposeInMainWorld('api', {
   gitStatus: (repoPath: string) => invokeWithTimeout('git:status', repoPath),
   gitDiff: (repoPath: string, filePath?: string) => invokeWithTimeout('git:diff', repoPath, filePath),
   gitDiffStaged: (repoPath: string) => invokeWithTimeout('git:diffStaged', repoPath),
+  gitApplyPatch: (repoPath: string, patch: string, opts?: { reverse?: boolean; cached?: boolean }) => invokeWithTimeout('git:applyPatch', repoPath, patch, opts),
   gitCommit: (repoPath: string, message: string) => invokeWithTimeout('git:commit', repoPath, message),
   gitCommitStaged: (repoPath: string, message: string) => invokeWithTimeout('git:commitStaged', repoPath, message),
   gitPush: (repoPath: string, branch?: string) => invokeWithTimeout('git:push', repoPath, branch),
@@ -156,6 +157,7 @@ export type ElectronAPI = {
   gitStatus: (repoPath: string) => Promise<GitStatus | { error: string }>
   gitDiff: (repoPath: string, filePath?: string) => Promise<string | { error: string }>
   gitDiffStaged: (repoPath: string) => Promise<string | { error: string }>
+  gitApplyPatch: (repoPath: string, patch: string, opts?: { reverse?: boolean; cached?: boolean }) => Promise<{ success: boolean } | { error: string }>
   gitCommit: (repoPath: string, message: string) => Promise<{ success: boolean; summary?: string } | { error: string }>
   gitCommitStaged: (repoPath: string, message: string) => Promise<{ success: boolean; summary?: string } | { error: string }>
   gitPush: (repoPath: string, branch?: string) => Promise<{ success: boolean } | { error: string }>

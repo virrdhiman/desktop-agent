@@ -36,6 +36,7 @@ describe('repoIndex', () => {
   it('ranks path, symbol, and content matches with snippets', async () => {
     const hits = await searchRepo(root, 'query queue agent chat')
     expect(hits[0].path).toBe('src/AgentChat.tsx')
+    expect(hits[0].reason).toContain('semantic')
     expect(hits[0].snippet).toContain('queryQueue')
     expect(hits[0].line).toBeGreaterThan(0)
   })

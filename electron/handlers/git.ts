@@ -10,6 +10,7 @@
  */
 import { ipcMain } from 'electron'
 import { simpleGit, SimpleGit } from 'simple-git'
+import { spawn } from 'child_process'
 
 /** Cache of SimpleGit instances per working directory */
 const gitInstances: Map<string, SimpleGit> = new Map()
@@ -19,6 +20,25 @@ function getGit(dirPath: string): SimpleGit {
     gitInstances.set(dirPath, simpleGit(dirPath))
   }
   return gitInstances.get(dirPath)!
+}
+
+function applyPatch(repoPath: string, patch: string, opts: { reverse?: boolean; cached?: boolean } = {}) {
+  return new Promise<{ success: boolean } | { error: string }>((resolve) => {
+    const args = ['apply', '--whitespace=nowarn']
+    if (opts.cached) args.push('--cached')
+    if (opts.reverse) args.push('-R')
+    const child = spawn('git', args, { cwd: repoPath, windowsHide: true })
+    let stdout = ''
+    let stderr = ''
+    child.stdout.on('data', (chunk) => { stdout += String(chunk) })
+    child.stderr.on('data', (chunk) => { stderr += String(chunk) })
+    child.on('error', (err) => resolve({ error: err.message }))
+    child.on('close', (code) => {
+      if (code === 0) resolve({ success: true })
+      else resolve({ error: [stderr.trim(), stdout.trim(), `git apply exited with ${code}`].filter(Boolean).join('\n') })
+    })
+    child.stdin.end(patch)
+  })
 }
 
 export function registerGitHandlers() {
@@ -57,6 +77,15 @@ export function registerGitHandlers() {
     try {
       const git = getGit(repoPath)
       return await git.diff(['--cached'])
+    } catch (err: any) {
+      return { error: err.message }
+    }
+  })
+
+  ipcMain.handle('git:applyPatch', async (_event, repoPath: string, patch: string, opts?: { reverse?: boolean; cached?: boolean }) => {
+    try {
+      if (!patch.trim()) return { error: 'Patch is empty' }
+      return await applyPatch(repoPath, patch, opts || {})
     } catch (err: any) {
       return { error: err.message }
     }

@@ -174,6 +174,25 @@ export default function GitPanel() {
     }
   }, [workspacePath])
 
+  const applyHunkPatch = useCallback(async (patch: string, action: 'stage' | 'discard') => {
+    if (!workspacePath) return
+    setLoading(true)
+    try {
+      const result = await window.api.gitApplyPatch(workspacePath, patch, action === 'stage' ? { cached: true } : { reverse: true })
+      if ('error' in result) {
+        addTerminalEntry({ id: Date.now().toString(), type: 'error', content: `Git hunk ${action} failed: ${result.error}`, timestamp: Date.now() })
+      } else {
+        addTerminalEntry({ id: Date.now().toString(), type: 'success', content: `Git hunk ${action === 'stage' ? 'staged' : 'discarded'}.`, timestamp: Date.now() })
+        await showDiff(diffFile && diffFile !== 'review bundle' ? diffFile : undefined)
+        await refresh()
+      }
+    } catch (err: any) {
+      addTerminalEntry({ id: Date.now().toString(), type: 'error', content: `Git hunk ${action} error: ${err.message || err}`, timestamp: Date.now() })
+    } finally {
+      setLoading(false)
+    }
+  }, [workspacePath, diffFile, showDiff, refresh, addTerminalEntry])
+
   if (!workspacePath) {
     return (
       <div className="empty-state">
@@ -328,7 +347,12 @@ export default function GitPanel() {
                   </div>
                 </div>
                 {diffViewMode === 'unified' ? (
-                  <SyntaxHighlightedDiff diff={gitDiff} />
+                  <SyntaxHighlightedDiff
+                    diff={gitDiff}
+                    canPatch={!!workspacePath && diffFile !== 'review bundle' && !gitDiff.startsWith('VD Agent Review Bundle')}
+                    loading={loading}
+                    onApplyHunk={applyHunkPatch}
+                  />
                 ) : (
                   <SplitDiffView diff={gitDiff} />
                 )}
@@ -365,8 +389,48 @@ export default function GitPanel() {
 }
 
 // Syntax-highlighted unified diff viewer
-const SyntaxHighlightedDiff = memo(function SyntaxHighlightedDiff({ diff }: { diff: string }) {
+function parsePatchableHunks(diff: string): Map<number, string> {
   const lines = diff.split('\n')
+  const hunks = new Map<number, string>()
+  let header: string[] = []
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].startsWith('diff --git ')) {
+      header = [lines[i]]
+      let j = i + 1
+      while (j < lines.length && !lines[j].startsWith('@@') && !lines[j].startsWith('diff --git ')) {
+        header.push(lines[j])
+        j++
+      }
+      i = j - 1
+      continue
+    }
+    if (!lines[i].startsWith('@@')) continue
+    const hunkStart = i
+    const hunk = [lines[i]]
+    let j = i + 1
+    while (j < lines.length && !lines[j].startsWith('@@') && !lines[j].startsWith('diff --git ')) {
+      hunk.push(lines[j])
+      j++
+    }
+    if (header.length > 0) hunks.set(hunkStart, `${[...header, ...hunk].join('\n')}\n`)
+    i = j - 1
+  }
+  return hunks
+}
+
+const SyntaxHighlightedDiff = memo(function SyntaxHighlightedDiff({
+  diff,
+  canPatch = false,
+  loading = false,
+  onApplyHunk,
+}: {
+  diff: string
+  canPatch?: boolean
+  loading?: boolean
+  onApplyHunk?: (patch: string, action: 'stage' | 'discard') => void
+}) {
+  const lines = diff.split('\n')
+  const patchableHunks = canPatch ? parsePatchableHunks(diff) : new Map<number, string>()
   return (
     <div style={{ flex: 1, overflow: 'auto', background: '#0d1117' }}>
       {lines.map((line, i) => {
@@ -387,8 +451,10 @@ const SyntaxHighlightedDiff = memo(function SyntaxHighlightedDiff({ diff }: { di
           color = 'var(--text-muted)'
         }
 
+        const patch = patchableHunks.get(i)
         return (
           <div key={i} style={{
+            display: 'flex', alignItems: 'center', gap: 8,
             padding: '1px 16px', fontFamily: "'JetBrains Mono', monospace",
             fontSize: 12, lineHeight: 1.5, background: bg, color,
             whiteSpace: 'pre-wrap', wordBreak: 'break-all',
@@ -396,7 +462,17 @@ const SyntaxHighlightedDiff = memo(function SyntaxHighlightedDiff({ diff }: { di
                         line.startsWith('-') ? '3px solid #f87171' :
                         line.startsWith('@') ? '3px solid #60a5fa' : '3px solid transparent',
           }}>
-            {line}
+            <span style={{ flex: 1 }}>{line}</span>
+            {patch && onApplyHunk && (
+              <span style={{ display: 'flex', gap: 4, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                <button className="btn btn-sm" disabled={loading} onClick={() => onApplyHunk(patch, 'stage')} style={{ fontSize: 10, padding: '1px 6px' }}>
+                  Stage hunk
+                </button>
+                <button className="btn btn-sm" disabled={loading} onClick={() => onApplyHunk(patch, 'discard')} style={{ fontSize: 10, padding: '1px 6px' }}>
+                  Discard hunk
+                </button>
+              </span>
+            )}
           </div>
         )
       })}
