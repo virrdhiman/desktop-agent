@@ -36,8 +36,7 @@ type ChatSuccess = { content: string; models?: string[] }
 const MODELS_TIMEOUT_MS = 8000
 const CACHE_MS = 10 * 60 * 1000
 const modelCache = new Map<string, { ids: string[]; at: number }>()
-
-let activeController: AbortController | null = null
+const activeControllers = new Set<AbortController>()
 
 function trimBase(baseUrl: string) {
   return baseUrl.replace(/\/+$/, '')
@@ -53,8 +52,8 @@ function redactKey(text: string, apiKey: string) {
   return apiKey && apiKey.length >= 8 ? text.split(apiKey).join('[redacted]') : text
 }
 
-function isAbort(err: any) {
-  return err?.name === 'AbortError' || activeController?.signal.aborted
+function isAbort(err: any, controller?: AbortController) {
+  return err?.name === 'AbortError' || !!controller?.signal.aborted
 }
 
 async function toError(response: Response, apiKey: string): Promise<ChatError> {
@@ -193,9 +192,8 @@ async function completeOpenAI(
 
 export function registerAiHandlers(getMainWindow: () => BrowserWindow | null) {
   ipcMain.handle('ai:chat', async (_event, config: ChatConfig) => {
-    activeController?.abort()
     const controller = new AbortController()
-    activeController = controller
+    activeControllers.add(controller)
 
     try {
       if (config.provider === 'anthropic') {
@@ -222,16 +220,17 @@ export function registerAiHandlers(getMainWindow: () => BrowserWindow | null) {
       const catalog = rankModels(discovered).slice(0, 40)
       return catalog.length > 0 ? { ...result, models: catalog } : result
     } catch (err: any) {
-      if (isAbort(err)) return { error: 'Cancelled', kind: 'cancelled' }
+      if (isAbort(err, controller)) return { error: 'Cancelled', kind: 'cancelled' }
       const error = redactKey(String(err?.message || err), config.apiKey)
       return { error, kind: classifyModelError(error) }
     } finally {
-      if (activeController === controller) activeController = null
+      activeControllers.delete(controller)
     }
   })
 
   ipcMain.handle('ai:cancel', async () => {
-    activeController?.abort()
+    for (const controller of activeControllers) controller.abort()
+    activeControllers.clear()
     return { success: true }
   })
 

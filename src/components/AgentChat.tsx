@@ -48,6 +48,20 @@ type ChatOutcome =
   | { content: string; provider: ProviderConfig; failed: ProviderAttempt[] }
   | { error: string; cancelled?: boolean }
 
+type QueryJobStatus = 'queued' | 'running' | 'done' | 'error'
+
+type QueuedQuery = {
+  id: string
+  text: string
+  userContent: string
+  images: { data: string; name: string }[]
+  status: QueryJobStatus
+  createdAt: number
+  userMessageId: string
+}
+
+const MAX_ACTIVE_QUERIES = 2
+
 function traceText(value: string, max = 6_000): string {
   const text = value.trim()
   if (text.length <= max) return text
@@ -294,7 +308,7 @@ function parseMarkdown(text: string): MdBlock[] {
 
 export default function AgentChat() {
   const {
-    messages, addMessage,
+    messages, addMessage, updateMessage,
     chatLoading, setChatLoading,
     getActiveProvider, settings,
     workspacePath, selectedFile, fileContent,
@@ -309,6 +323,7 @@ export default function AgentChat() {
   } = useStore()
 
   const [input, setInput] = useState('')
+  const [queryQueue, setQueryQueue] = useState<QueuedQuery[]>([])
   const [modelOverride, setModelOverride] = useState<string | null>(null)
   const [availableModels, setAvailableModels] = useState<string[]>([])
   const [dragOver, setDragOver] = useState(false)
@@ -317,14 +332,36 @@ export default function AgentChat() {
   const [mentionQuery, setMentionQuery] = useState('')
   const [mentionType, setMentionType] = useState<'file' | 'folder' | 'web'>('file')
   const [showSessions, setShowSessions] = useState(false)
+  const [voiceStatus, setVoiceStatus] = useState('')
+  const [listening, setListening] = useState(false)
   const messagesScrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const queryQueueRef = useRef<QueuedQuery[]>([])
+  const activeQueriesRef = useRef(0)
+  const pumpingQueueRef = useRef(false)
+  const voiceDraftBaseRef = useRef('')
 
   const { allFiles, sessions, loadSession, deleteSession, newChat, currentSessionId,
     planMode, setPlanMode, settings: appSettings, setSettings: setAppSettings, setCancelRequested } = useStore()
 
   const activeProvider = settings.providers.find((p) => p.id === settings.activeProvider)
+
+  const syncQueryQueue = useCallback((updater: (jobs: QueuedQuery[]) => QueuedQuery[]) => {
+    const next = updater(queryQueueRef.current)
+    queryQueueRef.current = next
+    setQueryQueue(next)
+  }, [])
+
+  const updateQueuedQuery = useCallback((id: string, updates: Partial<QueuedQuery>) => {
+    syncQueryQueue((jobs) => jobs.map((job) => job.id === id ? { ...job, ...updates } : job))
+  }, [syncQueryQueue])
+
+  const contentForQueuedQuery = useCallback((text: string, images: { data: string; name: string }[]) => {
+    return images.length > 0
+      ? `${text}\n\n[Attached images: ${images.map(img => img.name).join(', ')}]`
+      : text
+  }, [])
 
   useEffect(() => {
     // scrollIntoView would also scroll the overflow-hidden panel ancestors and push the header off-screen.
@@ -564,35 +601,29 @@ export default function AgentChat() {
     return { error: describeProviderFailure(failed) }
   }, [modelOverride, addTerminalEntry, setAppSettings, setStreamingContent])
 
-  const sendMessage = useCallback(async () => {
-    const text = input.trim()
-    if (!text || chatLoading) return
-
-    const provider = getActiveProvider()
-    if (!provider?.apiKey) {
-      addMessage({
-        id: Date.now().toString(),
-        role: 'system',
-        content: missingKeyNotice(provider?.name),
-        timestamp: Date.now(),
-      })
+  const runQueuedQuery = useCallback(async (job: QueuedQuery) => {
+    const text = job.text.trim()
+    if (!text) {
+      updateQueuedQuery(job.id, { status: 'error' })
       return
     }
     setCancelRequested(false)
     const taskKind = classifyAgentTask(text)
 
     // Image contents are not sent yet; the model is told which files were attached.
-    let userContent = text
-    if (pendingImages.length > 0) {
-      userContent = text + '\n\n[Attached images: ' + pendingImages.map(img => img.name).join(', ') + ']'
-    }
+    const userContent = job.userContent
+    const historyMessages = (() => {
+      const current = useStore.getState().messages
+      const index = current.findIndex((message) => message.id === job.userMessageId)
+      return index >= 0 ? current.slice(0, index + 1) : current
+    })()
 
     const workspaceContext = buildContext({
       workspacePath,
       selectedFile,
       fileContent,
       projectMemory,
-      conversationSummary: buildConversationSummary(messages),
+      conversationSummary: buildConversationSummary(historyMessages),
       resumeNote: [
         latestCheckpoint ? `Latest recovery checkpoint: ${latestCheckpoint.label} (${latestCheckpoint.files.join(', ')})` : '',
         lastVerification ? `Last verification: ${lastVerification.ok ? 'passed' : 'failed'} ${lastVerification.command}\n${lastVerification.summary}` : '',
@@ -609,16 +640,6 @@ export default function AgentChat() {
     const teamProfile = resolveTeamProfile(appSettings.teamPreset, appSettings.teamProfile)
     const teamEnabled = shouldUseTeamMode(appSettings.teamMode, userContent, taskKind, teamBudget)
 
-    const userMessage: ChatMessage = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: userContent,
-      timestamp: Date.now(),
-    }
-    addMessage(userMessage)
-    setInput('')
-    setPendingImages([])
-    setChatLoading(true)
     setStreamingContent('')
 
     const taskId = Date.now().toString()
@@ -633,20 +654,20 @@ export default function AgentChat() {
     // System notices shown in the UI are not part of the model's history.
     let apiMessages = [
       { role: 'system', content: systemPrompt },
-      ...buildHistory([...messages, { role: 'user', content: userContent }]),
+      ...buildHistory(historyMessages),
     ]
 
     const finish = (status: 'done' | 'error', notice?: string) => {
       if (notice) addMessage({ id: `${Date.now()}-notice`, role: 'system', content: notice, timestamp: Date.now() })
       updateTask(taskId, { status })
+      updateQueuedQuery(job.id, { status })
       setStreamingContent('')
-      setChatLoading(false)
     }
 
     let answeredBy: string | undefined
     let fallbackNoticeShown = false
     const call = async (): Promise<Extract<ChatOutcome, { content: string }> | null> => {
-      const outcome = await callWithFallback(apiMessages, answeredBy, taskKind)
+      const outcome = await callWithFallback(apiMessages, answeredBy, taskKind, false)
       if ('error' in outcome) {
         finish('error', outcome.cancelled ? 'Generation stopped.' : outcome.error)
         return null
@@ -763,7 +784,7 @@ export default function AgentChat() {
       setStreamingContent('')
 
       if (!hasToolBlock(responseContent)) {
-        const problems = assessResponse(responseContent, userContent, messages.some((message) => message.role === 'user' || message.role === 'assistant'))
+        const problems = assessResponse(responseContent, userContent, historyMessages.some((message) => message.role === 'user' || message.role === 'assistant'))
         const claims = problems.length === 0 ? unverifiedClaims(responseContent, toolRuns) : []
         if ((problems.length > 0 || claims.length > 0) && !retried) {
           retried = true
@@ -829,7 +850,7 @@ export default function AgentChat() {
           if (useStore.getState().cancelRequested) { finish('done', 'Generation stopped.'); return }
           let finalContent = cleaned
           if (synthesized) {
-            const finalProblems = assessResponse(synthesized, userContent, messages.some((message) => message.role === 'user' || message.role === 'assistant'))
+            const finalProblems = assessResponse(synthesized, userContent, historyMessages.some((message) => message.role === 'user' || message.role === 'assistant'))
             const finalClaims = finalProblems.length === 0 ? unverifiedClaims(synthesized, toolRuns) : []
             if (finalProblems.length === 0 && finalClaims.length === 0) finalContent = synthesized
             else addStepToTask(taskId, { id: `${Date.now()}-verifier-fallback`, type: 'error', content: 'Verifier: unusable synthesis discarded; kept the executor answer', timestamp: Date.now() })
@@ -863,7 +884,152 @@ export default function AgentChat() {
       if (!outcome) return
       addTokens(0, Math.ceil(outcome.content.length / 4))
     }
-  }, [input, chatLoading, messages, getActiveProvider, workspacePath, selectedFile, fileContent, pendingImages, planMode, appSettings.customRules, appSettings.teamMode, callWithFallback, processToolCalls, setCancelRequested, projectMemory, latestCheckpoint, lastVerification, toolExecutions, tasks])
+  }, [workspacePath, selectedFile, fileContent, projectMemory, latestCheckpoint, lastVerification, tasks, toolExecutions, planMode, appSettings.customRules, appSettings.teamTokenBudget, appSettings.teamPreset, appSettings.teamProfile, appSettings.teamMode, appSettings.dynamicTeam, setCancelRequested, setStreamingContent, addTask, updateTask, addStepToTask, callWithFallback, addTokens, addMessage, processToolCalls, updateQueuedQuery])
+
+  const pumpQueryQueue = useCallback(() => {
+    if (pumpingQueueRef.current) return
+    pumpingQueueRef.current = true
+    try {
+      while (queryQueueRef.current.filter((job) => job.status === 'running').length < MAX_ACTIVE_QUERIES) {
+        const next = queryQueueRef.current.find((job) => job.status === 'queued')
+        if (!next) break
+        activeQueriesRef.current = queryQueueRef.current.filter((job) => job.status === 'running').length + 1
+        setChatLoading(true)
+        updateQueuedQuery(next.id, { status: 'running' })
+        void runQueuedQuery({ ...next, status: 'running' })
+          .catch((error) => {
+            updateQueuedQuery(next.id, { status: 'error' })
+            addMessage({
+              id: `${Date.now()}-queue-error`,
+              role: 'system',
+              content: `Queued query failed: ${error?.message || error}`,
+              timestamp: Date.now(),
+            })
+          })
+          .finally(() => {
+            activeQueriesRef.current = queryQueueRef.current.filter((job) => job.status === 'running').length
+            setChatLoading(activeQueriesRef.current > 0)
+            setTimeout(() => pumpQueryQueue(), 0)
+          })
+      }
+    } finally {
+      pumpingQueueRef.current = false
+    }
+  }, [addMessage, runQueuedQuery, setChatLoading, updateQueuedQuery])
+
+  const sendMessage = useCallback(() => {
+    const text = input.trim()
+    if (!text) return
+
+    const provider = getActiveProvider()
+    if (!provider?.apiKey) {
+      addMessage({
+        id: Date.now().toString(),
+        role: 'system',
+        content: missingKeyNotice(provider?.name),
+        timestamp: Date.now(),
+      })
+      return
+    }
+
+    const images = pendingImages.slice()
+    const userContent = contentForQueuedQuery(text, images)
+    const userMessage: ChatMessage = {
+      id: `${Date.now()}-user`,
+      role: 'user',
+      content: userContent,
+      timestamp: Date.now(),
+    }
+    const job: QueuedQuery = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      text,
+      userContent,
+      images,
+      status: 'queued',
+      createdAt: Date.now(),
+      userMessageId: userMessage.id,
+    }
+
+    addMessage(userMessage)
+    syncQueryQueue((jobs) => [...jobs, job])
+    setInput('')
+    setPendingImages([])
+    setTimeout(() => pumpQueryQueue(), 0)
+  }, [input, getActiveProvider, pendingImages, contentForQueuedQuery, addMessage, syncQueryQueue, pumpQueryQueue])
+
+  const editQueuedQuery = useCallback((job: QueuedQuery, text: string) => {
+    if (job.status !== 'queued') return
+    const clean = text.trimStart()
+    const userContent = contentForQueuedQuery(clean, job.images)
+    updateQueuedQuery(job.id, { text: clean, userContent })
+    updateMessage(job.userMessageId, { content: userContent })
+  }, [contentForQueuedQuery, updateMessage, updateQueuedQuery])
+
+  const removeQueuedQuery = useCallback((job: QueuedQuery) => {
+    if (job.status !== 'queued') return
+    syncQueryQueue((jobs) => jobs.filter((candidate) => candidate.id !== job.id))
+    updateMessage(job.userMessageId, { content: `[Cancelled queued query]\n${job.userContent}` })
+  }, [syncQueryQueue, updateMessage])
+
+  const startVoiceInput = useCallback(() => {
+    if (listening) return
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (!SpeechRecognition) {
+      setVoiceStatus('Voice input is not available in this runtime.')
+      return
+    }
+    const recognition = new SpeechRecognition()
+    recognition.lang = 'en-US'
+    recognition.interimResults = true
+    recognition.continuous = false
+    voiceDraftBaseRef.current = input
+    setListening(true)
+    setVoiceStatus('Listening...')
+    recognition.onresult = (event: any) => {
+      const transcript = Array.from(event.results)
+        .map((result: any) => result[0]?.transcript || '')
+        .join(' ')
+        .trim()
+      if (transcript) {
+        const base = voiceDraftBaseRef.current
+        setInput(`${base}${base && !base.endsWith(' ') ? ' ' : ''}${transcript}`)
+      }
+    }
+    recognition.onerror = () => {
+      setListening(false)
+      setVoiceStatus('Voice input failed.')
+    }
+    recognition.onend = () => {
+      setListening(false)
+      setVoiceStatus('')
+      inputRef.current?.focus()
+    }
+    recognition.start()
+  }, [input, listening])
+
+  const speakLatestAnswer = useCallback(() => {
+    const synth = window.speechSynthesis
+    if (!synth) {
+      setVoiceStatus('Voice output is not available in this runtime.')
+      return
+    }
+    if (synth.speaking) {
+      synth.cancel()
+      setVoiceStatus('')
+      return
+    }
+    const latest = [...useStore.getState().messages].reverse().find((message) => message.role === 'assistant')
+    if (!latest?.content.trim()) {
+      setVoiceStatus('No answer to read yet.')
+      return
+    }
+    const utterance = new SpeechSynthesisUtterance(latest.content.replace(/```[\s\S]*?```/g, 'code block omitted'))
+    utterance.rate = 1
+    utterance.onend = () => setVoiceStatus('')
+    utterance.onerror = () => setVoiceStatus('Voice output failed.')
+    setVoiceStatus('Reading latest answer...')
+    synth.speak(utterance)
+  }, [])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -1249,6 +1415,78 @@ export default function AgentChat() {
         )}
       </div>
 
+      {/* Query queue */}
+      {queryQueue.some((job) => job.status !== 'done') && (
+        <div style={{
+          padding: '8px 14px',
+          borderTop: '1px solid var(--border)',
+          background: 'var(--bg-secondary)',
+          display: 'grid',
+          gap: 6,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>
+              Query queue
+            </span>
+            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+              {activeQueriesRef.current}/{MAX_ACTIVE_QUERIES} running · {queryQueue.filter((job) => job.status === 'queued').length} waiting
+            </span>
+          </div>
+          {queryQueue.filter((job) => job.status !== 'done').slice(0, 6).map((job) => (
+            <div
+              key={job.id}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: job.status === 'queued' ? '1fr auto auto' : '1fr auto',
+                gap: 6,
+                alignItems: 'center',
+              }}
+            >
+              {job.status === 'queued' || job.status === 'running' ? (
+                <input
+                  className="input"
+                  aria-label={job.status === 'queued' ? 'Edit queued query' : 'Running query'}
+                  value={job.text}
+                  onChange={(event) => editQueuedQuery(job, event.target.value)}
+                  readOnly={job.status !== 'queued'}
+                  style={{ fontSize: 12, height: 30, borderRadius: 6 }}
+                />
+              ) : (
+                <div style={{
+                  fontSize: 12,
+                  color: 'var(--text-secondary)',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}>
+                  {job.text}
+                </div>
+              )}
+              <span
+                className="badge"
+                style={{
+                  fontSize: 10,
+                  background: job.status === 'running' ? 'rgba(59,130,246,0.15)' : job.status === 'error' ? 'rgba(239,68,68,0.15)' : 'var(--bg-tertiary)',
+                  color: job.status === 'running' ? 'var(--accent)' : job.status === 'error' ? 'var(--error)' : 'var(--text-muted)',
+                }}
+              >
+                {job.status}
+              </span>
+              {job.status === 'queued' && (
+                <button
+                  className="btn btn-sm"
+                  onClick={() => removeQueuedQuery(job)}
+                  title="Remove queued query"
+                  style={{ height: 30 }}
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Pending images preview */}
       {pendingImages.length > 0 && (
         <div style={{
@@ -1302,6 +1540,11 @@ export default function AgentChat() {
                 {sessionStats.estimatedCost > 0 && ` · $${sessionStats.estimatedCost.toFixed(4)}`}
               </span>
             )}
+            {queryQueue.some((job) => job.status === 'queued' || job.status === 'running') && (
+              <span className="badge" style={{ fontSize: 9, padding: '1px 6px' }}>
+                {queryQueue.filter((job) => job.status === 'running').length} running · {queryQueue.filter((job) => job.status === 'queued').length} queued
+              </span>
+            )}
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
@@ -1327,6 +1570,22 @@ export default function AgentChat() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+          <button
+            className={`btn btn-sm ${listening ? 'btn-success' : ''}`}
+            onClick={startVoiceInput}
+            title="Dictate prompt"
+            style={{ height: 42, minWidth: 42 }}
+          >
+            {listening ? '●' : '🎙'}
+          </button>
+          <button
+            className="btn btn-sm"
+            onClick={speakLatestAnswer}
+            title="Read latest answer aloud"
+            style={{ height: 42, minWidth: 42 }}
+          >
+            🔊
+          </button>
           <button
             className="btn btn-sm"
             onClick={() => fileInputRef.current?.click()}
@@ -1425,20 +1684,24 @@ export default function AgentChat() {
               handleKeyDown(e)
               if (e.key === 'Escape') setShowMentions(false)
             }}
-            placeholder="Ask me anything... Type @ for context, Ctrl+V for images, drag files. (Enter to send)"
+            placeholder="Ask or queue work... Type @ for context, Ctrl+V for images, drag files. (Enter queues immediately)"
             rows={2}
             style={{ resize: 'none', fontSize: 13, borderRadius: 12 }}
-            disabled={chatLoading}
           />
           <button
             className="btn btn-primary"
             onClick={sendMessage}
-            disabled={!input.trim() || chatLoading}
+            disabled={!input.trim()}
             style={{ alignSelf: 'flex-end', height: 42, minWidth: 42, borderRadius: 12 }}
           >
-            {chatLoading ? '⟳' : '➤'}
+            {chatLoading ? 'Queue' : '➤'}
           </button>
         </div>
+        {voiceStatus && (
+          <div style={{ marginTop: 4, fontSize: 10, color: 'var(--text-muted)' }}>
+            {voiceStatus}
+          </div>
+        )}
       </div>
     </div>
   )

@@ -35,5 +35,6 @@ self.MonacoEnvironment = {
 }
 
 loader.config({ monaco })
+;(self as unknown as { __VD_MONACO?: typeof monaco }).__VD_MONACO = monaco
 
 export { default } from '@monaco-editor/react'
