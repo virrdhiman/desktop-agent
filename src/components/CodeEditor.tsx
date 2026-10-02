@@ -15,10 +15,20 @@
  * - Language auto-detection from file extension
  * - Minimap, bracket matching, code folding
  */
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { lazy, Suspense } from 'react'
-const Editor = lazy(() => import('../lib/monacoEditor'))
+import type * as Monaco from 'monaco-editor'
 import { useStore } from '../store'
+import {
+  findWorkspaceReferences,
+  isValidIdentifier,
+  pickLikelyDefinition,
+  renameWorkspaceIdentifier,
+  type WorkspaceReference,
+} from '../lib/editorIntelligence'
+
+const loadMonacoEditor = () => import('../lib/monacoEditor')
+const Editor = lazy(loadMonacoEditor)
 
 function getLanguage(filePath: string): string {
   const ext = filePath.split('.').pop()?.toLowerCase() || ''
@@ -49,9 +59,17 @@ export default function CodeEditor() {
   const {
     selectedFile, setSelectedFile, fileContent, setFileContent,
     fileDirty, setFileDirty, openFiles, addOpenFile, closeOpenFile,
+    allFiles, addTerminalEntry,
   } = useStore()
 
   const [editorContent, setEditorContent] = useState('')
+  const [languageReady, setLanguageReady] = useState(false)
+  const [references, setReferences] = useState<WorkspaceReference[]>([])
+  const [referenceWord, setReferenceWord] = useState('')
+  const [pendingReveal, setPendingReveal] = useState<WorkspaceReference | null>(null)
+  const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null)
+
+  const language = useMemo(() => selectedFile ? getLanguage(selectedFile) : 'plaintext', [selectedFile])
 
   // Load file when selected changes
   useEffect(() => {
@@ -64,6 +82,18 @@ export default function CodeEditor() {
       }
     })
   }, [selectedFile])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!selectedFile) return
+    setLanguageReady(false)
+    loadMonacoEditor()
+      .then((module) => module.ensureMonacoLanguage(language))
+      .finally(() => {
+        if (!cancelled) setLanguageReady(true)
+      })
+    return () => { cancelled = true }
+  }, [language, selectedFile])
 
   const handleSave = useCallback(async () => {
     if (!selectedFile) return
@@ -108,6 +138,112 @@ export default function CodeEditor() {
       setSelectedFile(remaining.length ? remaining[remaining.length - 1] : null)
     }
   }, [selectedFile, openFiles])
+
+  const currentIdentifier = useCallback(() => {
+    const editor = editorRef.current
+    const model = editor?.getModel()
+    const position = editor?.getPosition()
+    if (!editor || !model || !position) return ''
+    return model.getWordAtPosition(position)?.word || ''
+  }, [])
+
+  const openReference = useCallback((ref: WorkspaceReference) => {
+    setPendingReveal(ref)
+    setSelectedFile(ref.path)
+    addOpenFile(ref.path)
+  }, [addOpenFile, setSelectedFile])
+
+  useEffect(() => {
+    if (!pendingReveal || selectedFile !== pendingReveal.path || !editorRef.current) return
+    const editor = editorRef.current
+    editor.setPosition({ lineNumber: pendingReveal.line, column: pendingReveal.column })
+    editor.revealLineInCenter(pendingReveal.line)
+    editor.focus()
+    setPendingReveal(null)
+  }, [editorContent, pendingReveal, selectedFile])
+
+  const collectReferences = useCallback(async (word?: string) => {
+    const identifier = word || currentIdentifier()
+    if (!isValidIdentifier(identifier)) return []
+    const refs = await findWorkspaceReferences(allFiles, window.api.readFile, identifier)
+    setReferenceWord(identifier)
+    setReferences(refs)
+    return refs
+  }, [allFiles, currentIdentifier])
+
+  const handleGoToDefinition = useCallback(async () => {
+    const editor = editorRef.current
+    const word = currentIdentifier()
+    if (!editor || !word) return
+    await editor.getAction('editor.action.revealDefinition')?.run()
+    const refs = await collectReferences(word)
+    const target = pickLikelyDefinition(refs, word)
+    if (target) openReference(target)
+  }, [collectReferences, currentIdentifier, openReference])
+
+  const handleFindReferences = useCallback(async () => {
+    const word = currentIdentifier()
+    const refs = await collectReferences(word)
+    if (word) {
+      addTerminalEntry({
+        id: Date.now().toString(),
+        type: 'output',
+        content: refs.length ? `Found ${refs.length} reference(s) for "${word}".` : `No references found for "${word}".`,
+        timestamp: Date.now(),
+      })
+    }
+  }, [addTerminalEntry, collectReferences, currentIdentifier])
+
+  const handleRenameSymbol = useCallback(async () => {
+    const from = currentIdentifier()
+    if (!isValidIdentifier(from)) return
+    const to = window.prompt(`Rename "${from}" to:`)?.trim()
+    if (!to || to === from) return
+    if (!isValidIdentifier(to)) {
+      window.alert('Use a valid JavaScript/TypeScript-style identifier for workspace rename.')
+      return
+    }
+    const refs = await collectReferences(from)
+    const ok = window.confirm(`Rename ${refs.length} occurrence(s) of "${from}" to "${to}" across workspace text files?`)
+    if (!ok) return
+    const result = await renameWorkspaceIdentifier(allFiles, window.api.readFile, window.api.writeFile, from, to)
+    if (selectedFile && result.updatedFiles.includes(selectedFile)) {
+      const reloaded = await window.api.readFile(selectedFile)
+      if ('content' in reloaded) {
+        setEditorContent(reloaded.content)
+        setFileContent(reloaded.content)
+      }
+    }
+    setReferences([])
+    addTerminalEntry({
+      id: Date.now().toString(),
+      type: result.errors.length ? 'error' : 'success',
+      content: `Renamed ${result.replacements} occurrence(s) in ${result.updatedFiles.length} file(s).${result.errors.length ? ` ${result.errors.length} file(s) failed.` : ''}`,
+      timestamp: Date.now(),
+    })
+  }, [addTerminalEntry, allFiles, collectReferences, currentIdentifier, selectedFile, setFileContent])
+
+  const handleEditorMount = useCallback((editor: Monaco.editor.IStandaloneCodeEditor, monaco: typeof Monaco) => {
+    editorRef.current = editor
+    editor.addAction({
+      id: 'vd.goToDefinition',
+      label: 'VD: Go to Definition',
+      keybindings: [monaco.KeyCode.F12],
+      run: () => { void handleGoToDefinition() },
+    })
+    editor.addAction({
+      id: 'vd.findWorkspaceReferences',
+      label: 'VD: Find Workspace References',
+      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.F12],
+      run: () => { void handleFindReferences() },
+    })
+    editor.addAction({
+      id: 'vd.renameWorkspaceSymbol',
+      label: 'VD: Rename Workspace Symbol',
+      keybindings: [monaco.KeyCode.F2],
+      run: () => { void handleRenameSymbol() },
+    })
+  }, [handleFindReferences, handleGoToDefinition, handleRenameSymbol])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -185,6 +321,15 @@ export default function CodeEditor() {
             )}
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
+            <button className="btn btn-sm" onClick={handleGoToDefinition} title="Go to definition (F12)">
+              Def
+            </button>
+            <button className="btn btn-sm" onClick={handleFindReferences} title="Find workspace references (Ctrl+Shift+F12)">
+              Refs
+            </button>
+            <button className="btn btn-sm" onClick={handleRenameSymbol} title="Rename exact identifier across workspace text files (F2)">
+              Rename
+            </button>
             {fileDirty && (
               <button className="btn btn-sm btn-success" onClick={handleSave}>
                 💾 Save
@@ -197,12 +342,58 @@ export default function CodeEditor() {
         </div>
       )}
 
+      {references.length > 0 && (
+        <div style={{
+          maxHeight: 160,
+          overflow: 'auto',
+          background: 'var(--bg-secondary)',
+          borderBottom: '1px solid var(--border)',
+          flexShrink: 0,
+        }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '6px 10px',
+            fontSize: 12,
+            color: 'var(--text-muted)',
+            borderBottom: '1px solid var(--border)',
+          }}>
+            <span>{references.length} reference(s) for <strong style={{ color: 'var(--text-primary)' }}>{referenceWord}</strong></span>
+            <button className="btn btn-sm" onClick={() => setReferences([])}>Close</button>
+          </div>
+          {references.slice(0, 80).map((ref, index) => (
+            <button
+              key={`${ref.path}:${ref.line}:${ref.column}:${index}`}
+              onClick={() => openReference(ref)}
+              style={{
+                display: 'block',
+                width: '100%',
+                textAlign: 'left',
+                padding: '6px 10px',
+                border: 'none',
+                borderBottom: '1px solid var(--border)',
+                background: 'transparent',
+                color: 'var(--text-secondary)',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                fontSize: 12,
+              }}
+            >
+              <span style={{ color: 'var(--accent)' }}>{ref.path}:{ref.line}:{ref.column}</span>
+              <span style={{ marginLeft: 8, fontFamily: 'monospace' }}>{ref.preview}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Monaco Editor (lazy-loaded) */}
-      {selectedFile ? (
+      {selectedFile && languageReady ? (
         <Suspense fallback={<div style={{ padding: 20, color: 'var(--text-muted)' }}>Loading editor...</div>}>
         <Editor
-          language={getLanguage(selectedFile)}
+          language={language}
           value={editorContent}
+          onMount={handleEditorMount}
           onChange={(val) => {
             setEditorContent(val || '')
             if (val !== fileContent) setFileDirty(true)
@@ -240,6 +431,10 @@ export default function CodeEditor() {
           }
         />
         </Suspense>
+      ) : selectedFile ? (
+        <div className="empty-state" style={{ flex: 1 }}>
+          <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading {language} support...</div>
+        </div>
       ) : (
         <div className="empty-state" style={{ flex: 1 }}>
           <div className="empty-state-icon">📝</div>

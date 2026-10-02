@@ -11,25 +11,94 @@
  */
 import 'monaco-editor/esm/vs/editor/edcore.main'
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api'
-import 'monaco-editor/esm/vs/basic-languages/css/css.contribution'
-import 'monaco-editor/esm/vs/basic-languages/html/html.contribution'
-import 'monaco-editor/esm/vs/basic-languages/javascript/javascript.contribution'
-import 'monaco-editor/esm/vs/basic-languages/markdown/markdown.contribution'
-import 'monaco-editor/esm/vs/language/json/monaco.contribution'
-import 'monaco-editor/esm/vs/language/typescript/monaco.contribution'
 import { loader } from '@monaco-editor/react'
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
-import JsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
-import CssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker'
-import HtmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
-import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
+
+const languageLoads = new Map<string, Promise<unknown>>()
+
+export function ensureMonacoLanguage(language: string): Promise<unknown> {
+  const normalized = language === 'tsx' ? 'typescript' : language === 'jsx' ? 'javascript' : language
+  if (languageLoads.has(normalized)) return languageLoads.get(normalized)!
+
+  const load = (() => {
+    switch (normalized) {
+      case 'typescript':
+      case 'javascript':
+        return import('monaco-editor/esm/vs/language/typescript/monaco.contribution')
+      case 'json':
+        return import('monaco-editor/esm/vs/language/json/monaco.contribution')
+      case 'css':
+      case 'scss':
+      case 'less':
+        return import('monaco-editor/esm/vs/basic-languages/css/css.contribution')
+      case 'html':
+      case 'handlebars':
+      case 'razor':
+        return import('monaco-editor/esm/vs/basic-languages/html/html.contribution')
+      case 'markdown':
+        return import('monaco-editor/esm/vs/basic-languages/markdown/markdown.contribution')
+      case 'python':
+        return import('monaco-editor/esm/vs/basic-languages/python/python.contribution')
+      case 'go':
+        return import('monaco-editor/esm/vs/basic-languages/go/go.contribution')
+      case 'rust':
+        return import('monaco-editor/esm/vs/basic-languages/rust/rust.contribution')
+      case 'java':
+        return import('monaco-editor/esm/vs/basic-languages/java/java.contribution')
+      case 'c':
+      case 'cpp':
+        return import('monaco-editor/esm/vs/basic-languages/cpp/cpp.contribution')
+      case 'csharp':
+        return import('monaco-editor/esm/vs/basic-languages/csharp/csharp.contribution')
+      case 'yaml':
+        return import('monaco-editor/esm/vs/basic-languages/yaml/yaml.contribution')
+      case 'shell':
+        return import('monaco-editor/esm/vs/basic-languages/shell/shell.contribution')
+      case 'sql':
+        return import('monaco-editor/esm/vs/basic-languages/sql/sql.contribution')
+      case 'xml':
+        return import('monaco-editor/esm/vs/basic-languages/xml/xml.contribution')
+      case 'ruby':
+        return import('monaco-editor/esm/vs/basic-languages/ruby/ruby.contribution')
+      case 'php':
+        return import('monaco-editor/esm/vs/basic-languages/php/php.contribution')
+      case 'swift':
+        return import('monaco-editor/esm/vs/basic-languages/swift/swift.contribution')
+      case 'kotlin':
+        return import('monaco-editor/esm/vs/basic-languages/kotlin/kotlin.contribution')
+      case 'r':
+        return import('monaco-editor/esm/vs/basic-languages/r/r.contribution')
+      case 'dart':
+        return import('monaco-editor/esm/vs/basic-languages/dart/dart.contribution')
+      case 'graphql':
+        return import('monaco-editor/esm/vs/basic-languages/graphql/graphql.contribution')
+      default:
+        return Promise.resolve()
+    }
+  })()
+
+  languageLoads.set(normalized, load)
+  return load
+}
 
 self.MonacoEnvironment = {
-  getWorker(_workerId: string, label: string) {
-    if (label === 'json') return new JsonWorker()
-    if (label === 'css' || label === 'scss' || label === 'less') return new CssWorker()
-    if (label === 'html' || label === 'handlebars' || label === 'razor') return new HtmlWorker()
-    if (label === 'typescript' || label === 'javascript') return new TsWorker()
+  async getWorker(_workerId: string, label: string) {
+    if (label === 'json') {
+      const worker = await import('monaco-editor/esm/vs/language/json/json.worker?worker')
+      return new worker.default()
+    }
+    if (label === 'css' || label === 'scss' || label === 'less') {
+      const worker = await import('monaco-editor/esm/vs/language/css/css.worker?worker')
+      return new worker.default()
+    }
+    if (label === 'html' || label === 'handlebars' || label === 'razor') {
+      const worker = await import('monaco-editor/esm/vs/language/html/html.worker?worker')
+      return new worker.default()
+    }
+    if (label === 'typescript' || label === 'javascript') {
+      const worker = await import('monaco-editor/esm/vs/language/typescript/ts.worker?worker')
+      return new worker.default()
+    }
     return new EditorWorker()
   },
 }

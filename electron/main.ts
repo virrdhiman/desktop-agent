@@ -19,6 +19,7 @@
  */
 import { app, BrowserWindow, dialog, session, shell } from 'electron'
 import path from 'path'
+import fs from 'fs'
 import { fileURLToPath } from 'url'
 import { isExternalWebUrl, isSameAppPage } from './navigation'
 
@@ -45,7 +46,17 @@ const getMainWindow = () => mainWindow
 
 // ─── Window Management ────────────────────────────────────────────────────
 
+function resolveWindowIcon(): string | undefined {
+  const iconFile = process.platform === 'win32' ? 'icon.ico' : 'icon.png'
+  const candidates = [
+    path.join(process.resourcesPath, iconFile),
+    path.join(__dirname, '../build', iconFile),
+  ]
+  return candidates.find((candidate) => fs.existsSync(candidate))
+}
+
 function createWindow() {
+  const icon = resolveWindowIcon()
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 920,
@@ -53,6 +64,7 @@ function createWindow() {
     minHeight: 600,
     titleBarStyle: 'hiddenInset',
     backgroundColor: '#0f172a',
+    ...(icon ? { icon } : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,

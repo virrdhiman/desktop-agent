@@ -49,6 +49,7 @@
     "agent:evals": "node scripts/agent-evals.mjs",
     "agent:evals:export": "node scripts/hosted-eval-export.mjs",
     "agent:evals:import": "node scripts/hosted-eval-import.mjs",
+    "icons": "node scripts/generate-icons.mjs",
     "verify": "npm run lint && npm test && npm run build",
     "security:audit": "npm audit --omit=dev --audit-level=high",
     "checksums": "node scripts/checksums.mjs",
@@ -125,6 +126,16 @@
         "to": "LICENSE.txt"
       }
     ],
+    "extraResources": [
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
+      },
+      {
+        "from": "build/icon.ico",
+        "to": "icon.ico"
+      }
+    ],
     "mac": {
       "target": [
         "dmg",
@@ -138,6 +149,7 @@
         "nsis",
         "portable"
       ],
+      "icon": "build/icon.ico",
       "requestedExecutionLevel": "asInvoker",
       "signAndEditExecutable": false
     },
@@ -146,6 +158,7 @@
         "AppImage",
         "deb"
       ],
+      "icon": "build/icon.png",
       "category": "Development"
     },
     "nsis": {
