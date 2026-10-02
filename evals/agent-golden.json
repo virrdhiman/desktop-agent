@@ -3,9 +3,9 @@
   "name": "VD Agent local golden evals",
   "inspiration": "Golden tasks, trace checks, and release smoke gates.",
   "minimums": {
-    "vitestPassed": 302,
-    "smokeChecks": 49,
-    "goldenCases": 80
+    "vitestPassed": 304,
+    "smokeChecks": 50,
+    "goldenCases": 82
   },
   "tiers": [
     {
@@ -52,10 +52,39 @@
       "checks": [
         "Relative paths resolve under workspace.",
         "Non-zero command exits are surfaced as failures.",
-        "Timeouts include a clear timeout message."
+        "Timeouts include a clear timeout message.",
+        "Command failures include a concrete recovery hint."
       ],
       "coveredBy": [
         "electron/__tests__/toolSupport.test.ts"
+      ]
+    },
+    {
+      "id": "component-repo-index",
+      "tier": 1,
+      "prompt": "Build a local code index and search a repo by symbols, paths, and content snippets before broad edits.",
+      "checks": [
+        "Repo maps include files, language, size, and discovered symbols.",
+        "Ignored folders such as node_modules are excluded.",
+        "Repo search ranks relevant files and returns line-numbered snippets."
+      ],
+      "coveredBy": [
+        "electron/__tests__/repoIndex.test.ts"
+      ]
+    },
+    {
+      "id": "trajectory-cursor-style-repo-work",
+      "tier": 2,
+      "source": "real-user",
+      "prompt": "Make this work like a professional coding agent: inspect the repo, find relevant files, edit multiple files safely, review the diff, verify, and summarize what remains.",
+      "checks": [
+        "Broad repo work uses repo_map or repo_search before targeted file reads.",
+        "Multi-file edits are grounded in exact reads and old_string replacements.",
+        "The final report separates implemented improvements from pending gaps."
+      ],
+      "coveredBy": [
+        "src/lib/agent.test.ts",
+        "scripts/smoke.mjs"
       ]
     },
     {

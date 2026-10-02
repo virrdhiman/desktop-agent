@@ -17,6 +17,7 @@ describe('resolveToolArgs', () => {
 
   it('defaults directory tools and run_command to the workspace', () => {
     expect(resolveToolArgs('list_files', {}, ws).path).toBe(ws)
+    expect(resolveToolArgs('repo_search', { query: 'agent' }, ws).path).toBe(ws)
     expect(resolveToolArgs('git_status', {}, ws).path).toBe(ws)
     expect(resolveToolArgs('run_command', { command: 'npm test' }, ws).cwd).toBe(ws)
     expect(resolveToolArgs('run_command', { command: 'ls', cwd: 'packages/app' }, ws).cwd).toBe(path.join(ws, 'packages', 'app'))
@@ -59,6 +60,7 @@ describe('formatCommandResult', () => {
     expect('error' in r && r.error).toContain('Command failed with exit code 1: npm test')
     expect('error' in r && r.error).toContain('3 passed')
     expect('error' in r && r.error).toContain('1 failed')
+    expect('error' in r && r.error).toContain('Recovery:')
   })
 
   it('reports a timeout clearly', () => {
@@ -76,6 +78,6 @@ describe('formatCommandResult', () => {
     const long = 'x'.repeat(30_000) + 'THE-ERROR'
     const r = formatCommandResult('build', { code: 2 }, long, '')
     expect('error' in r && r.error).toContain('THE-ERROR')
-    expect('error' in r && r.error.length).toBeLessThan(21_000)
+    expect('error' in r && r.error.length).toBeLessThan(21_500)
   })
 })

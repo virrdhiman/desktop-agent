@@ -17,6 +17,7 @@ import { COMMAND_TIMEOUT_MS, formatCommandResult, resolveToolArgs } from '../too
 import { assessToolPolicy, checkpointTargets, resolvesInsideWorkspace, toolApprovalDetail, type PermissionMode } from '../toolPolicy'
 import { createCheckpoint } from '../checkpointStore'
 import { archiveOutputPaths, extractZipArchive, inspectZipArchive, type ArchiveInspection } from '../archiveStore'
+import { buildRepoMap, searchRepo } from '../repoIndex'
 
 /** Git instances cache for tool execution */
 const toolGitInstances: Map<string, SimpleGit> = new Map()
@@ -179,6 +180,26 @@ export function registerToolHandlers() {
             }
             await doCodeSearch(searchDir, 0)
             return { result: codeResults.length ? codeResults.slice(0, 100).join('\n') : 'No matches found' }
+          }
+          case 'repo_map': {
+            const root = tool.args.path || tool.workspace || '.'
+            const entries = await buildRepoMap(root, Number(tool.args.limit || 160))
+            const lines = entries.map((entry) => {
+              const symbols = entry.symbols.length ? ` — ${entry.symbols.join(', ')}` : ''
+              return `${entry.path} (${entry.language}, ${entry.bytes} bytes)${symbols}`
+            })
+            return { result: lines.length ? `Repo map (${lines.length} files):\n${lines.join('\n')}` : 'No indexable text files found.' }
+          }
+          case 'repo_search': {
+            const root = tool.args.path || tool.workspace || '.'
+            const query = String(tool.args.query || '').trim()
+            if (!query) return { error: 'repo_search requires query' }
+            const hits = await searchRepo(root, query, Number(tool.args.limit || 30))
+            const lines = hits.map((hit, index) => [
+              `${index + 1}. ${hit.path}:${hit.line} score=${hit.score} reason=${hit.reason}`,
+              hit.snippet,
+            ].join('\n'))
+            return { result: lines.length ? `Repo search for "${query}" (${lines.length} hits):\n\n${lines.join('\n\n')}` : 'No matches found.' }
           }
           case 'run_command': {
             const { exec } = await import('child_process')

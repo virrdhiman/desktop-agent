@@ -133,6 +133,47 @@ export default function GitPanel() {
     } catch (err) { console.error('Failed to get diff:', err) }
   }, [workspacePath])
 
+  const showReviewBundle = useCallback(async () => {
+    if (!workspacePath) return
+    setLoading(true)
+    try {
+      const [status, unstaged, staged] = await Promise.all([
+        window.api.gitStatus(workspacePath),
+        window.api.gitDiff(workspacePath),
+        window.api.gitDiffStaged(workspacePath),
+      ])
+      const statusText = 'error' in status
+        ? status.error
+        : [
+            `Branch: ${status.branch}`,
+            `Tracking: ${status.tracking || 'none'}${status.ahead ? `, ${status.ahead} ahead` : ''}${status.behind ? `, ${status.behind} behind` : ''}`,
+            `Staged: ${status.staged.join(', ') || 'none'}`,
+            `Modified: ${status.modified.join(', ') || 'none'}`,
+            `Untracked: ${status.not_added.join(', ') || 'none'}`,
+            `Deleted: ${status.deleted.join(', ') || 'none'}`,
+          ].join('\n')
+      const unstagedText = typeof unstaged === 'string' ? unstaged : unstaged.error
+      const stagedText = typeof staged === 'string' ? staged : staged.error
+      setDiffFile('review bundle')
+      setGitDiff([
+        'VD Agent Review Bundle',
+        '',
+        '--- git status ---',
+        statusText,
+        '',
+        '--- unstaged diff ---',
+        unstagedText || 'No unstaged changes',
+        '',
+        '--- staged diff ---',
+        stagedText || 'No staged changes',
+      ].join('\n'))
+    } catch (err: any) {
+      setGitDiff(`Review bundle failed: ${err.message || err}`)
+    } finally {
+      setLoading(false)
+    }
+  }, [workspacePath])
+
   if (!workspacePath) {
     return (
       <div className="empty-state">
@@ -199,6 +240,9 @@ export default function GitPanel() {
                   <button className="btn btn-sm btn-primary" onClick={handlePush} disabled={loading}>⬆ Push</button>
                   <button className="btn btn-sm btn-warning" onClick={handlePull} disabled={loading}>⬇ Pull</button>
                 </div>
+                <button className="btn btn-sm" onClick={showReviewBundle} disabled={loading} title="Show status, unstaged diff, and staged diff together">
+                  Review Bundle
+                </button>
               </div>
             </div>
 

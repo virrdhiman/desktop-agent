@@ -257,6 +257,16 @@ export const AGENT_TOOLS = [
     parameters: { pattern: 'string', path: 'string (optional)' },
   },
   {
+    name: 'repo_map',
+    description: 'Build a local repository map with files, languages, sizes, and top symbols. Use before broad multi-file changes.',
+    parameters: { path: 'string (optional)', limit: 'number (optional, default 160)' },
+  },
+  {
+    name: 'repo_search',
+    description: 'Rank local repository files by query relevance using path, symbol, and content snippets with line numbers.',
+    parameters: { query: 'string', path: 'string (optional)', limit: 'number (optional, default 30)' },
+  },
+  {
     name: 'run_command',
     description: 'Execute a shell command',
     parameters: { command: 'string', cwd: 'string (optional)' },
