@@ -26,6 +26,7 @@ import {
   renameWorkspaceIdentifier,
   type WorkspaceReference,
 } from '../lib/editorIntelligence'
+import { buildPreview, summarizeInlineEdit } from '../lib/inlineEdits'
 
 const loadMonacoEditor = () => import('../lib/monacoEditor')
 const Editor = lazy(loadMonacoEditor)
@@ -59,7 +60,7 @@ export default function CodeEditor() {
   const {
     selectedFile, setSelectedFile, fileContent, setFileContent,
     fileDirty, setFileDirty, openFiles, addOpenFile, closeOpenFile,
-    allFiles, addTerminalEntry, workspacePath,
+    allFiles, addTerminalEntry, workspacePath, fileEditHistory, removeFileEdit,
   } = useStore()
 
   const [editorContent, setEditorContent] = useState('')
@@ -72,6 +73,13 @@ export default function CodeEditor() {
 
   const language = useMemo(() => selectedFile ? getLanguage(selectedFile) : 'plaintext', [selectedFile])
   const hasTsLanguageService = language === 'typescript' || language === 'javascript'
+  const latestInlineEdit = useMemo(() => {
+    if (!selectedFile) return null
+    return [...fileEditHistory].reverse().find((edit) => edit.path === selectedFile) || null
+  }, [fileEditHistory, selectedFile])
+  const latestInlineEditSummary = useMemo(() => (
+    latestInlineEdit ? summarizeInlineEdit(latestInlineEdit.before, latestInlineEdit.after) : null
+  ), [latestInlineEdit])
 
   // Load file when selected changes
   useEffect(() => {
@@ -258,6 +266,27 @@ export default function CodeEditor() {
       timestamp: Date.now(),
     })
   }, [addTerminalEntry, allFiles, collectReferences, currentIdentifier, currentPosition, hasTsLanguageService, selectedFile, setFileContent, workspacePath])
+
+  const acceptInlineEdit = useCallback(async () => {
+    if (!latestInlineEdit || !selectedFile) return
+    setFileContent(latestInlineEdit.after)
+    setEditorContent(latestInlineEdit.after)
+    removeFileEdit(latestInlineEdit.timestamp)
+    addTerminalEntry({ id: Date.now().toString(), type: 'success', content: `Accepted inline edit: ${selectedFile}`, timestamp: Date.now() })
+  }, [addTerminalEntry, latestInlineEdit, removeFileEdit, selectedFile, setFileContent])
+
+  const rejectInlineEdit = useCallback(async () => {
+    if (!latestInlineEdit || !selectedFile) return
+    const result = await window.api.writeFile(selectedFile, latestInlineEdit.before)
+    if ('error' in result) {
+      addTerminalEntry({ id: Date.now().toString(), type: 'error', content: `Reject inline edit failed: ${result.error}`, timestamp: Date.now() })
+      return
+    }
+    setFileContent(latestInlineEdit.before)
+    setEditorContent(latestInlineEdit.before)
+    removeFileEdit(latestInlineEdit.timestamp)
+    addTerminalEntry({ id: Date.now().toString(), type: 'success', content: `Rejected inline edit and restored previous file: ${selectedFile}`, timestamp: Date.now() })
+  }, [addTerminalEntry, latestInlineEdit, removeFileEdit, selectedFile, setFileContent])
 
   useEffect(() => {
     let cancelled = false
@@ -473,6 +502,36 @@ export default function CodeEditor() {
               <span style={{ marginLeft: 8 }}>{diag.message}</span>
             </button>
           ))}
+        </div>
+      )}
+
+      {latestInlineEdit && latestInlineEditSummary && (
+        <div style={{
+          background: 'rgba(59,130,246,0.10)',
+          borderBottom: '1px solid rgba(59,130,246,0.25)',
+          padding: '8px 10px',
+          flexShrink: 0,
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', marginBottom: 6 }}>
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+              Inline edit proposal: {latestInlineEditSummary.changedLines} changed line(s)
+              {latestInlineEditSummary.addedLines ? `, +${latestInlineEditSummary.addedLines}` : ''}
+              {latestInlineEditSummary.removedLines ? `, -${latestInlineEditSummary.removedLines}` : ''}
+            </span>
+            <span style={{ display: 'flex', gap: 6 }}>
+              <button className="btn btn-sm btn-success" onClick={acceptInlineEdit}>Accept</button>
+              <button className="btn btn-sm" onClick={rejectInlineEdit}>Reject</button>
+            </span>
+          </div>
+          <pre style={{
+            margin: 0,
+            maxHeight: 120,
+            overflow: 'auto',
+            color: 'var(--text-muted)',
+            fontSize: 11,
+            fontFamily: "'JetBrains Mono', monospace",
+            whiteSpace: 'pre',
+          }}>{buildPreview(latestInlineEdit.before, latestInlineEdit.after)}</pre>
         </div>
       )}
 

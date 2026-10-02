@@ -428,12 +428,25 @@ export default function AgentChat() {
     })
     try {
       const workspace = useStore.getState().workspacePath || undefined
+      let beforeEdit: string | null = null
+      if ((toolName === 'write_file' || toolName === 'create_file' || toolName === 'edit_file') && typeof args.path === 'string') {
+        const existing = await window.api.readFile(args.path).catch(() => null)
+        beforeEdit = existing && 'content' in existing ? existing.content : ''
+      }
       return await window.api.toolExecute({
         name: toolName,
         args,
         workspace,
         sessionId: useStore.getState().currentSessionId || undefined,
         taskId,
+      }).then(async (result) => {
+        if (result && !result.error && beforeEdit !== null && typeof args.path === 'string') {
+          const after = await window.api.readFile(args.path).catch(() => null)
+          if (after && 'content' in after && after.content !== beforeEdit) {
+            useStore.getState().addFileEdit({ path: args.path, before: beforeEdit, after: after.content })
+          }
+        }
+        return result
       })
     } catch (err: any) {
       return { error: `Tool execution failed: ${err?.message || err}` }

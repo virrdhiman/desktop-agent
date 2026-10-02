@@ -196,6 +196,7 @@ interface AppState {
   // File Edit History (for diff viewer)
   fileEditHistory: { path: string; before: string; after: string; timestamp: number }[]
   addFileEdit: (edit: { path: string; before: string; after: string }) => void
+  removeFileEdit: (timestamp: number) => void
   clearEditHistory: () => void
 }
 
@@ -631,6 +632,9 @@ export const useStore = create<AppState>((set, get) => ({
   fileEditHistory: [],
   addFileEdit: (edit) => set((s) => ({
     fileEditHistory: [...s.fileEditHistory.slice(-20), { ...edit, timestamp: Date.now() }],
+  })),
+  removeFileEdit: (timestamp) => set((s) => ({
+    fileEditHistory: s.fileEditHistory.filter((edit) => edit.timestamp !== timestamp),
   })),
   clearEditHistory: () => set({ fileEditHistory: [] }),
 }))
