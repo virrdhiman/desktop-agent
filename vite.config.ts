@@ -16,7 +16,6 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes('@monaco-editor/react')) return 'monaco-react'
-          if (id.includes('monaco-editor/esm/vs/language/typescript')) return 'monaco-ts'
           if (id.includes('monaco-editor/esm/vs/language')) return 'monaco-languages'
           if (id.includes('monaco-editor/esm/vs/editor')) return 'monaco-editor-core'
           if (id.includes('monaco-editor/esm/vs/base') || id.includes('monaco-editor/esm/vs/platform')) return 'monaco-platform'

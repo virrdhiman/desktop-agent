@@ -23,8 +23,9 @@ export function ensureMonacoLanguage(language: string): Promise<unknown> {
   const load = (() => {
     switch (normalized) {
       case 'typescript':
+        return import('monaco-editor/esm/vs/basic-languages/typescript/typescript.contribution')
       case 'javascript':
-        return import('monaco-editor/esm/vs/language/typescript/monaco.contribution')
+        return import('monaco-editor/esm/vs/basic-languages/javascript/javascript.contribution')
       case 'json':
         return import('monaco-editor/esm/vs/language/json/monaco.contribution')
       case 'css':
@@ -93,10 +94,6 @@ self.MonacoEnvironment = {
     }
     if (label === 'html' || label === 'handlebars' || label === 'razor') {
       const worker = await import('monaco-editor/esm/vs/language/html/html.worker?worker')
-      return new worker.default()
-    }
-    if (label === 'typescript' || label === 'javascript') {
-      const worker = await import('monaco-editor/esm/vs/language/typescript/ts.worker?worker')
       return new worker.default()
     }
     return new EditorWorker()
