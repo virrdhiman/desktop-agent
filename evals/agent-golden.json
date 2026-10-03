@@ -3,9 +3,9 @@
   "name": "VD Agent local golden evals",
   "inspiration": "Golden tasks, trace checks, and release smoke gates.",
   "minimums": {
-    "vitestPassed": 304,
+    "vitestPassed": 319,
     "smokeChecks": 50,
-    "goldenCases": 82
+    "goldenCases": 86
   },
   "tiers": [
     {
@@ -867,6 +867,42 @@
       "prompt": "Continue a multi-round tool task after provider fallback.",
       "checks": ["Later rounds stay on the provider that successfully answered."],
       "coveredBy": ["scripts/smoke.mjs"]
+    },
+    {
+      "id": "editor-inline-hunk-review",
+      "tier": 1,
+      "source": "real-user",
+      "prompt": "Review an agent edit like a code review tool: accept one changed hunk, reject another, and keep the file consistent.",
+      "checks": [
+        "Inline edit proposals are split into reviewable hunks.",
+        "A rejected hunk restores only that block and preserves accepted changes.",
+        "Insertions and deletions remain scoped to the intended lines even after earlier hunk decisions shift line numbers."
+      ],
+      "coveredBy": ["src/lib/inlineEdits.ts", "src/lib/inlineEdits.test.ts", "src/components/CodeEditor.tsx"]
+    },
+    {
+      "id": "editor-multilanguage-definition-fallback",
+      "tier": 1,
+      "source": "real-user",
+      "prompt": "Use go-to-definition in non-TypeScript files when no full language server exists.",
+      "checks": [
+        "Definition fallback ranks Python declarations above call sites.",
+        "Definition fallback ranks Rust-style declarations above call sites.",
+        "Workspace references and rename remain exact identifier based for text files."
+      ],
+      "coveredBy": ["src/lib/editorIntelligence.ts", "src/lib/editorIntelligence.test.ts", "src/components/CodeEditor.tsx"]
+    },
+    {
+      "id": "editor-monaco-worker-budget",
+      "tier": 2,
+      "source": "real-user",
+      "prompt": "Keep the code editor useful without loading unnecessary Monaco worker weight.",
+      "checks": [
+        "TypeScript and JavaScript use lightweight Monaco tokenizers for syntax highlighting.",
+        "The Electron-side language service remains responsible for TypeScript diagnostics, definition, references, and rename.",
+        "The production build no longer emits the large TypeScript browser worker asset."
+      ],
+      "coveredBy": ["src/lib/monacoEditor.ts", "vite.config.ts", "electron/tsLanguageService.ts", "scripts/smoke.mjs"]
     },
     {
       "id": "visual-external-link-isolation",
