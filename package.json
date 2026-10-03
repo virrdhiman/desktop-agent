@@ -54,6 +54,7 @@
     "security:audit": "npm audit --omit=dev --audit-level=high",
     "checksums": "node scripts/checksums.mjs",
     "release:notes": "node scripts/release-notes.mjs",
+    "release:qa": "node scripts/release-qa.mjs",
     "electron:dev": "vite --config vite.config.ts",
     "electron:build": "vite build && electron-builder"
   },

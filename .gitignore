@@ -3,6 +3,7 @@ dist/
 dist-electron/
 release/
 evals/hosted/
+.vd-agent/
 *.log
 .DS_Store
 Thumbs.db

@@ -130,6 +130,24 @@ for (let i = 0; i < sizes.length; i++) {
 }
 fs.writeFileSync(path.join(outDir, 'icon.ico'), Buffer.concat([header, ...pngs]))
 
+const icnsPngs = [
+  ['ic07', makePng(128)],
+  ['ic08', png256],
+  ['ic09', makePng(512)],
+  ['ic10', makePng(1024)],
+]
+const icnsLength = 8 + icnsPngs.reduce((total, [, data]) => total + 8 + data.length, 0)
+const icnsHeader = Buffer.alloc(8)
+icnsHeader.write('icns', 0, 4, 'ascii')
+icnsHeader.writeUInt32BE(icnsLength, 4)
+const icnsChunks = icnsPngs.map(([type, data]) => {
+  const header = Buffer.alloc(8)
+  header.write(type, 0, 4, 'ascii')
+  header.writeUInt32BE(8 + data.length, 4)
+  return Buffer.concat([header, data])
+})
+fs.writeFileSync(path.join(outDir, 'icon.icns'), Buffer.concat([icnsHeader, ...icnsChunks]))
+
 fs.writeFileSync(path.join(outDir, 'icon.svg'), `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
   <rect width="256" height="256" rx="46" fill="#0e172d"/>
   <path d="M42 64l38 128L118 64" fill="none" stroke="#38bdf8" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
@@ -137,4 +155,4 @@ fs.writeFileSync(path.join(outDir, 'icon.svg'), `<svg xmlns="http://www.w3.org/2
 </svg>
 `)
 
-console.log('Generated build/icon.png, build/icon.ico, and build/icon.svg')
+console.log('Generated build/icon.png, build/icon.ico, build/icon.icns, and build/icon.svg')

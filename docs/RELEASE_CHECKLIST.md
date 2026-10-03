@@ -37,6 +37,7 @@ Never commit certificates, passwords, or `.env` files.
 - [ ] Version bumped in `package.json`: `npm version <x.y.z> --no-git-tag-version`
 - [ ] `CHANGELOG.md` has a section for the version, with the release date
 - [ ] Release notes render cleanly: `npm run release:notes -- --version <x.y.z> --out release-notes.md`
+- [ ] Release preflight passes: `npm run icons && npm run release:qa`
 - [ ] Docs match the release: README, USAGE, `docs/`
 - [ ] App icons exist: `build/icon.ico` (Windows), `build/icon.icns` (macOS), `build/icon.png` 512×512 (Linux). Without them, electron-builder uses the default Electron icon.
 - [ ] Signing certificates are available on each build machine (see above)
@@ -57,6 +58,7 @@ Never commit certificates, passwords, or `.env` files.
 - [ ] Installer QA on Windows: install to a non-default folder, launch from Start Menu and desktop shortcut, verify terminal startup, uninstall, and confirm user data is not removed unless manually deleted.
 - [ ] Update QA if publishing updates: install the previous release first, enable update checks, publish the draft update metadata, and verify that the app detects, downloads, and asks before restart.
 - [ ] If signed, check the signature: file Properties → Digital Signatures on Windows, `codesign --verify --deep --strict` and `spctl -a -vv` on macOS
+- [ ] After packaging, rerun `npm run release:qa -- --artifacts` to confirm versioned installers and `SHA256SUMS.txt` are present.
 
 ## Checksums
 
