@@ -18,15 +18,18 @@ describe('resolveToolArgs', () => {
   it('defaults directory tools and run_command to the workspace', () => {
     expect(resolveToolArgs('list_files', {}, ws).path).toBe(ws)
     expect(resolveToolArgs('repo_search', { query: 'agent' }, ws).path).toBe(ws)
+    expect(resolveToolArgs('repo_plan', { query: 'agent loop' }, ws).path).toBe(ws)
     expect(resolveToolArgs('vscode_context', {}, ws).path).toBe(ws)
     expect(resolveToolArgs('git_status', {}, ws).path).toBe(ws)
     expect(resolveToolArgs('run_command', { command: 'npm test' }, ws).cwd).toBe(ws)
     expect(resolveToolArgs('run_command', { command: 'ls', cwd: 'packages/app' }, ws).cwd).toBe(path.join(ws, 'packages', 'app'))
   })
 
-  it('resolves every path in multi_file_edit', () => {
+  it('resolves every path in multi_file_edit and preview_edits', () => {
     const out = resolveToolArgs('multi_file_edit', { edits: [{ path: 'a.ts', old_string: 'x', new_string: 'y' }] }, ws)
     expect(out.edits[0]).toEqual({ path: path.join(ws, 'a.ts'), old_string: 'x', new_string: 'y' })
+    const preview = resolveToolArgs('preview_edits', { edits: [{ path: 'b.ts', old_string: 'x', new_string: 'y' }] }, ws)
+    expect(preview.edits[0].path).toBe(path.join(ws, 'b.ts'))
   })
 
   it('resolves archive source and destination paths against the workspace', () => {

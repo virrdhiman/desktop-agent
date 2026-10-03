@@ -258,8 +258,13 @@ export const AGENT_TOOLS = [
   },
   {
     name: 'repo_map',
-    description: 'Build a local repository map with files, languages, sizes, and top symbols. Use before broad multi-file changes.',
+    description: 'Build a local repository map with files, languages, sizes, imports, test markers, and top symbols. Use before broad multi-file changes.',
     parameters: { path: 'string (optional)', limit: 'number (optional, default 160)' },
+  },
+  {
+    name: 'repo_plan',
+    description: 'Create a repo-wide implementation plan for a user request: likely files, tests/docs/config, workflow, and verification commands.',
+    parameters: { query: 'string — user request or technical goal', path: 'string (optional)', limit: 'number (optional, default 12)' },
   },
   {
     name: 'repo_search',
@@ -330,6 +335,11 @@ export const AGENT_TOOLS = [
     name: 'multi_file_edit',
     description: 'Edit multiple files at once with targeted replacements',
     parameters: { edits: 'array of {path, old_string, new_string}' },
+  },
+  {
+    name: 'preview_edits',
+    description: 'Preview a unified diff for targeted edits without writing files. Use before risky or multi-file edits.',
+    parameters: { edits: 'array of {path, old_string, new_string}', path: 'string (optional) — workspace root for relative diff paths' },
   },
   {
     name: 'read_directory_tree',

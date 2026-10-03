@@ -14,6 +14,8 @@ export type RepoMapEntry = {
   bytes: number
   language: string
   symbols: string[]
+  imports: string[]
+  testLike: boolean
 }
 
 const TEXT_EXTS = new Set([
@@ -83,6 +85,26 @@ function extractSymbols(text: string, max = 20): string[] {
   return [...symbols]
 }
 
+function extractImports(text: string, max = 12): string[] {
+  const imports = new Set<string>()
+  const patterns = [
+    /\bimport\s+(?:[^'"]+\s+from\s+)?['"]([^'"]+)['"]/g,
+    /\brequire\(['"]([^'"]+)['"]\)/g,
+    /^\s*from\s+([A-Za-z0-9_./-]+)\s+import\b/gm,
+    /^\s*import\s+([A-Za-z0-9_./-]+)/gm,
+  ]
+  for (const pattern of patterns) {
+    let match
+    while ((match = pattern.exec(text)) && imports.size < max) imports.add(match[1])
+  }
+  return [...imports]
+}
+
+function isTestLike(file: string): boolean {
+  const normalized = file.replace(/\\/g, '/').toLowerCase()
+  return /(^|\/)(__tests__|tests?|specs?)\//.test(normalized) || /\.(test|spec)\.[a-z0-9]+$/.test(normalized)
+}
+
 async function walkTextFiles(root: string): Promise<string[]> {
   const files: string[] = []
   async function walk(dir: string, depth: number) {
@@ -116,6 +138,8 @@ export async function buildRepoMap(root: string, limit = 200): Promise<RepoMapEn
       bytes: Buffer.byteLength(text),
       language: languageFor(file),
       symbols: extractSymbols(text, 12),
+      imports: extractImports(text, 8),
+      testLike: isTestLike(file),
     })
   }
   return entries

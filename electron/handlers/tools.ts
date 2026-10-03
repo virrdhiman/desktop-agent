@@ -18,6 +18,8 @@ import { assessToolPolicy, checkpointTargets, resolvesInsideWorkspace, toolAppro
 import { createCheckpoint } from '../checkpointStore'
 import { archiveOutputPaths, extractZipArchive, inspectZipArchive, type ArchiveInspection } from '../archiveStore'
 import { buildRepoMap, searchRepo } from '../repoIndex'
+import { planRepoChange } from '../repoPlanner'
+import { previewEdits } from '../patchPreview'
 import { formatVsCodeContext } from '../vscodeBridge'
 
 /** Git instances cache for tool execution */
@@ -187,9 +189,17 @@ export function registerToolHandlers() {
             const entries = await buildRepoMap(root, Number(tool.args.limit || 160))
             const lines = entries.map((entry) => {
               const symbols = entry.symbols.length ? ` — ${entry.symbols.join(', ')}` : ''
-              return `${entry.path} (${entry.language}, ${entry.bytes} bytes)${symbols}`
+              const imports = entry.imports.length ? ` imports=${entry.imports.slice(0, 4).join(', ')}` : ''
+              const kind = entry.testLike ? ' test' : ''
+              return `${entry.path} (${entry.language}${kind}, ${entry.bytes} bytes)${symbols}${imports}`
             })
             return { result: lines.length ? `Repo map (${lines.length} files):\n${lines.join('\n')}` : 'No indexable text files found.' }
+          }
+          case 'repo_plan': {
+            const root = tool.args.path || tool.workspace || '.'
+            const query = String(tool.args.query || '').trim()
+            if (!query) return { error: 'repo_plan requires query' }
+            return { result: await planRepoChange(root, query, Number(tool.args.limit || 12)) }
           }
           case 'repo_search': {
             const root = tool.args.path || tool.workspace || '.'
@@ -282,6 +292,10 @@ export function registerToolHandlers() {
               } catch (err: any) { results.push(`${edit.path}: ✕ ${err.message}`) }
             }
             return { result: results.join('\n') }
+          }
+          case 'preview_edits': {
+            const root = tool.args.path || tool.workspace || '.'
+            return { result: await previewEdits(root, tool.args.edits) }
           }
           case 'read_directory_tree': {
             const dirPath = tool.args.path || '.'
