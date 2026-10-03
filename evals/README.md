@@ -9,8 +9,8 @@
 
 This folder contains VD Agent's golden agent-evaluation data.
 
-The dataset currently contains 86 cases across functional, trajectory, and
-visual tiers. Twenty-four cases preserve prompts from real user conversations;
+The dataset currently contains 88 cases across functional, trajectory, and
+visual tiers. Twenty-six cases preserve prompts from real user conversations;
 maintained scenarios use `source: "synthetic"`. The real cases cover repository
 execution, response quality, licensing/provenance, resume behavior, dynamic
 free-model refresh, local history, release costs, handoffs, hosted eval export,
@@ -18,8 +18,8 @@ release polish, bundle-size optimization, and verified archive-to-CSV output.
 It also covers adaptive multi-agent routing, role isolation, dynamic specialists,
 saved team presets, token budgets, visual trace panels, bounded repair,
 evidence-aware synthesis, inline hunk review, multi-language definition
-fallback, editor bundle trimming, and safe fallback when a specialist returns
-junk.
+fallback, optional external language servers, editor bundle trimming, and safe
+fallback when a specialist returns junk.
 
 The structure is inspired by public AI-agent evaluation practices, including
 commit-reconstruction benchmarks, trace/trajectory analysis, and visual smoke

@@ -29,10 +29,10 @@ It runs:
 3. `npm run build`
 4. `node scripts/smoke.mjs`
 
-The runner also validates all 86 mapped cases in `evals/agent-golden.json`,
-including 24 prompts from real user conversations. It checks unique IDs and
-prompts, coverage-file paths, tier minimums, at least 319 passing Vitest tests,
-at least 50 smoke assertions, and at least 86 golden cases. If a refactor
+The runner also validates all 88 mapped cases in `evals/agent-golden.json`,
+including 26 prompts from real user conversations. It checks unique IDs and
+prompts, coverage-file paths, tier minimums, at least 320 passing Vitest tests,
+at least 50 smoke assertions, and at least 88 golden cases. If a refactor
 silently drops coverage, the command fails.
 
 ## Tier 1: Functional & component tests

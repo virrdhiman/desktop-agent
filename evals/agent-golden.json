@@ -3,9 +3,9 @@
   "name": "VD Agent local golden evals",
   "inspiration": "Golden tasks, trace checks, and release smoke gates.",
   "minimums": {
-    "vitestPassed": 319,
+    "vitestPassed": 320,
     "smokeChecks": 50,
-    "goldenCases": 86
+    "goldenCases": 88
   },
   "tiers": [
     {
@@ -903,6 +903,30 @@
         "The production build no longer emits the large TypeScript browser worker asset."
       ],
       "coveredBy": ["src/lib/monacoEditor.ts", "vite.config.ts", "electron/tsLanguageService.ts", "scripts/smoke.mjs"]
+    },
+    {
+      "id": "editor-external-lsp-non-ts",
+      "tier": 1,
+      "source": "real-user",
+      "prompt": "Give non-TypeScript files real language-server behavior when the matching server is installed.",
+      "checks": [
+        "Python, Go, Rust, C/C++, and C# can route diagnostics, definition, references, and rename through an external stdio LSP server.",
+        "The protocol path is covered with a fake language server so CI does not depend on local pyright/gopls/rust-analyzer installs.",
+        "If no server is available, the editor falls back to workspace text intelligence instead of breaking file editing."
+      ],
+      "coveredBy": ["electron/externalLanguageService.ts", "electron/__tests__/externalLanguageService.test.ts", "electron/handlers/lsp.ts", "src/components/CodeEditor.tsx"]
+    },
+    {
+      "id": "editor-monaco-core-budget",
+      "tier": 2,
+      "source": "real-user",
+      "prompt": "Reduce the remaining Monaco core weight without losing the bundled editor.",
+      "checks": [
+        "The editor imports the standalone Monaco API without the broad edcore contribution bundle.",
+        "The production build emits a smaller Monaco editor core chunk.",
+        "The Electron smoke test still opens a workspace file in Monaco without renderer errors."
+      ],
+      "coveredBy": ["src/lib/monacoEditor.ts", "scripts/smoke.mjs"]
     },
     {
       "id": "visual-external-link-isolation",
