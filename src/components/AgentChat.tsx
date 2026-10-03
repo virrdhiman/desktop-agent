@@ -320,6 +320,7 @@ export default function AgentChat() {
     sessionStats, addTokens, addToolExecution, recordToolExecution, setLastVerification,
     projectMemory, latestCheckpoint, lastVerification,
     toolExecutions, tasks,
+    openFiles, fileEditHistory,
   } = useStore()
 
   const [input, setInput] = useState('')
@@ -635,6 +636,9 @@ export default function AgentChat() {
       workspacePath,
       selectedFile,
       fileContent,
+      openFiles,
+      workspaceFiles: allFiles,
+      recentEdits: fileEditHistory,
       projectMemory,
       conversationSummary: buildConversationSummary(historyMessages),
       resumeNote: [
@@ -897,7 +901,7 @@ export default function AgentChat() {
       if (!outcome) return
       addTokens(0, Math.ceil(outcome.content.length / 4))
     }
-  }, [workspacePath, selectedFile, fileContent, projectMemory, latestCheckpoint, lastVerification, tasks, toolExecutions, planMode, appSettings.customRules, appSettings.teamTokenBudget, appSettings.teamPreset, appSettings.teamProfile, appSettings.teamMode, appSettings.dynamicTeam, setCancelRequested, setStreamingContent, addTask, updateTask, addStepToTask, callWithFallback, addTokens, addMessage, processToolCalls, updateQueuedQuery])
+  }, [workspacePath, selectedFile, fileContent, openFiles, allFiles, fileEditHistory, projectMemory, latestCheckpoint, lastVerification, tasks, toolExecutions, planMode, appSettings.customRules, appSettings.teamTokenBudget, appSettings.teamPreset, appSettings.teamProfile, appSettings.teamMode, appSettings.dynamicTeam, setCancelRequested, setStreamingContent, addTask, updateTask, addStepToTask, callWithFallback, addTokens, addMessage, processToolCalls, updateQueuedQuery])
 
   const pumpQueryQueue = useCallback(() => {
     if (pumpingQueueRef.current) return

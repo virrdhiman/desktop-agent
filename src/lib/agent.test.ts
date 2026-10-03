@@ -69,6 +69,24 @@ describe('buildContext', () => {
     expect(ctx).toContain(`showing the first ${MAX_CONTEXT_FILE_CHARS} of ${content.length} characters; use read_file for the rest`)
     expect(buildContext({ selectedFile: '/repo/small.ts', fileContent: 'x' })).not.toContain('showing the first')
   })
+
+  it('packs workspace shape, open files, recent edits, and context strategy', () => {
+    const ctx = buildContext({
+      workspacePath: '/repo',
+      openFiles: ['/repo/src/a.ts', '/repo/src/b.ts'],
+      workspaceFiles: [
+        { name: 'a.ts', path: '/repo/src/a.ts', isDirectory: false },
+        { name: 'b.ts', path: '/repo/src/b.ts', isDirectory: false },
+        { name: 'c.test.ts', path: '/repo/electron/c.test.ts', isDirectory: false },
+      ],
+      recentEdits: [{ path: '/repo/src/a.ts', before: 'one\ntwo', after: 'one\nTWO', timestamp: 1 }],
+    })
+    expect(ctx).toContain('Open editor tabs')
+    expect(ctx).toContain('Workspace shape: 3 indexed file(s)')
+    expect(ctx).toContain('Recent file edit proposals or applied edits')
+    expect(ctx).toContain('Context strategy')
+    expect(ctx).toContain('repo_search/repo_map')
+  })
 })
 
 describe('buildHistory', () => {

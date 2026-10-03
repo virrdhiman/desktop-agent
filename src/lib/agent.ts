@@ -120,13 +120,43 @@ export type ContextInput = {
   workspacePath?: string
   selectedFile?: string | null
   fileContent?: string
+  openFiles?: string[]
+  workspaceFiles?: Array<{ name: string; path: string; isDirectory: boolean }>
+  recentEdits?: Array<{ path: string; before: string; after: string; timestamp: number }>
   projectMemory?: string
   conversationSummary?: string
   resumeNote?: string
 }
 
+function summarizeWorkspaceFiles(files: Array<{ name: string; path: string; isDirectory: boolean }> = []): string {
+  const fileOnly = files.filter((file) => !file.isDirectory)
+  if (fileOnly.length === 0) return ''
+  const extCounts = new Map<string, number>()
+  const dirCounts = new Map<string, number>()
+  for (const file of fileOnly) {
+    const name = file.name.toLowerCase()
+    const ext = name.includes('.') ? `.${name.split('.').pop()}` : '[no ext]'
+    extCounts.set(ext, (extCounts.get(ext) || 0) + 1)
+    const parts = file.path.replace(/\\/g, '/').split('/')
+    const srcIndex = Math.max(parts.lastIndexOf('src'), parts.lastIndexOf('electron'), parts.lastIndexOf('app'))
+    const bucket = srcIndex >= 0 && parts[srcIndex + 1] ? `${parts[srcIndex]}/${parts[srcIndex + 1]}` : parts.slice(-2, -1)[0] || '(root)'
+    dirCounts.set(bucket, (dirCounts.get(bucket) || 0) + 1)
+  }
+  const topExts = [...extCounts].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([ext, count]) => `${ext}:${count}`).join(', ')
+  const topDirs = [...dirCounts].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([dir, count]) => `${dir}:${count}`).join(', ')
+  return `Workspace shape: ${fileOnly.length} indexed file(s). Common extensions: ${topExts}. Active areas: ${topDirs}.`
+}
+
+function summarizeEdit(before: string, after: string): string {
+  const oldLines = before.split(/\r?\n/)
+  const newLines = after.split(/\r?\n/)
+  let changed = 0
+  for (let i = 0; i < Math.max(oldLines.length, newLines.length); i++) if (oldLines[i] !== newLines[i]) changed++
+  return `${changed} changed line(s)`
+}
+
 export function buildContext({
-  workspacePath, selectedFile, fileContent = '', projectMemory = '', conversationSummary = '', resumeNote = '',
+  workspacePath, selectedFile, fileContent = '', openFiles = [], workspaceFiles = [], recentEdits = [], projectMemory = '', conversationSummary = '', resumeNote = '',
 }: ContextInput): string {
   const parts: string[] = []
   if (workspacePath) {
@@ -140,6 +170,20 @@ export function buildContext({
       ? ` (showing the first ${shown.length} of ${fileContent.length} characters; use read_file for the rest)`
       : ''
     parts.push(`File open in the editor: ${selectedFile}${note}\n${FENCE}\n${shown}\n${FENCE}`)
+  }
+  if (openFiles.length > 0) parts.push(`Open editor tabs:\n${openFiles.slice(-8).map((file) => `- ${file}`).join('\n')}`)
+  const shape = summarizeWorkspaceFiles(workspaceFiles)
+  if (shape) parts.push(shape)
+  if (recentEdits.length > 0) {
+    parts.push(`Recent file edit proposals or applied edits:\n${recentEdits.slice(-6).map((edit) => `- ${edit.path}: ${summarizeEdit(edit.before, edit.after)}`).join('\n')}`)
+  }
+  if (workspacePath) {
+    parts.push([
+      'Context strategy:',
+      '- Use this packed context as a map, not proof. Read exact files before editing or making file-specific claims.',
+      '- For broad code tasks, call repo_search/repo_map first, then read the smallest relevant files.',
+      '- After edits, run the narrowest meaningful verification and report only verified results.',
+    ].join('\n'))
   }
   if (projectMemory.trim()) parts.push(`Local project memory (refresh if files disagree):\n${projectMemory.slice(0, 12_000)}`)
   if (conversationSummary.trim()) parts.push(conversationSummary.slice(0, 8_000))
@@ -347,7 +391,14 @@ export function formatToolResult(call: ToolCall, result: { result?: string; erro
 }
 
 export function followUpMessage(toolResults: string): string {
-  return `Tool results:\n\n${toolResults}\n\nContinue. If a tool failed, say so in one line and adapt instead of repeating the same call. Use more tools if needed; otherwise give the final answer and state what you verified.`
+  return [
+    `Tool results:\n\n${toolResults}`,
+    'Continue the agent loop:',
+    '- If a tool failed, say so in one line and adapt instead of repeating the same call.',
+    '- If files were edited, inspect or verify the changed behavior before claiming completion.',
+    '- If more context is needed, use repo_search/repo_map/read_file instead of guessing.',
+    '- Otherwise give the final answer and state exactly what was verified.',
+  ].join('\n\n')
 }
 
 // ─── Response quality ───────────────────────────────────────────────────────
