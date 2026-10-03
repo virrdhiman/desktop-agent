@@ -48,6 +48,7 @@ For a reproducible problem, use **Settings > Export diagnostics**. The JSON repo
 |---------|-----|
 | I clicked a file but don't see it | The editor appears to the right of the **Agent** panel. Switch to 🤖 Agent to see open files. |
 | Editor stuck on "Loading editor..." | Make sure you're on the latest version. Earlier builds loaded the editor from a CDN that the app blocked. |
+| Go to definition or rename is basic in Python/Go/Rust/C/C++/C# | Install the matching language server (`pyright-langserver`, `gopls`, `rust-analyzer`, `clangd`, or `csharp-ls`) and keep it on `PATH`, or set the matching `VD_AGENT_LSP_*` command in `.env.local`. Without it, VD falls back to exact workspace text search. |
 | "Not a git repository" | Run `git init` in the workspace, or open a folder that is a git repository. |
 | Push rejected | Pull first (`git pull --rebase`), then push. |
 

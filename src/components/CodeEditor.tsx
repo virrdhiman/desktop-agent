@@ -46,6 +46,10 @@ function getLanguage(filePath: string): string {
   return map[ext] || 'plaintext'
 }
 
+function hasLspSupport(language: string): boolean {
+  return ['typescript', 'javascript', 'python', 'go', 'rust', 'c', 'cpp', 'csharp'].includes(language)
+}
+
 function getIcon(filePath: string): string {
   const ext = filePath.split('.').pop()?.toLowerCase() || ''
   const map: Record<string, string> = {
@@ -74,6 +78,7 @@ export default function CodeEditor() {
 
   const language = useMemo(() => selectedFile ? getLanguage(selectedFile) : 'plaintext', [selectedFile])
   const hasTsLanguageService = language === 'typescript' || language === 'javascript'
+  const hasLanguageService = hasLspSupport(language)
   const latestInlineEdit = useMemo(() => {
     if (!selectedFile) return null
     return [...fileEditHistory].reverse().find((edit) => edit.path === selectedFile) || null
@@ -121,13 +126,13 @@ export default function CodeEditor() {
       const result = await window.api.writeFile(selectedFile, editorContent)
       if ('success' in result) {
         setFileContent(editorContent)
-        if (workspacePath && hasTsLanguageService) {
+        if (workspacePath && hasLanguageService) {
           const next = await window.api.lspDiagnostics(workspacePath, selectedFile)
           if (Array.isArray(next)) setDiagnostics(next)
         }
       }
     } catch (err) { console.error('Failed to save file:', err) }
-  }, [selectedFile, editorContent, workspacePath, hasTsLanguageService])
+  }, [selectedFile, editorContent, workspacePath, hasLanguageService])
 
   // Ctrl+S handler
   useEffect(() => {
@@ -195,7 +200,7 @@ export default function CodeEditor() {
     const identifier = word || currentIdentifier()
     if (!isValidIdentifier(identifier)) return []
     const position = currentPosition()
-    if (workspacePath && selectedFile && hasTsLanguageService && position) {
+    if (workspacePath && selectedFile && hasLanguageService && position) {
       const exact = await window.api.lspReferences(workspacePath, selectedFile, position.line, position.column)
       if (Array.isArray(exact) && exact.length > 0) {
         setReferenceWord(identifier)
@@ -207,14 +212,14 @@ export default function CodeEditor() {
     setReferenceWord(identifier)
     setReferences(refs)
     return refs
-  }, [allFiles, currentIdentifier, currentPosition, hasTsLanguageService, selectedFile, workspacePath])
+  }, [allFiles, currentIdentifier, currentPosition, hasLanguageService, selectedFile, workspacePath])
 
   const handleGoToDefinition = useCallback(async () => {
     const editor = editorRef.current
     const word = currentIdentifier()
     if (!editor || !word) return
     const position = currentPosition()
-    if (workspacePath && selectedFile && hasTsLanguageService && position) {
+    if (workspacePath && selectedFile && hasLanguageService && position) {
       const exact = await window.api.lspDefinition(workspacePath, selectedFile, position.line, position.column)
       if (exact && !('error' in exact)) {
         openReference(exact)
@@ -225,7 +230,7 @@ export default function CodeEditor() {
     const refs = await collectReferences(word)
     const target = pickLikelyDefinition(refs, word)
     if (target) openReference(target)
-  }, [collectReferences, currentIdentifier, currentPosition, hasTsLanguageService, openReference, selectedFile, workspacePath])
+  }, [collectReferences, currentIdentifier, currentPosition, hasLanguageService, openReference, selectedFile, workspacePath])
 
   const handleFindReferences = useCallback(async () => {
     const word = currentIdentifier()
@@ -251,8 +256,8 @@ export default function CodeEditor() {
     }
     const refs = await collectReferences(from)
     const position = currentPosition()
-    const exactRename = workspacePath && selectedFile && hasTsLanguageService && position
-    const ok = window.confirm(`Rename ${refs.length} occurrence(s) of "${from}" to "${to}"${exactRename ? ' using TypeScript language service' : ' across workspace text files'}?`)
+    const exactRename = workspacePath && selectedFile && hasLanguageService && position
+    const ok = window.confirm(`Rename ${refs.length} occurrence(s) of "${from}" to "${to}"${exactRename ? ' using language service' : ' across workspace text files'}?`)
     if (!ok) return
     const result = exactRename
       ? await window.api.lspRename(workspacePath, selectedFile, position.line, position.column, to)
@@ -275,7 +280,7 @@ export default function CodeEditor() {
       content: `Renamed ${result.replacements} occurrence(s) in ${result.updatedFiles.length} file(s).${result.errors.length ? ` ${result.errors.length} file(s) failed.` : ''}`,
       timestamp: Date.now(),
     })
-  }, [addTerminalEntry, allFiles, collectReferences, currentIdentifier, currentPosition, hasTsLanguageService, selectedFile, setFileContent, workspacePath])
+  }, [addTerminalEntry, allFiles, collectReferences, currentIdentifier, currentPosition, hasLanguageService, selectedFile, setFileContent, workspacePath])
 
   const acceptInlineEdit = useCallback(async () => {
     if (!latestInlineEdit || !selectedFile) return
@@ -334,7 +339,7 @@ export default function CodeEditor() {
 
   useEffect(() => {
     let cancelled = false
-    if (!workspacePath || !selectedFile || !hasTsLanguageService) {
+    if (!workspacePath || !selectedFile || !hasLanguageService) {
       setDiagnostics([])
       return
     }
@@ -347,7 +352,7 @@ export default function CodeEditor() {
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [fileContent, hasTsLanguageService, selectedFile, workspacePath])
+  }, [fileContent, hasLanguageService, selectedFile, workspacePath])
 
   const handleEditorMount = useCallback((editor: Monaco.editor.IStandaloneCodeEditor, monaco: typeof Monaco) => {
     editorRef.current = editor

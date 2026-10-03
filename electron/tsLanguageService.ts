@@ -13,11 +13,11 @@ export type LspRenameResult = { replacements: number; updatedFiles: string[]; er
 const EXTS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mts', '.cts', '.mjs', '.cjs'])
 const SKIP = new Set(['.git', 'node_modules', 'dist', 'dist-electron', 'release', 'coverage', 'build', '.vite'])
 
-function isTsFile(file: string) {
+export function isTsFile(file: string) {
   return EXTS.has(path.extname(file).toLowerCase())
 }
 
-function safe(root: string, file: string) {
+export function safeWorkspaceFile(root: string, file: string) {
   const rel = path.relative(path.resolve(root), path.resolve(file))
   return !!rel && !rel.startsWith('..') && !path.isAbsolute(rel)
 }
@@ -100,7 +100,7 @@ function loc(service: tsTypes.LanguageService, file: string, start: number): Lsp
 }
 
 export async function tsDiagnostics(root: string, file: string): Promise<LspDiagnostic[] | { error: string }> {
-  if (!safe(root, file) || !isTsFile(file)) return []
+  if (!safeWorkspaceFile(root, file) || !isTsFile(file)) return []
   const service = await project(root, file)
   return service.getSemanticDiagnostics(file).concat(service.getSyntacticDiagnostics(file)).slice(0, 80).map((diag) => ({
     ...loc(service, file, diag.start || 0),
@@ -110,21 +110,21 @@ export async function tsDiagnostics(root: string, file: string): Promise<LspDiag
 }
 
 export async function tsDefinition(root: string, file: string, line: number, column: number): Promise<LspLocation | null | { error: string }> {
-  if (!safe(root, file) || !isTsFile(file)) return null
+  if (!safeWorkspaceFile(root, file) || !isTsFile(file)) return null
   const service = await project(root, file)
   const def = service.getDefinitionAtPosition(file, offset(service, file, line, column))?.[0]
   return def ? loc(service, def.fileName, def.textSpan.start) : null
 }
 
 export async function tsReferences(root: string, file: string, line: number, column: number): Promise<LspLocation[] | { error: string }> {
-  if (!safe(root, file) || !isTsFile(file)) return []
+  if (!safeWorkspaceFile(root, file) || !isTsFile(file)) return []
   const service = await project(root, file)
   const refs = service.getReferencesAtPosition(file, offset(service, file, line, column)) || []
   return refs.slice(0, 250).map((ref) => loc(service, ref.fileName, ref.textSpan.start))
 }
 
 export async function tsRename(root: string, file: string, line: number, column: number, newName: string): Promise<LspRenameResult | { error: string }> {
-  if (!safe(root, file) || !isTsFile(file)) return { error: 'TypeScript rename supports only TS/JS files' }
+  if (!safeWorkspaceFile(root, file) || !isTsFile(file)) return { error: 'TypeScript rename supports only TS/JS files' }
   if (!/^[A-Za-z_$][\w$]*$/.test(newName)) return { error: 'Invalid identifier' }
   const service = await project(root, file)
   const pos = offset(service, file, line, column)
@@ -133,7 +133,7 @@ export async function tsRename(root: string, file: string, line: number, column:
   const locations = service.findRenameLocations(file, pos, false, false) || []
   const byFile = new Map<string, tsTypes.RenameLocation[]>()
   for (const item of locations) {
-    if (!safe(root, item.fileName)) continue
+    if (!safeWorkspaceFile(root, item.fileName)) continue
     byFile.set(item.fileName, [...(byFile.get(item.fileName) || []), item])
   }
   const updatedFiles: string[] = []
