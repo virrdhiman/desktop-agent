@@ -277,6 +277,26 @@ export const AGENT_TOOLS = [
     parameters: { path: 'string (optional) — workspace path, defaults to current workspace' },
   },
   {
+    name: 'vscode_open',
+    description: 'Ask the VD Agent Bridge VS Code extension to open a workspace file at an optional line/column.',
+    parameters: { path: 'string — file to open', line: 'number (optional)', column: 'number (optional)' },
+  },
+  {
+    name: 'vscode_apply_edit',
+    description: 'Apply an exact old_string/new_string replacement through VS Code, then save and reveal the edited file.',
+    parameters: { path: 'string — file to edit', old_string: 'string — exact text to find', new_string: 'string — replacement text' },
+  },
+  {
+    name: 'vscode_show_diff',
+    description: 'Open a VS Code diff preview for an exact replacement or full preview content without changing the source file.',
+    parameters: { path: 'string — source file', old_string: 'string (optional)', new_string: 'string (optional)', content: 'string (optional full preview content)', title: 'string (optional)' },
+  },
+  {
+    name: 'vscode_command',
+    description: 'Run a VS Code command through the bridge extension. Risky: use only when a specific VS Code command is needed.',
+    parameters: { command: 'string — VS Code command id', args: 'array (optional)', path: 'string (optional workspace root)' },
+  },
+  {
     name: 'run_command',
     description: 'Execute a shell command',
     parameters: { command: 'string', cwd: 'string (optional)' },

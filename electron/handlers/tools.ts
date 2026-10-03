@@ -20,7 +20,7 @@ import { archiveOutputPaths, extractZipArchive, inspectZipArchive, type ArchiveI
 import { buildRepoMap, searchRepo } from '../repoIndex'
 import { planRepoChange } from '../repoPlanner'
 import { previewEdits } from '../patchPreview'
-import { formatVsCodeContext } from '../vscodeBridge'
+import { formatVsCodeContext, sendVsCodeBridgeCommand } from '../vscodeBridge'
 
 /** Git instances cache for tool execution */
 const toolGitInstances: Map<string, SimpleGit> = new Map()
@@ -215,6 +215,44 @@ export function registerToolHandlers() {
           case 'vscode_context': {
             const root = tool.args.path || tool.workspace || '.'
             return { result: await formatVsCodeContext(root) }
+          }
+          case 'vscode_open': {
+            const root = tool.workspace || path.dirname(tool.args.path || process.cwd())
+            const result = await sendVsCodeBridgeCommand(root, {
+              action: 'open_file',
+              args: { path: tool.args.path, line: tool.args.line, column: tool.args.column },
+            })
+            return { result }
+          }
+          case 'vscode_apply_edit': {
+            const root = tool.workspace || path.dirname(tool.args.path || process.cwd())
+            const result = await sendVsCodeBridgeCommand(root, {
+              action: 'apply_edit',
+              args: { path: tool.args.path, old_string: tool.args.old_string, new_string: tool.args.new_string },
+            })
+            return { result }
+          }
+          case 'vscode_show_diff': {
+            const root = tool.workspace || path.dirname(tool.args.path || process.cwd())
+            const result = await sendVsCodeBridgeCommand(root, {
+              action: 'show_diff',
+              args: {
+                path: tool.args.path,
+                old_string: tool.args.old_string,
+                new_string: tool.args.new_string,
+                content: tool.args.content,
+                title: tool.args.title,
+              },
+            })
+            return { result }
+          }
+          case 'vscode_command': {
+            const root = tool.workspace || tool.args.path || process.cwd()
+            const result = await sendVsCodeBridgeCommand(root, {
+              action: 'run_command',
+              args: { command: tool.args.command, args: tool.args.args },
+            })
+            return { result }
           }
           case 'run_command': {
             const { exec } = await import('child_process')

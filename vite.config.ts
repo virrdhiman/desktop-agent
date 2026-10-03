@@ -12,13 +12,24 @@ import path from 'path'
 
 export default defineConfig({
   build: {
+    // Monaco is lazy-loaded behind CodeEditor. Keep warning if any lazy chunk grows
+    // materially beyond the current editor budget, but do not fail every build on
+    // Monaco's expected standalone editor internals.
+    chunkSizeWarningLimit: 700,
     rollupOptions: {
       output: {
         manualChunks(id) {
           if (id.includes('@monaco-editor/react')) return 'monaco-react'
           if (id.includes('monaco-editor/esm/vs/language')) return 'monaco-languages'
+          if (id.includes('monaco-editor/esm/vs/editor/contrib')) return 'monaco-editor-contrib'
+          if (id.includes('monaco-editor/esm/vs/editor/standalone')) return 'monaco-editor-standalone'
+          if (id.includes('monaco-editor/esm/vs/editor/browser')) return 'monaco-editor-browser'
+          if (id.includes('monaco-editor/esm/vs/editor/common')) return 'monaco-editor-common'
           if (id.includes('monaco-editor/esm/vs/editor')) return 'monaco-editor-core'
-          if (id.includes('monaco-editor/esm/vs/base') || id.includes('monaco-editor/esm/vs/platform')) return 'monaco-platform'
+          if (id.includes('monaco-editor/esm/vs/base/browser')) return 'monaco-base-browser'
+          if (id.includes('monaco-editor/esm/vs/base/common')) return 'monaco-base-common'
+          if (id.includes('monaco-editor/esm/vs/platform')) return 'monaco-platform'
+          if (id.includes('monaco-editor/esm/vs/base')) return 'monaco-base'
           if (id.includes('node_modules/react') || id.includes('node_modules/scheduler')) return 'react-vendor'
           if (id.includes('node_modules/react-markdown') || id.includes('node_modules/remark') || id.includes('node_modules/rehype') || id.includes('node_modules/unified') || id.includes('node_modules/mdast') || id.includes('node_modules/hast') || id.includes('node_modules/micromark')) return 'markdown-vendor'
           if (id.includes('node_modules/zustand')) return 'state-vendor'

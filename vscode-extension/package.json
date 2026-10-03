@@ -1,7 +1,7 @@
 {
   "name": "vd-agent-vscode-bridge",
   "displayName": "VD Agent Bridge",
-  "description": "Exports VS Code workspace and active editor context for VD Agent.",
+  "description": "Exports VS Code workspace/editor context and accepts local VD Agent editor commands.",
   "version": "0.1.0",
   "publisher": "virender-dhiman",
   "license": "SEE LICENSE IN ../LICENSE",
@@ -12,7 +12,8 @@
   "activationEvents": [
     "onStartupFinished",
     "onCommand:vdAgent.exportContext",
-    "onCommand:vdAgent.openBridgeFile"
+    "onCommand:vdAgent.openBridgeFile",
+    "onCommand:vdAgent.processCommands"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -24,6 +25,10 @@
       {
         "command": "vdAgent.openBridgeFile",
         "title": "VD Agent: Open Bridge Context File"
+      },
+      {
+        "command": "vdAgent.processCommands",
+        "title": "VD Agent: Process Pending Bridge Commands"
       }
     ],
     "configuration": {

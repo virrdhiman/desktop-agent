@@ -16,10 +16,10 @@ export type ToolPolicyDecision = {
   outsideWorkspace: string[]
 }
 
-const WRITE_TOOLS = new Set(['write_file', 'edit_file', 'create_file', 'multi_file_edit', 'archive_extract'])
+const WRITE_TOOLS = new Set(['write_file', 'edit_file', 'create_file', 'multi_file_edit', 'archive_extract', 'vscode_apply_edit'])
 const DANGEROUS_TOOLS = new Set([
   'delete_file', 'run_command', 'git_commit', 'git_branch', 'git_stash',
-  'git_undo_last', 'git_discard_changes',
+  'git_undo_last', 'git_discard_changes', 'vscode_command',
 ])
 
 export function isPathInsideWorkspace(workspace: string, target: string): boolean {

@@ -18,6 +18,17 @@ describe('tool policy', () => {
     expect(assessToolPolicy('write_file', { path: path.join(workspace, 'a.ts') }, workspace, 'ask-all-writes').needsApproval).toBe(true)
   })
 
+  it('classifies VS Code bridge edit and command tools by side effect risk', () => {
+    const ws = path.resolve('/tmp/work')
+    const edit = assessToolPolicy('vscode_apply_edit', { path: path.join(ws, 'src/app.ts') }, ws)
+    expect(edit.risk).toBe('write')
+    expect(edit.needsApproval).toBe(false)
+
+    const command = assessToolPolicy('vscode_command', { command: 'workbench.action.reloadWindow' }, ws)
+    expect(command.risk).toBe('dangerous')
+    expect(command.needsApproval).toBe(true)
+  })
+
   it('detects workspace escapes and checkpoint targets', () => {
     const outside = path.resolve(workspace, '..', 'secret.txt')
     expect(isPathInsideWorkspace(workspace, outside)).toBe(false)

@@ -7,18 +7,21 @@
 
 # VS Code Bridge
 
-VD Agent can read VS Code's current workspace/editor context through the local
-VD Agent Bridge extension in `vscode-extension/`.
+VD Agent can read VS Code's current workspace/editor context and send local
+editor commands through the VD Agent Bridge extension in `vscode-extension/`.
 
 The bridge writes a local file at:
 
 ```text
 .vd-agent/vscode-bridge.json
+.vd-agent/commands/*.json
+.vd-agent/command-results/*.json
 ```
 
-That file includes the active file, active language, selected text, visible
-editors, and open text documents. VD Agent reads it with the `vscode_context`
-tool. Source code and selections stay local.
+The context file includes the active file, active language, selected text,
+visible editors, and open text documents. Command files let VD Agent ask VS Code
+to open files, apply exact edits, reveal diff previews, or run a specific VS
+Code command. Source code, selections, commands, and results stay local.
 
 ## Install From Source
 
@@ -42,3 +45,15 @@ the agent call:
 The bridge is optional. If it is not installed or has not exported context yet,
 VD Agent falls back to its own workspace files, repo map, search, git diff, and
 editor state.
+
+Two-way tools:
+
+```json
+{"name":"vscode_open","args":{"path":"src/App.tsx","line":10}}
+{"name":"vscode_show_diff","args":{"path":"src/App.tsx","old_string":"old","new_string":"new"}}
+{"name":"vscode_apply_edit","args":{"path":"src/App.tsx","old_string":"old","new_string":"new"}}
+{"name":"vscode_command","args":{"command":"workbench.action.files.save"}}
+```
+
+`vscode_apply_edit` is treated as a write action by VD Agent. `vscode_command`
+is treated as risky because VS Code commands can have side effects.

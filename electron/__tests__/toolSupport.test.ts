@@ -20,6 +20,7 @@ describe('resolveToolArgs', () => {
     expect(resolveToolArgs('repo_search', { query: 'agent' }, ws).path).toBe(ws)
     expect(resolveToolArgs('repo_plan', { query: 'agent loop' }, ws).path).toBe(ws)
     expect(resolveToolArgs('vscode_context', {}, ws).path).toBe(ws)
+    expect(resolveToolArgs('vscode_open', { path: 'src/app.ts' }, ws).path).toBe(path.join(ws, 'src', 'app.ts'))
     expect(resolveToolArgs('git_status', {}, ws).path).toBe(ws)
     expect(resolveToolArgs('run_command', { command: 'npm test' }, ws).cwd).toBe(ws)
     expect(resolveToolArgs('run_command', { command: 'ls', cwd: 'packages/app' }, ws).cwd).toBe(path.join(ws, 'packages', 'app'))

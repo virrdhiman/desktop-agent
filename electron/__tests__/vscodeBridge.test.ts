@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { formatVsCodeContext, loadVsCodeBridgeState } from '../vscodeBridge'
+import { formatVsCodeContext, loadVsCodeBridgeState, sendVsCodeBridgeCommand } from '../vscodeBridge'
 
 let root: string
 
@@ -44,5 +44,46 @@ describe('vscodeBridge', () => {
   it('returns setup guidance when no bridge file exists', async () => {
     fs.rmSync(path.join(root, '.vd-agent'), { recursive: true, force: true })
     await expect(formatVsCodeContext(root)).resolves.toContain('No VS Code bridge state found')
+  })
+
+  it('queues a VS Code command and reads the bridge result', async () => {
+    const commandPromise = sendVsCodeBridgeCommand(root, {
+      action: 'open_file',
+      args: { path: path.join(root, 'src', 'app.ts'), line: 1 },
+    }, 2_000)
+
+    const commandDir = path.join(root, '.vd-agent', 'commands')
+    let commandFile = ''
+    for (let i = 0; i < 20; i++) {
+      const files = fs.existsSync(commandDir) ? fs.readdirSync(commandDir).filter((file) => file.endsWith('.json')) : []
+      if (files[0]) {
+        commandFile = path.join(commandDir, files[0])
+        break
+      }
+      await new Promise((resolve) => setTimeout(resolve, 25))
+    }
+    expect(commandFile).toBeTruthy()
+    const command = JSON.parse(fs.readFileSync(commandFile, 'utf8'))
+    expect(command.action).toBe('open_file')
+    expect(command.args.path).toBe(path.join(root, 'src', 'app.ts'))
+
+    const resultDir = path.join(root, '.vd-agent', 'command-results')
+    fs.mkdirSync(resultDir, { recursive: true })
+    fs.writeFileSync(path.join(resultDir, `${command.id}.json`), JSON.stringify({
+      id: command.id,
+      updatedAt: Date.now(),
+      ok: true,
+      message: 'Opened src/app.ts',
+    }))
+
+    await expect(commandPromise).resolves.toBe('Opened src/app.ts')
+    expect(fs.existsSync(path.join(resultDir, `${command.id}.json`))).toBe(false)
+  })
+
+  it('returns guidance when the VS Code bridge does not answer', async () => {
+    await expect(sendVsCodeBridgeCommand(root, {
+      action: 'open_file',
+      args: { path: path.join(root, 'src', 'app.ts') },
+    }, 50)).resolves.toContain('VS Code bridge command queued but no result arrived')
   })
 })
