@@ -18,6 +18,7 @@ import { assessToolPolicy, checkpointTargets, resolvesInsideWorkspace, toolAppro
 import { createCheckpoint } from '../checkpointStore'
 import { archiveOutputPaths, extractZipArchive, inspectZipArchive, type ArchiveInspection } from '../archiveStore'
 import { buildRepoMap, searchRepo } from '../repoIndex'
+import { formatVsCodeContext } from '../vscodeBridge'
 
 /** Git instances cache for tool execution */
 const toolGitInstances: Map<string, SimpleGit> = new Map()
@@ -200,6 +201,10 @@ export function registerToolHandlers() {
               hit.snippet,
             ].join('\n'))
             return { result: lines.length ? `Repo search for "${query}" (${lines.length} hits):\n\n${lines.join('\n\n')}` : 'No matches found.' }
+          }
+          case 'vscode_context': {
+            const root = tool.args.path || tool.workspace || '.'
+            return { result: await formatVsCodeContext(root) }
           }
           case 'run_command': {
             const { exec } = await import('child_process')

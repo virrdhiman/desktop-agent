@@ -18,6 +18,7 @@ describe('resolveToolArgs', () => {
   it('defaults directory tools and run_command to the workspace', () => {
     expect(resolveToolArgs('list_files', {}, ws).path).toBe(ws)
     expect(resolveToolArgs('repo_search', { query: 'agent' }, ws).path).toBe(ws)
+    expect(resolveToolArgs('vscode_context', {}, ws).path).toBe(ws)
     expect(resolveToolArgs('git_status', {}, ws).path).toBe(ws)
     expect(resolveToolArgs('run_command', { command: 'npm test' }, ws).cwd).toBe(ws)
     expect(resolveToolArgs('run_command', { command: 'ls', cwd: 'packages/app' }, ws).cwd).toBe(path.join(ws, 'packages', 'app'))

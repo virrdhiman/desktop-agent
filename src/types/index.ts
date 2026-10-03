@@ -267,6 +267,11 @@ export const AGENT_TOOLS = [
     parameters: { query: 'string', path: 'string (optional)', limit: 'number (optional, default 30)' },
   },
   {
+    name: 'vscode_context',
+    description: 'Read the latest VS Code active editor, selection, visible files, and open files exported by the VD Agent Bridge extension.',
+    parameters: { path: 'string (optional) — workspace path, defaults to current workspace' },
+  },
+  {
     name: 'run_command',
     description: 'Execute a shell command',
     parameters: { command: 'string', cwd: 'string (optional)' },

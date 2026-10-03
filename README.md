@@ -135,6 +135,7 @@ Your prompts and code go **only** to the AI provider you choose, plus any servic
 | [docs/SECURITY.md](./docs/SECURITY.md) | Security model, safe use, and reporting vulnerabilities |
 | [docs/AI_AGENT_TESTING.md](./docs/AI_AGENT_TESTING.md) | Functional, trajectory, and visual testing for the agent |
 | [docs/MULTI_AGENT.md](./docs/MULTI_AGENT.md) | Agentic environments, custom roles, safety boundaries, provider use, and limits |
+| [docs/VSCODE_BRIDGE.md](./docs/VSCODE_BRIDGE.md) | Optional VS Code extension bridge for active editor, selection, and open-file context |
 | [docs/RESUME_AND_RECOVERY.md](./docs/RESUME_AND_RECOVERY.md) | Restart resume state, local project memory, checkpoints, and rollback limits |
 | [docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) | Fixes for common problems |
 | [TOOLS.md](./TOOLS.md) | Reference for every agent tool |

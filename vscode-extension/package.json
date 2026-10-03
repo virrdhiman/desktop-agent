@@ -1,0 +1,47 @@
+{
+  "name": "vd-agent-vscode-bridge",
+  "displayName": "VD Agent Bridge",
+  "description": "Exports VS Code workspace and active editor context for VD Agent.",
+  "version": "0.1.0",
+  "publisher": "virender-dhiman",
+  "license": "SEE LICENSE IN ../LICENSE",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:vdAgent.exportContext",
+    "onCommand:vdAgent.openBridgeFile"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "vdAgent.exportContext",
+        "title": "VD Agent: Export Workspace Context"
+      },
+      {
+        "command": "vdAgent.openBridgeFile",
+        "title": "VD Agent: Open Bridge Context File"
+      }
+    ],
+    "configuration": {
+      "title": "VD Agent Bridge",
+      "properties": {
+        "vdAgentBridge.autoExport": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically export active editor context for VD Agent."
+        },
+        "vdAgentBridge.maxSelectionChars": {
+          "type": "number",
+          "default": 20000,
+          "minimum": 1000,
+          "maximum": 200000,
+          "description": "Maximum selected text characters written into the local bridge file."
+        }
+      }
+    }
+  }
+}

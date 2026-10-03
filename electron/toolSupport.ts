@@ -17,6 +17,7 @@ const PATH_KEYS = ['path', 'cwd', 'audio_path', 'archive_path', 'output_path']
 /** Tools whose `path` defaults to the current directory, which should mean the workspace. */
 const DIRECTORY_TOOLS = new Set([
   'list_files', 'search_files', 'search_code', 'repo_map', 'repo_search', 'read_directory_tree',
+  'vscode_context',
   'git_status', 'git_diff', 'git_commit', 'git_log', 'git_branch', 'git_stash',
   'git_generate_commit', 'git_undo_last', 'git_discard_changes',
 ])
