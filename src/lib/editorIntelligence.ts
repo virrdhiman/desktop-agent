@@ -113,6 +113,15 @@ export async function renameWorkspaceIdentifier(
 }
 
 export function pickLikelyDefinition(refs: WorkspaceReference[], identifier: string): WorkspaceReference | undefined {
-  const declaration = new RegExp(`\\b(function|class|interface|type|enum|const|let|var)\\s+${identifier}\\b|\\b${identifier}\\s*[:=]`)
-  return refs.find((ref) => declaration.test(ref.preview)) || refs[0]
+  const escaped = identifier.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const declarationPatterns = [
+    new RegExp(`\\b(function|class|interface|type|enum|const|let|var)\\s+${escaped}\\b`),
+    new RegExp(`\\b(def|class)\\s+${escaped}\\b`),
+    new RegExp(`\\b(func|type|var|const)\\s+${escaped}\\b`),
+    new RegExp(`\\b(fn|struct|enum|trait|type|const|let)\\s+${escaped}\\b`),
+    new RegExp(`\\b(class|interface|record|enum|fun|val|var)\\s+${escaped}\\b`),
+    new RegExp(`\\bfunction\\s+${escaped}\\b`),
+    new RegExp(`\\b${escaped}\\s*[:=]`),
+  ]
+  return refs.find((ref) => declarationPatterns.some((pattern) => pattern.test(ref.preview))) || refs[0]
 }

@@ -60,4 +60,20 @@ describe('editorIntelligence', () => {
     ]
     expect(pickLikelyDefinition(refs, 'agent')?.path).toBe('/repo/def.ts')
   })
+
+  it('prefers Python declarations for definition fallback', () => {
+    const refs = [
+      { path: '/repo/use.py', line: 5, column: 12, preview: 'return agent.run()' },
+      { path: '/repo/agent.py', line: 2, column: 5, preview: 'def agent(task):' },
+    ]
+    expect(pickLikelyDefinition(refs, 'agent')?.path).toBe('/repo/agent.py')
+  })
+
+  it('prefers Rust-style declarations for definition fallback', () => {
+    const refs = [
+      { path: '/repo/use.rs', line: 8, column: 18, preview: 'let next = agent(input);' },
+      { path: '/repo/lib.rs', line: 3, column: 4, preview: 'fn agent(input: Task) -> Result {' },
+    ]
+    expect(pickLikelyDefinition(refs, 'agent')?.path).toBe('/repo/lib.rs')
+  })
 })
