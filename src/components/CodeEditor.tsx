@@ -26,7 +26,7 @@ import {
   renameWorkspaceIdentifier,
   type WorkspaceReference,
 } from '../lib/editorIntelligence'
-import { buildPreview, summarizeInlineEdit } from '../lib/inlineEdits'
+import { buildInlineEditHunks, rejectInlineEditHunk, summarizeInlineEdit, type InlineEditHunk } from '../lib/inlineEdits'
 
 const loadMonacoEditor = () => import('../lib/monacoEditor')
 const Editor = lazy(loadMonacoEditor)
@@ -69,6 +69,7 @@ export default function CodeEditor() {
   const [diagnostics, setDiagnostics] = useState<Array<WorkspaceReference & { message: string; severity: 'error' | 'warning' | 'info' }>>([])
   const [referenceWord, setReferenceWord] = useState('')
   const [pendingReveal, setPendingReveal] = useState<WorkspaceReference | null>(null)
+  const [dismissedInlineHunks, setDismissedInlineHunks] = useState<Set<string>>(() => new Set())
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null)
 
   const language = useMemo(() => selectedFile ? getLanguage(selectedFile) : 'plaintext', [selectedFile])
@@ -80,6 +81,15 @@ export default function CodeEditor() {
   const latestInlineEditSummary = useMemo(() => (
     latestInlineEdit ? summarizeInlineEdit(latestInlineEdit.before, latestInlineEdit.after) : null
   ), [latestInlineEdit])
+  const inlineEditHunks = useMemo(() => (
+    latestInlineEdit
+      ? buildInlineEditHunks(latestInlineEdit.before, latestInlineEdit.after).filter((hunk) => !dismissedInlineHunks.has(hunk.id))
+      : []
+  ), [dismissedInlineHunks, latestInlineEdit])
+
+  useEffect(() => {
+    setDismissedInlineHunks(new Set())
+  }, [latestInlineEdit?.timestamp])
 
   // Load file when selected changes
   useEffect(() => {
@@ -272,6 +282,7 @@ export default function CodeEditor() {
     setFileContent(latestInlineEdit.after)
     setEditorContent(latestInlineEdit.after)
     removeFileEdit(latestInlineEdit.timestamp)
+    setDismissedInlineHunks(new Set())
     addTerminalEntry({ id: Date.now().toString(), type: 'success', content: `Accepted inline edit: ${selectedFile}`, timestamp: Date.now() })
   }, [addTerminalEntry, latestInlineEdit, removeFileEdit, selectedFile, setFileContent])
 
@@ -285,8 +296,41 @@ export default function CodeEditor() {
     setFileContent(latestInlineEdit.before)
     setEditorContent(latestInlineEdit.before)
     removeFileEdit(latestInlineEdit.timestamp)
+    setDismissedInlineHunks(new Set())
     addTerminalEntry({ id: Date.now().toString(), type: 'success', content: `Rejected inline edit and restored previous file: ${selectedFile}`, timestamp: Date.now() })
   }, [addTerminalEntry, latestInlineEdit, removeFileEdit, selectedFile, setFileContent])
+
+  const acceptInlineHunk = useCallback((hunk: InlineEditHunk) => {
+    if (!latestInlineEdit || !selectedFile) return
+    const remainingHunks = inlineEditHunks.filter((item) => item.id !== hunk.id)
+    if (remainingHunks.length === 0) {
+      removeFileEdit(latestInlineEdit.timestamp)
+      setDismissedInlineHunks(new Set())
+    } else {
+      setDismissedInlineHunks((current) => new Set(current).add(hunk.id))
+    }
+    addTerminalEntry({ id: Date.now().toString(), type: 'success', content: `Accepted inline edit hunk: ${selectedFile}:${hunk.newStart}`, timestamp: Date.now() })
+  }, [addTerminalEntry, inlineEditHunks, latestInlineEdit, removeFileEdit, selectedFile])
+
+  const rejectInlineHunk = useCallback(async (hunk: InlineEditHunk) => {
+    if (!latestInlineEdit || !selectedFile) return
+    const nextContent = rejectInlineEditHunk(editorContent || latestInlineEdit.after, hunk)
+    const result = await window.api.writeFile(selectedFile, nextContent)
+    if ('error' in result) {
+      addTerminalEntry({ id: Date.now().toString(), type: 'error', content: `Reject inline edit hunk failed: ${result.error}`, timestamp: Date.now() })
+      return
+    }
+    setFileContent(nextContent)
+    setEditorContent(nextContent)
+    const remainingHunks = inlineEditHunks.filter((item) => item.id !== hunk.id)
+    if (remainingHunks.length === 0) {
+      removeFileEdit(latestInlineEdit.timestamp)
+      setDismissedInlineHunks(new Set())
+    } else {
+      setDismissedInlineHunks((current) => new Set(current).add(hunk.id))
+    }
+    addTerminalEntry({ id: Date.now().toString(), type: 'success', content: `Rejected inline edit hunk: ${selectedFile}:${hunk.newStart}`, timestamp: Date.now() })
+  }, [addTerminalEntry, editorContent, inlineEditHunks, latestInlineEdit, removeFileEdit, selectedFile, setFileContent])
 
   useEffect(() => {
     let cancelled = false
@@ -517,21 +561,55 @@ export default function CodeEditor() {
               Inline edit proposal: {latestInlineEditSummary.changedLines} changed line(s)
               {latestInlineEditSummary.addedLines ? `, +${latestInlineEditSummary.addedLines}` : ''}
               {latestInlineEditSummary.removedLines ? `, -${latestInlineEditSummary.removedLines}` : ''}
+              {inlineEditHunks.length ? ` across ${inlineEditHunks.length} hunk(s)` : ''}
             </span>
             <span style={{ display: 'flex', gap: 6 }}>
-              <button className="btn btn-sm btn-success" onClick={acceptInlineEdit}>Accept</button>
-              <button className="btn btn-sm" onClick={rejectInlineEdit}>Reject</button>
+              <button className="btn btn-sm btn-success" onClick={acceptInlineEdit}>Accept all</button>
+              <button className="btn btn-sm" onClick={rejectInlineEdit}>Reject all</button>
             </span>
           </div>
-          <pre style={{
-            margin: 0,
-            maxHeight: 120,
-            overflow: 'auto',
-            color: 'var(--text-muted)',
-            fontSize: 11,
-            fontFamily: "'JetBrains Mono', monospace",
-            whiteSpace: 'pre',
-          }}>{buildPreview(latestInlineEdit.before, latestInlineEdit.after)}</pre>
+          <div style={{ display: 'grid', gap: 6, maxHeight: 240, overflow: 'auto' }}>
+            {inlineEditHunks.slice(0, 8).map((hunk) => (
+              <div key={hunk.id} style={{
+                border: '1px solid rgba(148,163,184,0.20)',
+                borderRadius: 6,
+                background: 'rgba(15,23,42,0.35)',
+                overflow: 'hidden',
+              }}>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  gap: 8,
+                  alignItems: 'center',
+                  padding: '5px 7px',
+                  borderBottom: '1px solid rgba(148,163,184,0.16)',
+                }}>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                    Lines {hunk.newEnd >= hunk.newStart ? `${hunk.newStart}-${hunk.newEnd}` : `${hunk.newStart}`}
+                  </span>
+                  <span style={{ display: 'flex', gap: 5 }}>
+                    <button className="btn btn-sm btn-success" onClick={() => acceptInlineHunk(hunk)}>Accept hunk</button>
+                    <button className="btn btn-sm" onClick={() => rejectInlineHunk(hunk)}>Reject hunk</button>
+                  </span>
+                </div>
+                <pre style={{
+                  margin: 0,
+                  maxHeight: 115,
+                  overflow: 'auto',
+                  padding: '6px 7px',
+                  color: 'var(--text-muted)',
+                  fontSize: 11,
+                  fontFamily: "'JetBrains Mono', monospace",
+                  whiteSpace: 'pre',
+                }}>{hunk.preview}</pre>
+              </div>
+            ))}
+            {inlineEditHunks.length > 8 && (
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                {inlineEditHunks.length - 8} more hunk(s). Accept or reject visible hunks to continue reviewing.
+              </div>
+            )}
+          </div>
         </div>
       )}
 
