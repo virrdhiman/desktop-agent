@@ -61,7 +61,7 @@ VD Agent only sends data when you use a feature that needs a network service:
 | `speech_to_text` tool | Groq or Hugging Face, with your key | The audio file |
 | `image_analysis` tool | Google Gemini, with your key | The image |
 | `generate_image`, `text_to_speech`, `generate_video` tools | Pollinations | The prompt or text, as part of a URL |
-| Web3 tools | Public blockchain RPC endpoints and IPFS gateways | Addresses, CIDs, or content you ask about |
+| `web3_balance` and `web3_explorer` | Public blockchain RPC endpoints and block explorers | The address, transaction, or block you ask about |
 | Update check | The configured GitHub release host or public update feed | App version, platform, and the ordinary network metadata involved in an HTTPS request. Update checks can be disabled in Settings. |
 | You click a link | Your default browser | Nothing from VD Agent; the page opens outside the app |
 

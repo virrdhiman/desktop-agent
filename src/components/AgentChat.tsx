@@ -1095,7 +1095,6 @@ export default function AgentChat() {
         { icon: '🔑', label: 'Configure API', action: 'How do I set up my API key?' },
         { icon: '💡', label: 'What can you do?', action: 'What are your capabilities? What tools do you have access to?' },
         { icon: '🚀', label: 'Quick start', action: 'Give me a quick overview of how to use this agent effectively.' },
-        { icon: '⛓️', label: 'Web3 tools', action: 'What Web3 tools do you have? Can you check wallet balances, deploy contracts, or upload to IPFS?' },
       ]
 
   return (

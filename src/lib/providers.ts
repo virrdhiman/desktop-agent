@@ -12,6 +12,13 @@ export type ProviderCategory = 'free' | 'local' | 'community' | 'image_video' | 
 
 export const LOCAL_PROVIDER_IDS = ['ollama', 'lmstudio', 'llamacpp']
 export const IMAGE_VIDEO_PROVIDER_IDS = ['flux', 'pollinations_img', 'runway', 'kling', 'replicate', 'stability']
+const RETIRED_PROVIDER_IDS = ['runway', 'kling']
+
+/** Drop providers whose only integration was a set of setup instructions. */
+export function omitRetiredProviders<T extends { id: string }>(providers: T[]): T[] {
+  return providers.filter((provider) => !RETIRED_PROVIDER_IDS.includes(provider.id))
+}
+
 /** Unofficial proxies kept only so a saved settings file cannot revive them as fallbacks. */
 export const COMMUNITY_PROVIDER_IDS = [
   'g4f', 'chatgpt2api', 'zukijourney', 'electronhub', 'voidai', 'nagaai', 'helixmind', 'navyapi',

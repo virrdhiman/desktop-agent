@@ -14,7 +14,7 @@ import fs from 'fs'
 import { randomUUID } from 'crypto'
 import { privateEnvCandidatePaths } from '../privateEnv'
 import { maskProviderForRenderer, nextStoredApiKey } from '../../src/lib/providerKeys'
-import { COMMUNITY_PROVIDER_IDS, omitCommunityProviders } from '../../src/lib/providers'
+import { COMMUNITY_PROVIDER_IDS, omitCommunityProviders, omitRetiredProviders } from '../../src/lib/providers'
 
 /** Path to settings JSON on disk */
 export const SETTINGS_PATH = path.join(app.getPath('userData'), 'settings.json')
@@ -49,8 +49,6 @@ const DEFAULT_PROVIDERS = [
   // ═══ IMAGE / VIDEO (not used for chat) ═══
   { id: 'flux', name: 'FLUX.2 (BFL) 🎨', apiKey: '', baseUrl: 'https://api.bfl.ml/v1', model: 'flux-2-klein', freeTier: true, signupUrl: 'https://bfl.ai/', notes: 'Image generation. Not a chat provider.' },
   { id: 'pollinations_img', name: 'Pollinations Image 🖼️', apiKey: '', baseUrl: 'https://image.pollinations.ai', model: 'flux', freeTier: true, signupUrl: 'https://pollinations.ai/', notes: 'Image generation via URL. No key needed.' },
-  { id: 'runway', name: 'Runway 🎬', apiKey: '', baseUrl: 'https://api.runwayml.com/v1', model: 'gen3-alpha', freeTier: true, signupUrl: 'https://runwayml.com/', notes: 'Video generation. Limited free credits.' },
-  { id: 'kling', name: 'Kling Video 🎥', apiKey: '', baseUrl: 'https://api.klingai.com/v1', model: 'kling-v1', freeTier: true, signupUrl: 'https://klingai.com/', notes: 'Text/image-to-video. Limited free credits.' },
   { id: 'replicate', name: 'Replicate 🔄', apiKey: '', baseUrl: 'https://api.replicate.com/v1', model: 'black-forest-labs/flux-schnell', freeTier: true, signupUrl: 'https://replicate.com/account/api-tokens', notes: 'Hosted open models. Pay-per-use after any trial.' },
   { id: 'stability', name: 'Stability AI 🖼️', apiKey: '', baseUrl: 'https://api.stability.ai/v2beta', model: 'stable-diffusion-xl-1024-v1-0', freeTier: true, signupUrl: 'https://platform.stability.ai/account/keys', notes: 'Image generation. Signup credits.' },
 
@@ -131,7 +129,7 @@ function withEnvProviderKeys(providers: any[]): any[] {
 
 /** Add providers introduced after the user's settings file was first written. */
 function withNewDefaults(providers: any[]): any[] {
-  const kept = omitCommunityProviders(providers)
+  const kept = omitRetiredProviders(omitCommunityProviders(providers))
   const known = new Set(kept.map((p) => p.id))
   return [...kept, ...DEFAULT_PROVIDERS.filter((p) => !known.has(p.id))]
 }
