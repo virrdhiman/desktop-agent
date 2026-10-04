@@ -55,7 +55,10 @@ jobs:
         env:
           VD_AGENT_AUTO_APPROVE_TOOLS: "1"
       - name: Build release artifacts
-        run: npm run electron:build -- ${{ env.BUILDER_ARGS }} --publish never
+        shell: bash
+        run: |
+          if [ -z "$CSC_LINK" ]; then unset CSC_LINK CSC_KEY_PASSWORD; fi
+          npm run electron:build -- ${{ env.BUILDER_ARGS }} --publish never
       - name: Smoke packaged Windows app
         if: runner.os == 'Windows'
         run: node scripts/smoke.mjs --exe "release/win-unpacked/VD Agent.exe"
