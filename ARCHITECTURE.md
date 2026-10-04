@@ -65,10 +65,10 @@ electron-builder does not rebuild native dependencies a second time. `node-pty`'
 - `contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`. The renderer only reaches Node through `window.api`.
 - A Content-Security-Policy header is set on every response (looser in dev for Vite HMR).
 - `setWindowOpenHandler` denies every new window and opens `http(s)` links in the default browser. `will-navigate` blocks navigation away from the app page (`electron/navigation.ts`).
-- API keys live in `<userData>/settings.json`, encrypted with `safeStorage` when available. The renderer holds decrypted keys in memory so it can pass them to `ai:chat`.
+- API keys live in `<userData>/settings.json`, encrypted with `safeStorage` when available. `settings:load` masks real keys before they reach the renderer. `ai:chat` and tool calls resolve the key in the main process. A key typed into Settings is sent once on save, then dropped from renderer state.
 - Keys never appear in chat history. `conversationStore.redactSecrets` removes configured keys and common key formats before writing. Settings exports strip keys (`withoutApiKeys`).
 - The `/models` cache is keyed by a SHA-256 digest of the key, not the key itself. Provider error bodies have the key redacted before they reach the UI.
-- File writes and deletes must resolve inside the open workspace. `toolPolicy.ts` classifies tool risk in the main process and obtains native confirmation according to the saved permission mode.
+- File writes and deletes must resolve inside the open workspace. `toolPolicy.ts` classifies tool risk in the main process. Approval uses a scrollable window so a long command is not cut off.
 - File mutations create a bounded pre-edit checkpoint before execution. This does not make shell or Git side effects reversible.
 - Renderer permission requests are denied by default. Packaged update checks use electron-updater's HTTPS and SHA-512 integrity path and can be disabled; certificate-backed package signing is configured separately at release time.
 

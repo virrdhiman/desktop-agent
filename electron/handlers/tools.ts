@@ -8,11 +8,13 @@
  * Tool Execution IPC Handler
  * Agent tools: file ops, git ops, code search, web search, Web3, image/video, speech
  */
-import { app, BrowserWindow, dialog, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import { simpleGit, SimpleGit } from 'simple-git'
-import { SETTINGS_PATH } from './settings'
+import { loadRuntimeSettings } from './settings'
+import { confirmAgentAction } from '../approvalDialog'
+import { geminiGenerateContentRequest } from '../geminiRequest'
 import { COMMAND_TIMEOUT_MS, formatCommandResult, resolveToolArgs } from '../toolSupport'
 import { assessToolPolicy, checkpointTargets, resolvesInsideWorkspace, toolApprovalDetail, type PermissionMode } from '../toolPolicy'
 import { createCheckpoint } from '../checkpointStore'
@@ -31,12 +33,9 @@ function getToolGit(dirPath: string): SimpleGit {
   return toolGitInstances.get(dirPath)!
 }
 
-/** Load settings to get API keys for speech/image tools */
+/** Decrypted settings for speech/image tools. The renderer never receives these keys. */
 async function loadToolSettings(): Promise<any> {
-  try {
-    const data = await fs.promises.readFile(SETTINGS_PATH, 'utf-8')
-    return JSON.parse(data)
-  } catch { return { providers: [] } }
+  return loadRuntimeSettings()
 }
 
 export function registerToolHandlers() {
@@ -64,19 +63,13 @@ export function registerToolHandlers() {
         }
 
         if (decision.needsApproval && process.env.VD_AGENT_AUTO_APPROVE_TOOLS !== '1') {
-          const options = {
-            type: 'warning' as const,
-            title: 'Approve agent action',
-            message: `Allow VD Agent to run ${tool.name}?`,
-            detail: toolApprovalDetail(tool.name, tool.args, decision),
-            buttons: ['Cancel', 'Allow once'],
-            defaultId: 0,
-            cancelId: 0,
-            noLink: true,
-          }
           const owner = BrowserWindow.fromWebContents(event.sender)
-          const choice = owner ? await dialog.showMessageBox(owner, options) : await dialog.showMessageBox(options)
-          if (choice.response !== 1) return { error: `User declined ${tool.name}` }
+          const allowed = await confirmAgentAction(
+            owner,
+            `Allow VD Agent to run ${tool.name}?`,
+            toolApprovalDetail(tool.name, tool.args, decision),
+          )
+          if (!allowed) return { error: `User declined ${tool.name}` }
         }
 
         let archiveInspection: ArchiveInspection | undefined
@@ -505,10 +498,10 @@ export function registerToolHandlers() {
                 base64Image = buf.toString('base64')
                 mimeType = imageUrl.endsWith('.jpg') || imageUrl.endsWith('.jpeg') ? 'image/jpeg' : 'image/png'
               }
-              const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ contents: [{ parts: [{ text: question }, { inlineData: { mimeType, data: base64Image } }] }] }),
+              const request = geminiGenerateContentRequest(geminiKey, {
+                contents: [{ parts: [{ text: question }, { inlineData: { mimeType, data: base64Image } }] }],
               })
+              const resp = await fetch(request.url, request.init)
               if (resp.ok) { const data = await resp.json() as any; return { result: `Image Analysis (Gemini):\n\n${data.candidates?.[0]?.content?.parts?.[0]?.text || 'No analysis returned'}` } }
             }
             return { result: `Image Analysis:\n\nImage: ${imageUrl}\nQuestion: ${question}\n\nSet up a Gemini API key (free) in Settings for image analysis.` }

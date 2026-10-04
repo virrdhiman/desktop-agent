@@ -22,7 +22,8 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useStore } from '../store'
 import type { ProviderConfig, TeamPreset, TeamRoleProfile, TeamTokenBudget } from '../types'
-import { getProviderCategory, mergeImportedSettings, refreshProviderModelCatalog, withoutApiKeys } from '../lib/providers'
+import { getProviderCategory, mergeImportedSettings, providerIsConfigured, refreshProviderModelCatalog, withoutApiKeys } from '../lib/providers'
+import { maskProviderForRenderer } from '../lib/providerKeys'
 import { APP_NAME, APP_VERSION, AUTHOR_NAME, AUTHOR_URL, COPYRIGHT, LICENSE_URL, REPO_URL } from '../lib/brand'
 import { TEAM_PRESET_LABELS } from '../lib/multiAgent'
 
@@ -84,31 +85,46 @@ export default function SettingsPanel() {
     } catch (err) { console.error('Failed to save provider:', err) }
   }, [settings])
 
-  const saveProvider = useCallback(async (provider: ProviderConfig) => {
+  const saveProvider = useCallback(async (provider: ProviderConfig, clear = false) => {
     try {
-      const newSettings = {
-        ...settings,
-        providers: settings.providers.map((p) =>
-          p.id === provider.id ? { ...provider, apiKey: apiKeyInput } : p
-        ),
+      const local = getProviderCategory(provider) === 'local'
+      const typed = apiKeyInput.trim()
+      const outgoing = {
+        ...provider,
+        apiKey: local ? provider.apiKey : (clear ? '' : typed),
+        clearKey: clear,
       }
-      setSettings(newSettings)
+      const toSave = {
+        ...settings,
+        providers: settings.providers.map((p) => (p.id === provider.id ? outgoing : p)),
+      }
+      const view = {
+        ...toSave,
+        providers: toSave.providers.map((p) => (p.id === provider.id ? maskProviderForRenderer({ ...outgoing, hasKey: !clear && (Boolean(typed) || provider.hasKey) }) : p)),
+      }
+      setSettings(view)
       setEditing(null)
-      await window.api.saveSettings(newSettings)
+      setApiKeyInput('')
+      await window.api.saveSettings(toSave)
     } catch (err) { console.error('Failed to save provider:', err) }
   }, [settings, apiKeyInput])
 
   const refreshModels = useCallback(async () => {
     if (!editing) return
-    const apiKey = apiKeyInput || editing.apiKey
-    if (!apiKey || !editing.baseUrl) {
+    const local = getProviderCategory(editing) === 'local'
+    const typed = apiKeyInput.trim()
+    if ((!typed && !providerIsConfigured(editing)) || !editing.baseUrl) {
       setRefreshMessage('Add an API key and base URL before refreshing.')
       return
     }
     setRefreshingModels(true)
     setRefreshMessage('')
     try {
-      const ids = await window.api.aiListModels({ provider: editing.id, apiKey, baseUrl: editing.baseUrl })
+      const ids = await window.api.aiListModels({
+        provider: editing.id,
+        apiKey: local ? editing.apiKey : typed,
+        baseUrl: editing.baseUrl,
+      })
       if (!Array.isArray(ids) || ids.length === 0) {
         setRefreshMessage('No usable chat models were returned. The saved fallback model was kept.')
         return
@@ -116,14 +132,16 @@ export default function SettingsPanel() {
       const pendingSettings = {
         ...settings,
         providers: settings.providers.map((p) => (
-          p.id === editing.id ? { ...editing, apiKey } : p
+          p.id === editing.id ? { ...editing, apiKey: local ? editing.apiKey : typed } : p
         )),
       }
       const next = refreshProviderModelCatalog(pendingSettings, editing.id, ids)
       const saved = next || pendingSettings
-      const updated = saved.providers.find((p) => p.id === editing.id)
-      setSettings(saved)
+      const masked = { ...saved, providers: saved.providers.map((p) => maskProviderForRenderer(p)) }
+      const updated = masked.providers.find((p) => p.id === editing.id)
+      setSettings(masked)
       if (updated) setEditing(updated)
+      setApiKeyInput('')
       await window.api.saveSettings(saved)
       setRefreshMessage(`Synced ${ids.length} live chat models. Using ${updated?.model || ids[0]}.`)
     } catch (err: any) {
@@ -231,7 +249,7 @@ export default function SettingsPanel() {
               return (
                 <div
                   key={provider.id}
-                  onClick={() => { selectProvider(provider.id); setEditing(provider); setApiKeyInput(provider.apiKey); setRefreshMessage('') }}
+                  onClick={() => { selectProvider(provider.id); setEditing(provider); setApiKeyInput(getProviderCategory(provider) === 'local' ? provider.apiKey : ''); setRefreshMessage('') }}
                   style={{
                     padding: '8px 10px',
                     borderRadius: 'var(--radius)',
@@ -259,7 +277,7 @@ export default function SettingsPanel() {
                     </div>
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                    {provider.apiKey ? `✓ Key set · ${provider.model}${provider.models?.length ? ` · ${provider.models.length} live models` : ''}` :
+                    {providerIsConfigured(provider) ? `✓ Key set · ${provider.model}${provider.models?.length ? ` · ${provider.models.length} live models` : ''}` :
                      provider.notes?.slice(0, 80) + (provider.notes && provider.notes.length > 80 ? '...' : '') || `Model: ${provider.model}`}
                   </div>
                 </div>
@@ -309,8 +327,13 @@ export default function SettingsPanel() {
                     className="input"
                     value={apiKeyInput}
                     onChange={(e) => setApiKeyInput(e.target.value)}
-                    placeholder="Enter your API key..."
+                    placeholder={editing.hasKey ? 'A key is saved. Paste a new one to replace it.' : 'Enter your API key...'}
                   />
+                  {editing.hasKey && (
+                    <button type="button" className="btn btn-sm" style={{ marginTop: 6 }} onClick={() => saveProvider(editing, true)}>
+                      Remove saved key
+                    </button>
+                  )}
                   <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                     🔒 Stored on this machine, encrypted with the OS keychain when available, and sent only to this provider's base URL.
                   </div>
@@ -445,7 +468,7 @@ export default function SettingsPanel() {
                 const active = settings.providers.find((p) => p.id === settings.activeProvider)
                 if (active) {
                   setEditing(active)
-                  setApiKeyInput(active.apiKey)
+                  setApiKeyInput(getProviderCategory(active) === 'local' ? active.apiKey : '')
                 }
               }}
             >
@@ -703,8 +726,8 @@ export default function SettingsPanel() {
                         const imported = JSON.parse(text)
                         if (!imported || !Array.isArray(imported.providers)) throw new Error('missing providers')
                         const merged = mergeImportedSettings(settings, imported)
-                        setSettings(merged)
                         await window.api.saveSettings(merged)
+                        setSettings({ ...merged, providers: merged.providers.map((provider) => maskProviderForRenderer(provider)) })
                       } catch {
                         alert('Invalid settings file')
                       }
