@@ -99,7 +99,7 @@ For OpenAI-compatible providers, VD Agent:
 4. **Stops immediately on an invalid key**, so you can fix it instead of having the problem hidden.
 5. Saves the refreshed live model list and the model that worked, unless you pinned a model in the Agent header.
 
-If the active provider fails for any reason other than an invalid key, VD Agent tries other official free providers that have keys. Local servers and community proxies are never used automatically.
+If the active provider fails for any reason other than an invalid key, VD Agent tries other official free providers that have keys. Local servers are never used automatically. The catalog is official APIs and local OpenAI-compatible servers only.
 
 ---
 

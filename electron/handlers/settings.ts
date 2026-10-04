@@ -14,6 +14,7 @@ import fs from 'fs'
 import { randomUUID } from 'crypto'
 import { privateEnvCandidatePaths } from '../privateEnv'
 import { maskProviderForRenderer, nextStoredApiKey } from '../../src/lib/providerKeys'
+import { COMMUNITY_PROVIDER_IDS, omitCommunityProviders } from '../../src/lib/providers'
 
 /** Path to settings JSON on disk */
 export const SETTINGS_PATH = path.join(app.getPath('userData'), 'settings.json')
@@ -56,24 +57,7 @@ const DEFAULT_PROVIDERS = [
   // ═══ LOCAL ═══
   { id: 'ollama', name: 'Ollama (Local) 🏠', apiKey: 'ollama', baseUrl: 'http://localhost:11434/v1', model: 'qwen2.5-coder:7b', freeTier: true, signupUrl: 'https://ollama.com/download', notes: 'Runs on your machine. Prompts never leave it.' },
   { id: 'lmstudio', name: 'LM Studio (Local) 💻', apiKey: 'lm-studio', baseUrl: 'http://localhost:1234/v1', model: 'local-model', freeTier: true, signupUrl: 'https://lmstudio.ai/', notes: 'Runs on your machine. Desktop GUI for local models.' },
-  { id: 'llamacpp', name: 'llama.cpp Server 📦', apiKey: 'llama-cpp', baseUrl: 'http://localhost:8080/v1', model: 'local', freeTier: true, signupUrl: 'https://github.com/ggml-org/llama.cpp', notes: 'Runs on your machine. Lightweight OpenAI-compatible server.' },
-
-  // ═══ COMMUNITY (third-party proxies — never used as automatic fallbacks) ═══
-  { id: 'g4f', name: 'gpt4free (g4f) 🏴\u200d☠️', apiKey: '', baseUrl: 'http://localhost:8080/v1', model: 'gpt-4o', freeTier: true, signupUrl: 'https://github.com/xtekky/gpt4free', notes: 'Self-hosted proxy. Unofficial; reliability varies.' },
-  { id: 'pollinations', name: 'Pollinations 🌻', apiKey: '', baseUrl: 'https://text.pollinations.ai/openai', model: 'openai', freeTier: true, signupUrl: 'https://github.com/pollinations/pollinations', notes: 'Open-source community API. Rate-limited.' },
-  { id: 'chatgpt2api', name: 'ChatGPT-to-API 🔄', apiKey: '', baseUrl: 'http://localhost:8080/v1', model: 'gpt-4o', freeTier: true, signupUrl: 'https://github.com/acheong08/ChatGPT-to-API', notes: 'Self-hosted proxy. Unofficial.' },
-  { id: 'zukijourney', name: 'Zukijourney 🌐', apiKey: '', baseUrl: 'https://api.zukijourney.com/v1', model: 'gpt-4o', freeTier: true, signupUrl: 'https://discord.gg/zukijourney', notes: 'Third-party proxy. Sees your prompts.' },
-  { id: 'electronhub', name: 'ElectronHub ⚡', apiKey: '', baseUrl: 'https://api.electronhub.org/v1', model: 'gpt-4o', freeTier: true, signupUrl: 'https://discord.gg/electronhub', notes: 'Third-party proxy. Sees your prompts.' },
-  { id: 'voidai', name: 'VoidAI 👻', apiKey: '', baseUrl: 'https://api.voidai.xyz/v1', model: 'gpt-4o', freeTier: true, signupUrl: 'https://discord.gg/voidai', notes: 'Third-party proxy. Sees your prompts.' },
-  { id: 'nagaai', name: 'NagaAI 🐉', apiKey: '', baseUrl: 'https://api.nagaapi.com/v1', model: 'gpt-4o', freeTier: true, signupUrl: 'https://discord.gg/nagaai', notes: 'Third-party proxy. Sees your prompts.' },
-  { id: 'helixmind', name: 'HelixMind 🔮', apiKey: '', baseUrl: 'https://api.helixmind.dev/v1', model: 'gpt-4o', freeTier: true, signupUrl: 'https://discord.gg/helixmind', notes: 'Third-party proxy. Sees your prompts.' },
-  { id: 'navyapi', name: 'NavyAPI 🚢', apiKey: '', baseUrl: 'https://api.navyai.xyz/v1', model: 'gpt-4o', freeTier: true, signupUrl: 'https://discord.gg/navyai', notes: 'Third-party proxy. Sees your prompts.' },
-  { id: 'mnn', name: 'MNN API 🧊', apiKey: '', baseUrl: 'https://api.mnapi.xyz/v1', model: 'gpt-4o', freeTier: true, signupUrl: 'https://discord.gg/mnn', notes: 'Third-party proxy. Sees your prompts.' },
-  { id: 'webraftai', name: 'WebraftAI 🕸️', apiKey: '', baseUrl: 'https://api.webraft.ai/v1', model: 'gpt-4o', freeTier: true, signupUrl: 'https://discord.gg/webraftai', notes: 'Third-party proxy. Sees your prompts.' },
-  { id: 'voltai', name: 'VoltAI ⚡', apiKey: '', baseUrl: 'https://api.voltai.top/v1', model: 'gpt-4o', freeTier: true, signupUrl: 'https://discord.gg/voltai', notes: 'Third-party proxy. Sees your prompts.' },
-  { id: 'hcap', name: 'hcap.ai 🧢', apiKey: '', baseUrl: 'https://api.hcap.ai/v1', model: 'gpt-4o', freeTier: true, signupUrl: 'https://discord.gg/hcap', notes: 'Third-party proxy. Sees your prompts.' },
-  { id: 'zanityai', name: 'ZanityAI 😈', apiKey: '', baseUrl: 'https://api.zanity.xyz/v1', model: 'gpt-4o', freeTier: true, signupUrl: 'https://discord.gg/zanityai', notes: 'Third-party proxy. Sees your prompts.' },
-  { id: 'kimetsu', name: 'Kimetsu 🔥', apiKey: '', baseUrl: 'https://api.kimetsu.xyz/v1', model: 'gpt-4o', freeTier: true, signupUrl: 'https://discord.gg/kimetsu', notes: 'Third-party proxy. Sees your prompts.' },
+  { id: 'llamacpp', name: 'llama.cpp Server 📦', apiKey: 'llama-cpp', baseUrl: 'http://localhost:8080/v1', model: 'local', freeTier: true, signupUrl: 'https://github.com/ggml-org/llama.cpp', notes: 'Runs on your machine. Point the base URL at any OpenAI-compatible local server.' },
 
   // ═══ PAID ═══
   { id: 'openai', name: 'OpenAI 💰', apiKey: '', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o', notes: 'Paid API.' },
@@ -147,8 +131,16 @@ function withEnvProviderKeys(providers: any[]): any[] {
 
 /** Add providers introduced after the user's settings file was first written. */
 function withNewDefaults(providers: any[]): any[] {
-  const known = new Set(providers.map((p) => p.id))
-  return [...providers, ...DEFAULT_PROVIDERS.filter((p) => !known.has(p.id))]
+  const kept = omitCommunityProviders(providers)
+  const known = new Set(kept.map((p) => p.id))
+  return [...kept, ...DEFAULT_PROVIDERS.filter((p) => !known.has(p.id))]
+}
+
+function normalizeActiveProvider(activeProvider: string | undefined, providers: { id: string }[]): string {
+  if (activeProvider && !COMMUNITY_PROVIDER_IDS.includes(activeProvider) && providers.some((p) => p.id === activeProvider)) {
+    return activeProvider
+  }
+  return providers.some((p) => p.id === 'groq') ? 'groq' : (providers[0]?.id || 'groq')
 }
 
 /** Settings with decrypted keys, for the main process only. */
@@ -169,6 +161,7 @@ export async function loadRuntimeSettings(): Promise<any> {
     parsed.teamTokenBudget ??= 'balanced'
     parsed.dynamicTeam ??= true
     if (!parsed.teamProfile || typeof parsed.teamProfile !== 'object') parsed.teamProfile = {}
+    parsed.activeProvider = normalizeActiveProvider(parsed.activeProvider, parsed.providers)
     return parsed
   } catch {
     return {

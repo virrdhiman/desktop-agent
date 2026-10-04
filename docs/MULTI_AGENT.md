@@ -61,7 +61,7 @@ When several official free providers are configured, VD prefers different provid
 
 Agentic mode does not require a paid service, but it uses more API requests and tokens than standard chat. **Smart** is the recommended setting for free keys because it keeps simple questions on one model call. Provider rate limits still apply, and adding more than one official free provider improves resilience.
 
-The request and bounded context can be sent to up to three configured official free providers. Reviewer and Verifier calls also receive the latest executor answer and bounded tool evidence. Agentic mode does not implicitly use community proxies or paid providers. Use **Normal** or one local provider for sensitive work that must stay with a single endpoint.
+The request and bounded context can be sent to up to three configured official free providers. Reviewer and Verifier calls also receive the latest executor answer and bounded tool evidence. Agentic mode does not implicitly use paid providers. Use **Normal** or one local provider for sensitive work that must stay with a single endpoint.
 
 ## Limits
 

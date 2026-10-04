@@ -8,7 +8,7 @@
  * SettingsPanel — AI provider configuration
  *
  * Features:
- * - Provider catalog grouped by category (free, local, community, image/video, paid)
+ * - Provider catalog grouped by category (free, local, image/video, paid)
  * - Category filter tabs with counts
  * - Provider search
  * - API key input (encrypted at rest when the OS keychain is available)
@@ -229,7 +229,7 @@ export default function SettingsPanel() {
 
           {/* Filter tabs */}
           <div style={{ display: 'flex', gap: 3, marginBottom: 8, flexWrap: 'wrap' }}>
-            {(Object.keys(CATEGORY_LABELS) as Category[]).map((cat) => (
+            {(['all', 'free', 'local', 'image_video', 'paid'] as Category[]).map((cat) => (
               <button
                 key={cat}
                 className={`btn btn-sm ${filter === cat ? 'btn-primary' : ''}`}
@@ -268,7 +268,7 @@ export default function SettingsPanel() {
                           background: `${catInfo.color}22`,
                           color: catInfo.color,
                         }}>
-                          {cat === 'local' ? 'LOCAL' : cat === 'community' ? 'FREE' : 'FREE'}
+                          {cat === 'local' ? 'LOCAL' : cat === 'image_video' ? 'MEDIA' : 'FREE'}
                         </span>
                       )}
                       <span style={{ fontSize: 12, color: settings.activeProvider === provider.id ? 'var(--accent)' : 'var(--text-muted)' }}>
@@ -296,11 +296,12 @@ export default function SettingsPanel() {
               {editing.freeTier && (
                 <span style={{
                   padding: '2px 10px', borderRadius: 10, fontSize: 12, fontWeight: 700,
-                  background: getProviderCategory(editing) === 'community' ? 'rgba(168,85,247,0.2)' : 'rgba(34,197,94,0.2)',
-                  color: getProviderCategory(editing) === 'community' ? '#c084fc' : '#4ade80',
+                  background: getProviderCategory(editing) === 'paid' ? 'rgba(245,158,11,0.2)' : 'rgba(34,197,94,0.2)',
+                  color: getProviderCategory(editing) === 'paid' ? '#fbbf24' : '#4ade80',
                 }}>
                   {getProviderCategory(editing) === 'local' ? '🏠 LOCAL' :
-                   getProviderCategory(editing) === 'community' ? '🏴‍☠️ COMMUNITY' : '🆓 FREE TIER'}
+                   getProviderCategory(editing) === 'image_video' ? '🎨 MEDIA' :
+                   getProviderCategory(editing) === 'paid' ? '💰 PAID' : '🆓 FREE TIER'}
                 </span>
               )}
             </div>
@@ -308,10 +309,8 @@ export default function SettingsPanel() {
             {editing.notes && (
               <div style={{
                 padding: '12px 14px', marginBottom: 16, borderRadius: 'var(--radius)',
-                background: getProviderCategory(editing) === 'community'
-                  ? 'rgba(168,85,247,0.08)' : 'rgba(59,130,246,0.08)',
-                border: `1px solid ${getProviderCategory(editing) === 'community'
-                  ? 'rgba(168,85,247,0.2)' : 'rgba(59,130,246,0.2)'}`,
+                background: 'rgba(59,130,246,0.08)',
+                border: '1px solid rgba(59,130,246,0.2)',
                 fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6,
               }}>
                 ℹ️ {editing.notes}
@@ -388,16 +387,6 @@ export default function SettingsPanel() {
                 )}
               </div>
 
-              {getProviderCategory(editing) === 'community' && (
-                <div style={{
-                  padding: '10px 12px', borderRadius: 'var(--radius)', fontSize: 12, lineHeight: 1.6,
-                  background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', color: 'var(--text-secondary)',
-                }}>
-                  ⚠️ Community endpoints are unofficial third-party proxies. They receive your prompts and code, and may be unreliable.
-                  VD never uses them as automatic fallbacks. Do not send sensitive code through them.
-                </div>
-              )}
-
               {editing.signupUrl && (
                 <a
                   href={editing.signupUrl}
@@ -406,9 +395,7 @@ export default function SettingsPanel() {
                   className="btn btn-primary"
                   style={{ textDecoration: 'none', justifyContent: 'center' }}
                 >
-                  {getProviderCategory(editing) === 'community' ? '⭐ Join Discord / GitHub' :
-                   getProviderCategory(editing) === 'local' ? '📦 Download & Install' :
-                   '🔑 Get API Key'} → {editing.signupUrl.replace('https://', '').split('/')[0]}
+                  {getProviderCategory(editing) === 'local' ? '📦 Download & Install' : '🔑 Get API Key'} → {editing.signupUrl.replace('https://', '').split('/')[0]}
                 </a>
               )}
 
@@ -436,8 +423,8 @@ export default function SettingsPanel() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
               {([
                 { cat: 'free', title: '🆓 Free Official', color: '#4ade80', rgb: '34,197,94', note: 'Used for automatic fallback when they have a key.' },
-                { cat: 'local', title: '🏠 Local', color: '#60a5fa', rgb: '96,165,250', note: 'Runs on your machine; prompts stay local.' },
-                { cat: 'community', title: '🏴‍☠️ Community', color: '#c084fc', rgb: '168,85,247', note: 'Unofficial proxies. Never used automatically.' },
+                { cat: 'local', title: '🏠 Local', color: '#60a5fa', rgb: '96,165,250', note: 'Ollama, LM Studio, llama.cpp, or another OpenAI-compatible server.' },
+                { cat: 'image_video', title: '🎨 Image/Video', color: '#f472b6', rgb: '244,114,182', note: 'Official media APIs. Not used for chat.' },
                 { cat: 'paid', title: '💰 Paid', color: '#fbbf24', rgb: '245,158,11', note: 'Billed by the provider.' },
               ] as const).map(({ cat, title, color, rgb, note }) => (
                 <div key={cat} style={{ padding: 12, borderRadius: 'var(--radius)', background: `rgba(${rgb},0.05)`, border: `1px solid rgba(${rgb},0.2)` }}>

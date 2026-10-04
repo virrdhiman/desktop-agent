@@ -151,7 +151,7 @@ To pin a specific model, choose it in the **model picker** in the Agent header. 
 
 ### Provider fallback
 
-If the active provider fails for a non-auth reason, VD tries up to three other **official free** providers that have keys. The selected provider is always first; fallbacks are ordered by local reliability and latency, and repeatedly failing providers receive a short cooldown. When another provider answers, the chat says which one. The rest of that request stays on the provider that answered, so a rate-limited provider isn't retried on every tool round. If every provider fails, the chat lists each provider's error and suggests next steps. Local servers and community proxies are never used as fallbacks.
+If the active provider fails for a non-auth reason, VD tries up to three other **official free** providers that have keys. The selected provider is always first; fallbacks are ordered by local reliability and latency, and repeatedly failing providers receive a short cooldown. When another provider answers, the chat says which one. The rest of that request stays on the provider that answered, so a rate-limited provider isn't retried on every tool round. If every provider fails, the chat lists each provider's error and suggests next steps. Local servers are never used as fallbacks. Unofficial proxies are not in the catalog.
 
 ### Answer quality
 

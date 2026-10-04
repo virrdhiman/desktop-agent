@@ -67,9 +67,9 @@ VD Agent only sends data when you use a feature that needs a network service:
 
 Tools only run when the agent calls them. Tool calls appear in the agent's reply, and each call and its result is recorded in the **Tasks** panel. With a local provider such as Ollama and no web tools, nothing leaves your machine.
 
-Each AI provider handles your data under its own terms and privacy policy. **Community proxies are run by unknown third parties and see everything you send.**
+Each AI provider handles your data under its own terms and privacy policy.
 
-Agentic environments never route implicitly to community proxies, paid providers, or unconfigured local servers. Set the environment to **Normal**, disable dynamic specialists, choose the **Cheap** token budget, or use one local provider when a request must not be distributed across configured providers.
+Agentic environments never route implicitly to paid providers or unconfigured local servers. Set the environment to **Normal**, disable dynamic specialists, choose the **Cheap** token budget, or use one local provider when a request must not be distributed across configured providers.
 
 ## The agent can read your files
 

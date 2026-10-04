@@ -11,8 +11,10 @@ import {
   buildProviderChain,
   providerIsConfigured,
   classifyAgentTask,
+  COMMUNITY_PROVIDER_IDS,
   getProviderCategory,
   mergeImportedSettings,
+  omitCommunityProviders,
   recordProviderOutcome,
   refreshProviderModelCatalog,
   withoutApiKeys,
@@ -43,9 +45,12 @@ describe('buildProviderChain', () => {
     expect(chain.map((x) => x.id)).toEqual(['groq', 'gemini'])
   })
 
-  it('still honours an explicitly selected community or local provider', () => {
+  it('still honours an explicitly selected local provider and drops unofficial proxies', () => {
     expect(buildProviderChain([p('ollama', 'ollama'), p('groq', 'k')], 'ollama')[0].id).toBe('ollama')
     expect(getProviderCategory({ id: 'helixmind', freeTier: true })).toBe('community')
+    expect(COMMUNITY_PROVIDER_IDS).toEqual(expect.arrayContaining(['g4f', 'chatgpt2api', 'zukijourney']))
+    const saved = [p('groq', 'k'), p('g4f', 'proxy'), p('zukijourney', 'proxy'), p('ollama', 'ollama')]
+    expect(omitCommunityProviders(saved).map((provider) => provider.id)).toEqual(['groq', 'ollama'])
   })
 
   it('uses a masked saved key as a free fallback', () => {

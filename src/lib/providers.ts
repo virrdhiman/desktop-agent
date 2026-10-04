@@ -12,10 +12,15 @@ export type ProviderCategory = 'free' | 'local' | 'community' | 'image_video' | 
 
 export const LOCAL_PROVIDER_IDS = ['ollama', 'lmstudio', 'llamacpp']
 export const IMAGE_VIDEO_PROVIDER_IDS = ['flux', 'pollinations_img', 'runway', 'kling', 'replicate', 'stability']
+/** Unofficial proxies kept only so a saved settings file cannot revive them as fallbacks. */
 export const COMMUNITY_PROVIDER_IDS = [
   'g4f', 'chatgpt2api', 'zukijourney', 'electronhub', 'voidai', 'nagaai', 'helixmind', 'navyapi',
   'mnn', 'webraftai', 'voltai', 'hcap', 'zanityai', 'kimetsu', 'pollinations',
 ]
+
+export function omitCommunityProviders<T extends { id: string }>(providers: T[]): T[] {
+  return providers.filter((provider) => !COMMUNITY_PROVIDER_IDS.includes(provider.id))
+}
 
 export function getProviderCategory(p: Pick<ProviderConfig, 'id' | 'freeTier'>): ProviderCategory {
   if (LOCAL_PROVIDER_IDS.includes(p.id)) return 'local'
@@ -33,8 +38,8 @@ export const MAX_PROVIDER_ATTEMPTS = 4
 
 /**
  * Active provider first, then other official free chat providers that have a key.
- * Local servers are skipped (placeholder keys say nothing about whether they are running),
- * and community proxies are never used implicitly because they would receive the user's code.
+ * Local servers are skipped (placeholder keys say nothing about whether they are running).
+ * Unofficial proxies are omitted from the catalog and are never used as fallbacks.
  */
 export function buildProviderChain(
   providers: ProviderConfig[],

@@ -20,7 +20,7 @@ The system prompt tells the agent to inspect before acting and to ask before des
 - **Read tool calls** in the agent's replies, and check the **Tasks** panel for what ran.
 - **Watch for prompt injection.** File contents, web pages, and command output go to the model and can contain instructions aimed at it. Be careful with untrusted repositories and web content.
 - **Keep secrets out of the workspace**, or use a local model. Anything the agent reads may be sent to your AI provider.
-- **Avoid community proxies** for private code. They are third-party services that see everything you send.
+- The provider list is limited to official APIs and local servers. Unofficial proxies are not offered, and a saved settings file cannot keep them as fallbacks.
 
 ## How the app is hardened
 
