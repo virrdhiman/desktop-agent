@@ -11,6 +11,9 @@ All notable changes to VD Agent are documented here.
 
 ## [Unreleased]
 
+### Tools
+- Removed tools that only returned setup steps: `web3_deploy`, `web3_contract`, `web3_ipfs`, `comfyui_workflow`, and the Runway/Kling video options. Wallet balance and explorer lookup stay. The welcome screen no longer has a Web3 tools button.
+
 ### Providers
 - Removed unofficial proxies from the catalog, including gpt4free, ChatGPT-to-API, and Discord-run resellers. Saved settings drop those entries on load. Official APIs and local servers remain.
 

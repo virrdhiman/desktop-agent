@@ -147,8 +147,7 @@ Search the web and return text snippets.
 |------|-----------------------|--------------|
 | `generate_image` | Returns a Pollinations image URL for `prompt` (`width`, `height`, `model`, `seed` optional) | None |
 | `image_analysis` | Sends an image (`image_url`: URL or local path) and optional `question` to Gemini | Gemini key |
-| `generate_video` | Returns a Pollinations video URL, or setup steps for Runway/Kling (`provider`, `prompt`) | None |
-| `comfyui_workflow` | Returns ComfyUI setup instructions | None |
+| `generate_video` | Returns a Pollinations video URL for `prompt` | None |
 | `speech_to_text` | Transcribes `audio_path` with Whisper (`language` optional) | Groq or Hugging Face key |
 | `text_to_speech` | Returns a Pollinations audio URL for `text` (`voice` optional) | None |
 
@@ -158,9 +157,6 @@ Search the web and return text snippets.
 |------|--------------|
 | `web3_balance` | Native balance for `address` on `chain` (ethereum, polygon, arbitrum, optimism, base, bsc, sepolia) |
 | `web3_explorer` | Explorer link for a `tx`, `address`, or `block` |
-| `web3_ipfs` | `fetch` content by `cid`. `upload` depends on an external service. |
-| `web3_contract` | Verification steps or an ABI lookup link (`action`: verify or abi) |
-| `web3_deploy` | Hardhat deployment steps for `file` on `chain`. It does not deploy anything. |
 
 ## Execution flow
 

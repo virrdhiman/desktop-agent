@@ -391,34 +391,14 @@ export const AGENT_TOOLS = [
     parameters: { tx: 'string (optional)', address: 'string (optional)', block: 'string (optional)', chain: 'string (optional)' },
   },
   {
-    name: 'web3_ipfs',
-    description: 'Upload or fetch content from IPFS decentralized storage',
-    parameters: { action: 'string — upload|fetch', content: 'string (for upload)', cid: 'string (for fetch)', name: 'string (optional)' },
-  },
-  {
-    name: 'web3_contract',
-    description: 'Smart contract operations: verify, get ABI',
-    parameters: { action: 'string — verify|abi', address: 'string', chain: 'string (optional)' },
-  },
-  {
-    name: 'web3_deploy',
-    description: 'Get deployment instructions for a smart contract',
-    parameters: { file: 'string — contract file path', chain: 'string — target network' },
-  },
-  {
     name: 'generate_image',
     description: 'Generate an image from a text prompt using Pollinations.ai (free, no API key)',
     parameters: { prompt: 'string — image description', width: 'number (optional, default 1024)', height: 'number (optional, default 1024)', model: 'string (optional: flux, turbo)', seed: 'number (optional)' },
   },
   {
     name: 'generate_video',
-    description: 'Get a Pollinations video URL or setup instructions for Runway/Kling (does not render video locally)',
-    parameters: { provider: 'string — pollinations|wan|runway|kling', prompt: 'string (optional)' },
-  },
-  {
-    name: 'comfyui_workflow',
-    description: 'Get ComfyUI setup and workflow instructions',
-    parameters: {},
+    description: 'Return a Pollinations video URL for a text prompt (does not render video locally)',
+    parameters: { prompt: 'string (optional)' },
   },
   {
     name: 'speech_to_text',

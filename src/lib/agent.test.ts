@@ -45,6 +45,17 @@ describe('system prompt', () => {
     expect(TOOL_SYSTEM_PROMPT).toMatch(/Never invent file contents, APIs, command output, or test results/)
   })
 
+  it('does not offer tools that only return setup instructions', () => {
+    expect(TOOL_SYSTEM_PROMPT).not.toContain('web3_deploy')
+    expect(TOOL_SYSTEM_PROMPT).not.toContain('web3_ipfs')
+    expect(TOOL_SYSTEM_PROMPT).not.toContain('web3_contract')
+    expect(TOOL_SYSTEM_PROMPT).not.toContain('comfyui_workflow')
+    expect(TOOL_SYSTEM_PROMPT).not.toMatch(/runway|kling/i)
+    expect(TOOL_SYSTEM_PROMPT).toContain('**web3_balance**')
+    expect(TOOL_SYSTEM_PROMPT).toContain('**web3_explorer**')
+    expect(TOOL_SYSTEM_PROMPT).toContain('**generate_video**')
+  })
+
   it('adds session mode, context, and trimmed user rules', () => {
     const prompt = buildSystemPrompt({ planMode: true, context: 'Workspace: /repo', customRules: '  Use tabs  ' })
     expect(prompt).toContain('Plan Mode is ON')

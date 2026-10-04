@@ -420,32 +420,6 @@ export function registerToolHandlers() {
             if (tool.args.block) return { result: `Block ${tool.args.block}:\nView: ${explorer}/block/${tool.args.block}` }
             return { result: `Explorer: ${explorer}\nProvide tx, address, or block parameter.` }
           }
-          case 'web3_ipfs': {
-            if (tool.args.action === 'upload' && tool.args.content) {
-              const resp = await fetch('https://api.web3.storage/upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: tool.args.name || 'vd-upload', content: tool.args.content }) })
-              if (resp.ok) { const data = await resp.json(); return { result: `Uploaded to IPFS:\nCID: ${data.cid}\nURL: https://ipfs.io/ipfs/${data.cid}` } }
-              return { result: 'IPFS Upload: Use https://app.pinata.cloud (free tier) or https://web3.storage (free tier)' }
-            }
-            if (tool.args.action === 'fetch' && tool.args.cid) {
-              const resp = await fetch(`https://ipfs.io/ipfs/${tool.args.cid}`)
-              const text = await resp.text()
-              return { result: `IPFS Content (CID: ${tool.args.cid}):\n\n${text.slice(0, 3000)}` }
-            }
-            return { result: 'IPFS Tool:\n- action: upload (content, name)\n- action: fetch (cid)' }
-          }
-          case 'web3_contract': {
-            const chain = tool.args.chain || 'ethereum'
-            const explorers: Record<string, string> = { ethereum: 'https://etherscan.io', polygon: 'https://polygonscan.com', arbitrum: 'https://arbiscan.io', optimism: 'https://optimistic.etherscan.io', base: 'https://basescan.org', bsc: 'https://bscscan.com', sepolia: 'https://sepolia.etherscan.io' }
-            const explorer = explorers[chain] || explorers.ethereum
-            if (tool.args.action === 'verify' && tool.args.address) return { result: `Verify on ${chain}:\n1. ${explorer}/address/${tool.args.address}#code\n2. Click 'Verify and Publish'\n3. Or: npx hardhat verify --network ${chain} ${tool.args.address}` }
-            if (tool.args.action === 'abi' && tool.args.address) return { result: `ABI for ${tool.args.address}:\n${explorer}/api?module=contract&action=getabi&address=${tool.args.address}` }
-            return { result: 'Smart Contract Tool:\n- action: verify (address, chain)\n- action: abi (address, chain)' }
-          }
-          case 'web3_deploy': {
-            const chain = tool.args.chain || 'sepolia'
-            return { result: `Deploy Smart Contract (${chain}):\n1. npx hardhat compile\n2. Write deploy script in scripts/deploy.ts\n3. npx hardhat run scripts/deploy.ts --network ${chain}\n4. npx hardhat verify --network ${chain} <address>` }
-          }
-
           // ═══ IMAGE / VIDEO / SPEECH ════════════════════════════════════════
           case 'speech_to_text': {
             const audioPath = tool.args.audio_path
@@ -555,17 +529,8 @@ export function registerToolHandlers() {
             return { result: `Image generated!\n\nPrompt: ${tool.args.prompt}\nModel: ${model}\nSize: ${width}x${height}\nSeed: ${seed}\n\nView: ${imageUrl}\n\nDownload: ${imageUrl}&download=true` }
           }
           case 'generate_video': {
-            const provider = tool.args.provider || 'pollinations'
             const prompt = tool.args.prompt || 'a beautiful sunset over mountains'
-            if (provider === 'pollinations' || provider === 'wan') {
-              return { result: `Video Generation (Pollinations - Free):\n\nPrompt: ${prompt}\n\n🎥 Video URL:\nhttps://video.pollinations.ai/prompt/${encodeURIComponent(prompt)}` }
-            }
-            if (provider === 'runway') return { result: `Runway Video:\n1. https://runwayml.com/\n2. Sign up for free tier\n3. Gen-3 Alpha for text-to-video\n\nPrompt: ${prompt}` }
-            if (provider === 'kling') return { result: `Kling Video:\n1. https://klingai.com/\n2. Sign up for free credits\n\nPrompt: ${prompt}` }
-            return { result: `Video options:\n1. pollinations — Free: https://video.pollinations.ai/prompt/${encodeURIComponent(prompt)}\n2. runway — Free tier at runwayml.com\n3. kling — Free credits at klingai.com` }
-          }
-          case 'comfyui_workflow': {
-            return { result: `ComfyUI Workflow:\n\n1. git clone https://github.com/comfyanonymous/ComfyUI\n2. cd ComfyUI && pip install -r requirements.txt\n3. python main.py\n4. Open http://127.0.0.1:8188\n\nSupports: FLUX, SDXL, Wan, ControlNet, LoRA, Video.` }
+            return { result: `Video URL (Pollinations):\n\nPrompt: ${prompt}\n\nhttps://video.pollinations.ai/prompt/${encodeURIComponent(prompt)}` }
           }
 
           default:

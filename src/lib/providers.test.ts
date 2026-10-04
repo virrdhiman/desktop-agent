@@ -13,6 +13,7 @@ import {
   classifyAgentTask,
   COMMUNITY_PROVIDER_IDS,
   getProviderCategory,
+  omitRetiredProviders,
   mergeImportedSettings,
   omitCommunityProviders,
   recordProviderOutcome,
@@ -35,6 +36,11 @@ describe('buildProviderChain', () => {
       'groq'
     )
     expect(chain.map((x) => x.id)).toEqual(['groq', 'gemini'])
+  })
+
+  it('drops Runway and Kling, which had no working video integration', () => {
+    expect(omitRetiredProviders([p('groq', 'k'), p('runway', 'k'), p('kling', 'k')]).map((provider) => provider.id)).toEqual(['groq'])
+    expect(getProviderCategory({ id: 'runway', freeTier: true })).toBe('image_video')
   })
 
   it('never uses local, image/video, or community providers as implicit fallbacks', () => {

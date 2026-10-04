@@ -297,9 +297,6 @@ Review the generated CSV before using it for production imports. Ambiguous field
 
 - `web3_balance`: native balance on Ethereum, Polygon, Arbitrum, Optimism, Base, BSC, or Sepolia.
 - `web3_explorer`: block explorer links for a transaction, address, or block.
-- `web3_ipfs`: fetch content by CID. Upload depends on an external service.
-- `web3_contract`: verification steps and ABI lookup links.
-- `web3_deploy`: Hardhat deployment steps. It does not deploy anything itself.
 
 ---
 
