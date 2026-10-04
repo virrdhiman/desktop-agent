@@ -11,6 +11,10 @@ All notable changes to VD Agent are documented here.
 
 ## [Unreleased]
 
+### Docs and defaults
+- New installs use the Ollama model `qwen2.5-coder:7b`. Existing saved settings keep their current model.
+- The terminal docs match the app: PowerShell on Windows, bash on macOS and Linux.
+
 ### Development requirements
 - Node.js 22.19 or newer is required. Node.js 20 cannot install the pinned `undici` 8 release. `node-pty`'s install script is allowed explicitly, and Linux still compiles that module with node-gyp.
 
@@ -115,7 +119,7 @@ All notable changes to VD Agent are documented here.
 - Added `Linux/build.sh`. All three build scripts write checksums and warn when a build is unsigned. `Win/build.bat` enables executable signing when `CSC_LINK` is set.
 - `build/` is no longer git-ignored, so app icons can be committed.
 
-## [1.0.0] - 2025-08-28
+## [1.0.0] - 2026-08-22
 
 ### Initial Release
 

@@ -88,7 +88,7 @@ The layout has a **sidebar** (left) for switching panels, the **main area** for 
 
 ### No key: local models
 
-1. Install [Ollama](https://ollama.com/download) and pull a model, for example `ollama pull llama3.3`.
+1. Install [Ollama](https://ollama.com/download) and pull a model, for example `ollama pull qwen2.5-coder:7b`.
 2. In VD Agent: Settings → Ollama (Local) → Save and make it active.
 3. Prompts stay on your machine.
 
@@ -201,7 +201,7 @@ After each batch of tool calls, the results go back to the model and it continue
 
 - Toggle with ``Ctrl+` `` or open the Terminal panel from the sidebar.
 - Use **+** to add tabs and **×** to close them.
-- It's a real PTY shell: PowerShell on Windows, your login shell on macOS/Linux.
+- It's a real PTY shell: PowerShell on Windows, bash on macOS and Linux.
 
 ---
 

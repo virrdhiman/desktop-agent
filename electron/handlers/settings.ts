@@ -52,7 +52,7 @@ const DEFAULT_PROVIDERS = [
   { id: 'stability', name: 'Stability AI 🖼️', apiKey: '', baseUrl: 'https://api.stability.ai/v2beta', model: 'stable-diffusion-xl-1024-v1-0', freeTier: true, signupUrl: 'https://platform.stability.ai/account/keys', notes: 'Image generation. Signup credits.' },
 
   // ═══ LOCAL ═══
-  { id: 'ollama', name: 'Ollama (Local) 🏠', apiKey: 'ollama', baseUrl: 'http://localhost:11434/v1', model: 'llama3.3', freeTier: true, signupUrl: 'https://ollama.com/download', notes: 'Runs on your machine. Prompts never leave it.' },
+  { id: 'ollama', name: 'Ollama (Local) 🏠', apiKey: 'ollama', baseUrl: 'http://localhost:11434/v1', model: 'qwen2.5-coder:7b', freeTier: true, signupUrl: 'https://ollama.com/download', notes: 'Runs on your machine. Prompts never leave it.' },
   { id: 'lmstudio', name: 'LM Studio (Local) 💻', apiKey: 'lm-studio', baseUrl: 'http://localhost:1234/v1', model: 'local-model', freeTier: true, signupUrl: 'https://lmstudio.ai/', notes: 'Runs on your machine. Desktop GUI for local models.' },
   { id: 'llamacpp', name: 'llama.cpp Server 📦', apiKey: 'llama-cpp', baseUrl: 'http://localhost:8080/v1', model: 'local', freeTier: true, signupUrl: 'https://github.com/ggml-org/llama.cpp', notes: 'Runs on your machine. Lightweight OpenAI-compatible server.' },
 
