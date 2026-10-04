@@ -72,12 +72,13 @@ export default function MultiTerminal() {
 
     window.api.terminalCreate(termId, cwd)
 
-    // Store listener references so we can remove them later
+    // The IPC listeners outlive the terminal, so ignore output after dispose.
+    let disposed = false
     const dataHandler = (id: string, data: string) => {
-      if (id === termId) term.write(data)
+      if (!disposed && id === termId) term.write(data)
     }
     const exitHandler = (id: string, code: number) => {
-      if (id === termId) {
+      if (!disposed && id === termId) {
         term.writeln(`\r\n\x1b[33m[Process exited with code ${code}]\x1b[0m`)
       }
     }
@@ -92,6 +93,7 @@ export default function MultiTerminal() {
     term.writeln('')
 
     const cleanup = () => {
+      disposed = true
       window.api.terminalKill(termId)
       term.dispose()
     }
