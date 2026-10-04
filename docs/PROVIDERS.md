@@ -38,7 +38,7 @@ To add a key: **Settings →** select the provider **→ Get API Key →** paste
 
 | Server | Default URL | Setup |
 |--------|-------------|-------|
-| Ollama | `http://localhost:11434/v1` | [Install](https://ollama.com/download), then `ollama pull llama3.3` |
+| Ollama | `http://localhost:11434/v1` | [Install](https://ollama.com/download), then `ollama pull qwen2.5-coder:7b` |
 | LM Studio | `http://localhost:1234/v1` | [Install](https://lmstudio.ai/), load a model, and start the local server |
 | llama.cpp | `http://localhost:8080/v1` | Run [`llama-server`](https://github.com/ggml-org/llama.cpp) |
 

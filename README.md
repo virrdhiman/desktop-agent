@@ -85,7 +85,7 @@ You need one key to start. Groq and Google Gemini have free tiers and are good f
 3. Paste the key into VD Agent and click **Save**. Selecting a provider in the list also makes it the active one.
 4. Open a project folder (📁 **Files → Open**), go to 🤖 **Agent**, and send a message.
 
-No key? Install [Ollama](https://ollama.com/download), run `ollama pull llama3.3`, and pick **Ollama (Local)** in Settings. Prompts never leave your machine.
+No key? Install [Ollama](https://ollama.com/download), run `ollama pull qwen2.5-coder:7b`, and pick **Ollama (Local)** in Settings. Prompts never leave your machine.
 
 Adding keys for more than one free provider makes rate limits less of a problem, because VD Agent can fall back between them. Free-tier limits are set by each provider and change often. See [docs/PROVIDERS.md](./docs/PROVIDERS.md) for other providers and their trade-offs.
 
