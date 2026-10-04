@@ -128,8 +128,12 @@ function run(label, command, args, opts = {}) {
   })
 }
 
+function stripAnsi(text) {
+  return String(text).replace(/\u001b\[[0-9;]*m/g, '')
+}
+
 function parseVitest(output, minimum) {
-  const match = output.match(/Tests\s+(\d+)\s+passed/)
+  const match = stripAnsi(output).match(/Tests\s+(\d+)\s+passed/)
   if (!match) fail('could not find Vitest passed-test count')
   const count = Number(match[1])
   if (count < minimum) fail(`Vitest passed ${count} tests, below baseline ${minimum}`)
@@ -137,7 +141,7 @@ function parseVitest(output, minimum) {
 }
 
 function parseSmoke(output, minimum) {
-  const match = output.match(/(\d+)\/(\d+) checks passed/)
+  const match = stripAnsi(output).match(/(\d+)\/(\d+) checks passed/)
   if (!match) fail('could not find smoke passed-check count')
   const passed = Number(match[1])
   const total = Number(match[2])
