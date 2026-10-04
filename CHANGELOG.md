@@ -11,6 +11,8 @@ All notable changes to VD Agent are documented here.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-04
+
 ### Release
 - Tagged releases still publish Linux, Windows, and macOS installers plus `SHA256SUMS.txt` when signing secrets are absent. Builds are signed when the secrets are present.
 
@@ -45,8 +47,6 @@ All notable changes to VD Agent are documented here.
 - Tightened replies from live Groq/OpenRouter trials: provider-native and known bare-JSON tool calls are normalized and executed, generic task deflections and false context denial get one corrective retry, obvious action narration is removed, and handoff acknowledgements stay concise.
 - When a provider exposes strong models, tiny fallbacks are skipped so VD can move to another strong configured free provider instead of accepting a low-quality generic answer.
 - Added adaptive Multi-Agent Team Mode for normal chat: Analyst, tool-enabled Executor, evidence-based Reviewer, one bounded repair pass, and final Verifier. Specialist calls can use different configured free providers, only the Executor may mutate the workspace, malformed reviews fail safely to the executor answer, Stop is honored between roles, and the Agent header wraps its controls cleanly in split view.
-
-## [1.1.0] - 2026-09-30
 
 ### Resume, safety, and usability
 - Conversation schema v2 persists workspace, task, terminal, tool, model, project-memory, verification, and checkpoint state; previous valid saves are retained as recovery backups.
