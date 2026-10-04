@@ -63,7 +63,7 @@ If no release is listed yet, [run from source](#run-from-source). Full instructi
 
 ## Run from source
 
-You need **Node.js 20.19 or newer**, **git**, and native build tools for the terminal (`node-pty`). See [prerequisites](./docs/INSTALL.md#run-from-source).
+You need **Node.js 22.19 or newer**, **git**, and native build tools for the terminal (`node-pty`). See [prerequisites](./docs/INSTALL.md#run-from-source).
 
 ```bash
 git clone https://github.com/virrdhiman/desktop-agent.git

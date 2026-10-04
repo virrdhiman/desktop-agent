@@ -11,6 +11,9 @@ All notable changes to VD Agent are documented here.
 
 ## [Unreleased]
 
+### Development requirements
+- Node.js 22.19 or newer is required. Node.js 20 cannot install the pinned `undici` 8 release. `node-pty`'s install script is allowed explicitly, and Linux still compiles that module with node-gyp.
+
 ### Archive workflows, reliability, and diagnostics
 - Added safe ZIP inventory and extraction tools with path, symlink, overwrite, entry-size, and total-expansion protections, plus checkpoint rollback for extracted files.
 - Added agent guidance for inspecting every archive source and producing traceable, schema-checked CSV instead of blindly merging incompatible records.

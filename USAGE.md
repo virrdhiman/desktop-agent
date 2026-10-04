@@ -42,7 +42,7 @@ Most people should download the installer from [GitHub Releases](https://github.
 
 Prerequisites:
 
-- **Node.js 20.19+** and npm
+- **Node.js 22.19+** and npm. Node.js 20 is not supported (`undici` 8).
 - **Git**
 - Build tools for `node-pty`: Visual Studio Build Tools (Windows), Xcode Command Line Tools (macOS), or `build-essential` and `python3` (Linux)
 

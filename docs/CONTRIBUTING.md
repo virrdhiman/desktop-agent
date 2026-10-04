@@ -17,7 +17,7 @@ Bug reports, fixes, and improvements are welcome.
 
 ## Setup
 
-Requirements: Node.js 20.19 or newer, git, and native build tools for `node-pty` (see [INSTALL.md](./INSTALL.md#run-from-source)).
+Requirements: Node.js 22.19 or newer, git, and native build tools for `node-pty` (see [INSTALL.md](./INSTALL.md#run-from-source)). On npm 11, `node-pty`'s install script has to run; `package.json` allows it, and `npm rebuild node-pty` builds the native module if it was skipped.
 
 ```bash
 git clone https://github.com/<you>/desktop-agent.git
