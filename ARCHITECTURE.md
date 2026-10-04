@@ -179,7 +179,7 @@ Anthropic uses the Messages API (`/v1/messages`) with the system prompt in the `
 
 ### Add a provider
 1. Add it to `DEFAULT_PROVIDERS` in `electron/handlers/settings.ts`. Existing users get it on next load.
-2. If it isn't a free official chat provider, add its ID to the right list in `src/lib/providers.ts` (local, community, or image/video).
+2. If it isn't a free official chat provider, add its ID to the right list in `src/lib/providers.ts` (local or image/video). Do not add unofficial proxies.
 3. If it isn't OpenAI-compatible, add a branch in `electron/handlers/ai.ts`.
 
 ### Add a panel

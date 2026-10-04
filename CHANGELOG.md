@@ -11,6 +11,9 @@ All notable changes to VD Agent are documented here.
 
 ## [Unreleased]
 
+### Providers
+- Removed unofficial proxies from the catalog, including gpt4free, ChatGPT-to-API, and Discord-run resellers. Saved settings drop those entries on load. Official APIs and local servers remain.
+
 ### Security
 - Approval prompts show the full shell command in a scrollable window.
 - Gemini image analysis sends the API key in a request header.
