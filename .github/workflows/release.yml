@@ -35,6 +35,12 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Make node-pty spawn-helper executable
+        if: runner.os == 'macOS'
+        run: chmod +x node_modules/node-pty/prebuilds/darwin-*/spawn-helper
+      - name: Allow the Chromium sandbox on Ubuntu 24.04
+        if: runner.os == 'Linux'
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - name: Choose signing
         shell: bash
         run: node scripts/release-signing.mjs >> "$GITHUB_ENV"
