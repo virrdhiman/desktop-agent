@@ -11,6 +11,9 @@ All notable changes to VD Agent are documented here.
 
 ## [Unreleased]
 
+### Release
+- Tagged releases still publish Linux, Windows, and macOS installers plus `SHA256SUMS.txt` when signing secrets are absent. Builds are signed when the secrets are present.
+
 ### Tools
 - Removed tools that only returned setup steps: `web3_deploy`, `web3_contract`, `web3_ipfs`, `comfyui_workflow`, and the Runway/Kling video options. Wallet balance and explorer lookup stay. The welcome screen no longer has a Web3 tools button.
 
