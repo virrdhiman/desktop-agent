@@ -26,7 +26,7 @@ import DiffViewer from './DiffViewer'
 import { buildConversationSummary, useStore } from '../store'
 import type { AgentTaskKind, ChatMessage, AgentStep, ProviderConfig } from '../types'
 import {
-  applyDiscoveredModel, buildProviderChain, classifyAgentTask, recordProviderOutcome, refreshProviderModelCatalog,
+  applyDiscoveredModel, buildProviderChain, classifyAgentTask, providerIsConfigured, recordProviderOutcome, refreshProviderModelCatalog,
 } from '../lib/providers'
 import { highlightSyntax } from '../lib/highlight'
 import { AUTHOR_NAME, AUTHOR_URL, REPO_URL } from '../lib/brand'
@@ -379,7 +379,7 @@ export default function AgentChat() {
   useEffect(() => {
     setModelOverride(null)
     setAvailableModels([])
-    if (!activeProvider?.apiKey) return
+    if (!activeProvider || !providerIsConfigured(activeProvider)) return
     let stale = false
     Promise.resolve(window.api.aiListModels({
       provider: activeProvider.id, apiKey: activeProvider.apiKey, baseUrl: activeProvider.baseUrl,
@@ -396,7 +396,7 @@ export default function AgentChat() {
       })
       .catch(() => {})
     return () => { stale = true }
-  }, [activeProvider?.id, activeProvider?.apiKey, activeProvider?.baseUrl, setAppSettings])
+  }, [activeProvider?.id, activeProvider?.apiKey, activeProvider?.hasKey, activeProvider?.baseUrl, setAppSettings])
 
   // Paste image handler
   useEffect(() => {
@@ -939,7 +939,7 @@ export default function AgentChat() {
     if (!text) return
 
     const provider = getActiveProvider()
-    if (!provider?.apiKey) {
+    if (!providerIsConfigured(provider)) {
       addMessage({
         id: Date.now().toString(),
         role: 'system',

@@ -11,6 +11,12 @@ All notable changes to VD Agent are documented here.
 
 ## [Unreleased]
 
+### Security
+- Approval prompts show the full shell command in a scrollable window.
+- Gemini image analysis sends the API key in a request header.
+- Decrypted provider keys stay in the main process. The UI only learns that a key is saved.
+- Packaged builds no longer read `.env.local` from beside the executable. Set `VD_AGENT_ENV_FILE` for an explicit path.
+
 ### Docs and defaults
 - New installs use the Ollama model `qwen2.5-coder:7b`. Existing saved settings keep their current model.
 - The terminal docs match the app: PowerShell on Windows, bash on macOS and Linux.

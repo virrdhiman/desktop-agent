@@ -103,7 +103,7 @@ export function assessToolPolicy(
 
 export function toolApprovalDetail(name: string, args: Record<string, any>, decision: ToolPolicyDecision): string {
   const detail = name === 'run_command'
-    ? String(args.command || '').slice(0, 800)
+    ? String(args.command || '')
     : decision.targets.join('\n').slice(0, 1200)
   return [`Tool: ${name}`, decision.reason, detail].filter(Boolean).join('\n\n')
 }

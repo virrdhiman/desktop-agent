@@ -9,6 +9,7 @@ import type { ProviderConfig, Settings } from '../types'
 import {
   applyDiscoveredModel,
   buildProviderChain,
+  providerIsConfigured,
   classifyAgentTask,
   getProviderCategory,
   mergeImportedSettings,
@@ -45,6 +46,13 @@ describe('buildProviderChain', () => {
   it('still honours an explicitly selected community or local provider', () => {
     expect(buildProviderChain([p('ollama', 'ollama'), p('groq', 'k')], 'ollama')[0].id).toBe('ollama')
     expect(getProviderCategory({ id: 'helixmind', freeTier: true })).toBe('community')
+  })
+
+  it('uses a masked saved key as a free fallback', () => {
+    const chain = buildProviderChain([p('groq', ''), { ...p('gemini', ''), hasKey: true }], 'groq')
+    expect(chain.map((provider) => provider.id)).toEqual(['groq', 'gemini'])
+    expect(providerIsConfigured({ apiKey: '', hasKey: true })).toBe(true)
+    expect(providerIsConfigured({ apiKey: '' })).toBe(false)
   })
 
   it('caps the number of providers tried', () => {
@@ -138,5 +146,12 @@ describe('settings export/import', () => {
     expect(merged.activeProvider).toBe('gemini')
     expect(merged.providers.find((x) => x.id === 'groq')).toMatchObject({ apiKey: 'local-key', model: 'new-model' })
     expect(merged.providers.find((x) => x.id === 'gemini')?.apiKey).toBe('file-key')
+  })
+
+  it('keeps the saved-key flag when the renderer does not hold the secret', () => {
+    const current = settings([{ ...p('groq', ''), hasKey: true }])
+    const imported = settings([p('groq', '', true, 'new-model')])
+    const merged = mergeImportedSettings(current, imported)
+    expect(merged.providers[0]).toMatchObject({ apiKey: '', hasKey: true, model: 'new-model' })
   })
 })

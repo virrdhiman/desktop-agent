@@ -12,6 +12,8 @@ import { app, ipcMain, safeStorage } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import { randomUUID } from 'crypto'
+import { privateEnvCandidatePaths } from '../privateEnv'
+import { maskProviderForRenderer, nextStoredApiKey } from '../../src/lib/providerKeys'
 
 /** Path to settings JSON on disk */
 export const SETTINGS_PATH = path.join(app.getPath('userData'), 'settings.json')
@@ -115,13 +117,13 @@ function parseDotEnv(text: string): Record<string, string> {
 }
 
 function loadPrivateEnv(): Record<string, string> {
-  if (process.env.VD_AGENT_DISABLE_ENV_IMPORT === '1') return {}
-  const candidates = [
-    path.join(app.getPath('userData'), '.env.local'),
-    path.join(path.dirname(app.getPath('exe')), '.env.local'),
-    path.join(process.resourcesPath || '', '.env.local'),
-    path.join(app.getAppPath(), '.env.local'),
-  ]
+  const candidates = privateEnvCandidatePaths({
+    userData: app.getPath('userData'),
+    appPath: app.getAppPath(),
+    packaged: app.isPackaged,
+    envFile: process.env.VD_AGENT_ENV_FILE,
+    disabled: process.env.VD_AGENT_DISABLE_ENV_IMPORT === '1',
+  })
   const merged: Record<string, string> = {}
   for (const file of candidates) {
     try {
@@ -149,6 +151,50 @@ function withNewDefaults(providers: any[]): any[] {
   return [...providers, ...DEFAULT_PROVIDERS.filter((p) => !known.has(p.id))]
 }
 
+/** Settings with decrypted keys, for the main process only. */
+export async function loadRuntimeSettings(): Promise<any> {
+  try {
+    const parsed = JSON.parse(await fs.promises.readFile(SETTINGS_PATH, 'utf-8'))
+    if (Array.isArray(parsed.providers)) {
+      parsed.providers = withEnvProviderKeys(withNewDefaults(
+        parsed.providers.map((p: any) => ({ ...p, apiKey: decryptApiKey(p.apiKey || '') }))
+      ))
+    } else {
+      parsed.providers = withEnvProviderKeys(DEFAULT_PROVIDERS)
+    }
+    parsed.permissionMode ??= 'ask-risky'
+    parsed.autoUpdate ??= false
+    parsed.teamMode ??= 'auto'
+    parsed.teamPreset ??= 'default'
+    parsed.teamTokenBudget ??= 'balanced'
+    parsed.dynamicTeam ??= true
+    if (!parsed.teamProfile || typeof parsed.teamProfile !== 'object') parsed.teamProfile = {}
+    return parsed
+  } catch {
+    return {
+      providers: withEnvProviderKeys(DEFAULT_PROVIDERS),
+      activeProvider: 'groq',
+      workspacePath: '',
+      permissionMode: 'ask-risky',
+      autoUpdate: false,
+      teamMode: 'auto',
+      teamPreset: 'default',
+      teamTokenBudget: 'balanced',
+      dynamicTeam: true,
+      teamProfile: {},
+    }
+  }
+}
+
+/** Use a key the user just typed. Otherwise read the saved key in the main process. */
+export async function resolveProviderApiKey(providerId: string, supplied?: string): Promise<string> {
+  const typed = typeof supplied === 'string' ? supplied.trim() : ''
+  if (typed) return typed
+  const settings = await loadRuntimeSettings()
+  const provider = (settings.providers || []).find((item: any) => item.id === providerId)
+  return typeof provider?.apiKey === 'string' ? provider.apiKey : ''
+}
+
 /** Decrypted keys that look real (placeholders like "ollama" are ignored). Used to redact chat history. */
 export async function loadConfiguredApiKeys(): Promise<string[]> {
   try {
@@ -163,48 +209,28 @@ export async function loadConfiguredApiKeys(): Promise<string[]> {
 
 export function registerSettingsHandlers() {
   ipcMain.handle('settings:load', async () => {
-    try {
-      const data = await fs.promises.readFile(SETTINGS_PATH, 'utf-8')
-      const parsed = JSON.parse(data)
-      if (Array.isArray(parsed.providers)) {
-        parsed.providers = withEnvProviderKeys(withNewDefaults(
-          parsed.providers.map((p: any) => ({ ...p, apiKey: decryptApiKey(p.apiKey) }))
-        ))
-      } else {
-        parsed.providers = withEnvProviderKeys(DEFAULT_PROVIDERS)
-      }
-      parsed.permissionMode ??= 'ask-risky'
-      parsed.autoUpdate ??= false
-      parsed.teamMode ??= 'auto'
-      parsed.teamPreset ??= 'default'
-      parsed.teamTokenBudget ??= 'balanced'
-      parsed.dynamicTeam ??= true
-      if (!parsed.teamProfile || typeof parsed.teamProfile !== 'object') parsed.teamProfile = {}
-      return parsed
-    } catch {
-      return {
-        providers: withEnvProviderKeys(DEFAULT_PROVIDERS),
-        activeProvider: 'groq',
-        workspacePath: '',
-        permissionMode: 'ask-risky',
-        autoUpdate: false,
-        teamMode: 'auto',
-        teamPreset: 'default',
-        teamTokenBudget: 'balanced',
-        dynamicTeam: true,
-        teamProfile: {},
-      }
-    }
+    const parsed = await loadRuntimeSettings()
+    parsed.providers = (parsed.providers || []).map((provider: any) => maskProviderForRenderer(provider))
+    return parsed
   })
 
   ipcMain.handle('settings:save', async (_event, settings: any) => {
     try {
+      let previous: any[] = []
+      try {
+        const raw = JSON.parse(await fs.promises.readFile(SETTINGS_PATH, 'utf-8'))
+        previous = Array.isArray(raw.providers) ? raw.providers : []
+      } catch { /* first save */ }
+      const previousKeys = new Map(previous.map((provider) => [provider.id, provider.apiKey || '']))
       const toSave = {
         ...settings,
-        providers: settings.providers?.map((p: any) => ({
-          ...p,
-          apiKey: encryptApiKey(p.apiKey),
-        })) || settings.providers,
+        providers: settings.providers?.map((provider: any) => {
+          const { hasKey: _hasKey, clearKey: _clearKey, ...rest } = provider
+          return {
+            ...rest,
+            apiKey: nextStoredApiKey(provider, previousKeys.get(provider.id), encryptApiKey),
+          }
+        }) || settings.providers,
       }
       const tmp = `${SETTINGS_PATH}.${process.pid}.${randomUUID()}.tmp`
       await fs.promises.writeFile(tmp, JSON.stringify(toSave, null, 2), 'utf-8')

@@ -52,6 +52,10 @@ export interface ProviderConfig {
   id: string
   name: string
   apiKey: string
+  /** True when a real key is stored in the main process and was omitted from this copy. */
+  hasKey?: boolean
+  /** Ask the main process to delete the stored key. */
+  clearKey?: boolean
   baseUrl: string
   model: string
   models?: string[]

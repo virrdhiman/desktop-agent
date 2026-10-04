@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import path from 'path'
 import fs from 'fs'
 import os from 'os'
-import { assessToolPolicy, checkpointTargets, isPathInsideWorkspace, resolvesInsideWorkspace } from '../toolPolicy'
+import { assessToolPolicy, checkpointTargets, isPathInsideWorkspace, resolvesInsideWorkspace, toolApprovalDetail } from '../toolPolicy'
 
 const workspace = path.resolve('C:/work/project')
 
@@ -34,6 +34,12 @@ describe('tool policy', () => {
     expect(isPathInsideWorkspace(workspace, outside)).toBe(false)
     expect(assessToolPolicy('write_file', { path: outside }, workspace).outsideWorkspace).toEqual([outside])
     expect(checkpointTargets('multi_file_edit', { edits: [{ path: 'a' }, { path: 'b' }] })).toEqual(['a', 'b'])
+  })
+
+  it('includes the full shell command in the approval text', () => {
+    const command = `echo ${'x'.repeat(900)}`
+    const decision = assessToolPolicy('run_command', { command, cwd: workspace }, workspace)
+    expect(toolApprovalDetail('run_command', { command }, decision)).toContain(command)
   })
 
   it('requires approval for every shell command, including command chains with safe-looking prefixes', () => {

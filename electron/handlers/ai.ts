@@ -9,6 +9,7 @@
  * OpenAI-compatible + Anthropic, with per-key model discovery and per-model fallback.
  */
 import { ipcMain, BrowserWindow } from 'electron'
+import { resolveProviderApiKey } from './settings'
 import { createHash } from 'crypto'
 import {
   buildModelAttemptList,
@@ -192,6 +193,7 @@ async function completeOpenAI(
 
 export function registerAiHandlers(getMainWindow: () => BrowserWindow | null) {
   ipcMain.handle('ai:chat', async (_event, config: ChatConfig) => {
+    config = { ...config, apiKey: await resolveProviderApiKey(config.provider, config.apiKey) }
     const controller = new AbortController()
     activeControllers.add(controller)
 
@@ -235,9 +237,10 @@ export function registerAiHandlers(getMainWindow: () => BrowserWindow | null) {
   })
 
   ipcMain.handle('ai:listModels', async (_event, config: { provider: string; apiKey: string; baseUrl: string }) => {
-    if (config.provider === 'anthropic' || !config.apiKey || !config.baseUrl) return []
+    const apiKey = await resolveProviderApiKey(config.provider, config.apiKey)
+    if (config.provider === 'anthropic' || !apiKey || !config.baseUrl) return []
     try {
-      return rankModels(await listProviderModels(config.baseUrl, config.apiKey))
+      return rankModels(await listProviderModels(config.baseUrl, apiKey))
     } catch {
       return []
     }

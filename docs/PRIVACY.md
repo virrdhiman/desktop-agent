@@ -40,11 +40,13 @@ Settings includes an optional **Export diagnostics** action for troubleshooting.
 
 ### Private env files
 
-For a private local build, VD Agent can read `.env.local` from the app user-data
-folder, beside the executable, or inside app resources. It only fills provider
-API keys that are still blank in Settings and never uploads the file by itself.
-Do not place `.env.local` in a shared installer, public release, support bundle,
-or synced folder.
+VD Agent fills blank provider keys from `.env.local` in the app user-data folder.
+A development run also reads `.env.local` in the app directory. A packaged app
+does not read a file next to the executable or inside `resources`. Set
+`VD_AGENT_ENV_FILE` to an explicit path when you want another file, and set
+`VD_AGENT_DISABLE_ENV_IMPORT=1` to skip all of them. These values stay on this
+machine and are not uploaded. Do not put `.env.local` in a shared installer,
+public release, support bundle, or synced folder.
 
 ## What leaves your machine
 

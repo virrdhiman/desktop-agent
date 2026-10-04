@@ -6,6 +6,7 @@
  */
 import type { AgentTaskKind, ProviderConfig, Settings } from '../types'
 import { rankModels } from './modelSelect'
+import { isLocalPlaceholderKey } from './providerKeys'
 
 export type ProviderCategory = 'free' | 'local' | 'community' | 'image_video' | 'paid'
 
@@ -24,6 +25,10 @@ export function getProviderCategory(p: Pick<ProviderConfig, 'id' | 'freeTier'>):
   return 'paid'
 }
 
+export function providerIsConfigured(provider?: { apiKey?: string; hasKey?: boolean } | null): boolean {
+  return Boolean(provider?.hasKey || provider?.apiKey?.trim())
+}
+
 export const MAX_PROVIDER_ATTEMPTS = 4
 
 /**
@@ -40,7 +45,7 @@ export function buildProviderChain(
 ): ProviderConfig[] {
   const active = providers.find((p) => p.id === activeId)
   const fallbacks = providers.filter(
-    (p) => p.id !== activeId && !!p.apiKey?.trim() && getProviderCategory(p) === 'free'
+    (p) => p.id !== activeId && providerIsConfigured(p) && getProviderCategory(p) === 'free'
   ).sort((a, b) => providerScore(b, taskKind, now) - providerScore(a, taskKind, now))
   return [...(active ? [active] : []), ...fallbacks].slice(0, max)
 }
@@ -118,16 +123,21 @@ export function recordProviderOutcome(
 
 /** Settings as they may be written to an export file: every API key removed. */
 export function withoutApiKeys(settings: Settings): Settings {
-  return { ...settings, providers: settings.providers.map((p) => ({ ...p, apiKey: '' })) }
+  return { ...settings, providers: settings.providers.map((p) => ({ ...p, apiKey: '', hasKey: false, clearKey: undefined })) }
 }
 
 /** Imported settings keep the keys already stored on this machine unless the file supplies one. */
 export function mergeImportedSettings(current: Settings, imported: Settings): Settings {
-  const keys = new Map(current.providers.map((p) => [p.id, p.apiKey]))
+  const currentById = new Map(current.providers.map((p) => [p.id, p]))
   return {
     ...current,
     ...imported,
-    providers: (imported.providers || current.providers).map((p) => ({ ...p, apiKey: p.apiKey || keys.get(p.id) || '' })),
+    providers: (imported.providers || current.providers).map((p) => {
+      const previous = currentById.get(p.id)
+      const apiKey = p.apiKey || previous?.apiKey || ''
+      const hasKey = Boolean((apiKey.trim() && !isLocalPlaceholderKey(apiKey)) || (!p.apiKey && previous?.hasKey))
+      return { ...p, apiKey, hasKey }
+    }),
   }
 }
 
