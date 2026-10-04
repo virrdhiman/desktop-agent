@@ -98,12 +98,20 @@ Uninstalling leaves your user data in place. To remove chats, settings, and stor
 
 ### Prerequisites
 
-- **Node.js 20.19 or newer** (required by the build and test toolchain) and npm
+- **Node.js 22.19 or newer** and npm. Node.js 20 is not supported. The install pins `undici` 8 (a security override, also required by the test runner), and that release requires Node.js 22.19+.
 - **git**
 - Native build tools for `node-pty`, which powers the terminal:
   - Windows: Visual Studio Build Tools with the "Desktop development with C++" workload, and Python 3
   - macOS: Xcode Command Line Tools (`xcode-select --install`)
   - Linux: `build-essential` and `python3`
+
+`node-pty`'s install script checks for a prebuild and otherwise compiles with `node-gyp` (`node scripts/prebuild.js || node-gyp rebuild`). Windows and macOS ship prebuilds. Linux does not, so install compiles the module and the tools above have to be present.
+
+npm 11 still runs that install script. It also warns until the script is approved. This repo allows it with `"allowScripts": { "node-pty": true }` in `package.json`. If the terminal native module is missing because scripts were skipped, rebuild it:
+
+```bash
+npm rebuild node-pty
+```
 
 ### Run
 

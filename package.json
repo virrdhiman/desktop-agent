@@ -7,7 +7,10 @@
   "description": "VD Agent: desktop AI coding agent with free API key model selection, git, terminal, and local chat history",
   "license": "SEE LICENSE IN LICENSE",
   "engines": {
-    "node": ">=20.19.0"
+    "node": ">=22.19.0"
+  },
+  "allowScripts": {
+    "node-pty": true
   },
   "author": {
     "name": "Virender Dhiman",

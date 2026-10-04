@@ -58,7 +58,7 @@ VD Agent is an **Electron + React + TypeScript + Vite** desktop app built on Ele
 
 electron-builder packages these into `release/` using the `build` section of `package.json`. `LICENSE` is shown by the NSIS installer and copied next to the app as `LICENSE.txt`. The platform scripts (`Win/build.bat`, `Mac/build.sh`, `Linux/build.sh`) wrap the whole flow; see [docs/RELEASE_CHECKLIST.md](./docs/RELEASE_CHECKLIST.md).
 
-electron-builder does not rebuild native dependencies a second time. `node-pty` ships Windows/macOS Node-API prebuilds and its npm install step builds the Linux binary; the real Electron smoke gate creates a PTY so a missing or incompatible native module fails before release.
+electron-builder does not rebuild native dependencies a second time. `node-pty`'s install script uses the Windows/macOS prebuilds in the package and compiles the Linux binary with node-gyp. `package.json` allows that script (`allowScripts`). The real Electron smoke gate creates a PTY so a missing or incompatible native module fails before release. Development and CI need Node.js 22.19 or newer because the tree pins `undici` 8.
 
 ## Security model
 

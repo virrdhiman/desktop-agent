@@ -21,8 +21,9 @@
 
 | Problem | Fix |
 |---------|-----|
-| `npm install` fails on `node-pty` | Install native build tools: Visual Studio Build Tools with "Desktop development with C++" and Python 3 on Windows, Xcode Command Line Tools on macOS, or `build-essential` and `python3` on Linux. Then run `npm install` again. |
-| `npm test` fails to start | Use Node.js 20.19 or newer. |
+| `npm install` fails on `node-pty` or the terminal will not open | Install native build tools: Visual Studio Build Tools with "Desktop development with C++" and Python 3 on Windows, Xcode Command Line Tools on macOS, or `build-essential` and `python3` on Linux. Linux has no `node-pty` prebuild, so its install script compiles with `node-gyp`. If npm skipped install scripts, run `npm rebuild node-pty`. |
+| `npm install` reports `EBADENGINE` for `undici` | Use Node.js 22.19 or newer. Node.js 20 cannot install the pinned `undici` 8 release. |
+| `npm test` fails to start | Use Node.js 22.19 or newer. |
 | Port 5173 is in use | Stop the other dev server, or close the other VD Agent dev instance. |
 
 ## The agent
