@@ -1,6 +1,15 @@
 // @vitest-environment node
+import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
-import { releaseSigningPlan } from '../../scripts/release-signing.mjs'
+
+const { releaseSigningPlan } = createRequire(import.meta.url)('../../scripts/release-signing.mjs') as {
+  releaseSigningPlan: (input: { os: string; env?: Record<string, string> }) => {
+    signed: boolean
+    notarize?: boolean
+    builderArgs: string
+    env: Record<string, string>
+  }
+}
 
 const cert = { CSC_LINK: 'base64-cert', CSC_KEY_PASSWORD: 'secret' }
 const apple = {
