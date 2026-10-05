@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { buildRepoIndex, buildRepoMap, searchRepo } from '../repoIndex'
+import { buildRepoIndex, buildRepoMap, searchRepo, startRepoIndexWatcher, stopRepoIndexWatchers } from '../repoIndex'
 
 let root: string
 
@@ -24,6 +24,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  stopRepoIndexWatchers()
   fs.rmSync(root, { recursive: true, force: true })
 })
 
@@ -55,5 +56,12 @@ describe('repoIndex', () => {
     const third = await buildRepoIndex(root)
     expect(third.cached).toBe(false)
     expect(third.files).toBeGreaterThan(first.files)
+  })
+
+  it('starts a background watcher for the repo index', async () => {
+    const stats = await startRepoIndexWatcher(root)
+    expect(stats.watching).toBe(true)
+    const second = await buildRepoIndex(root)
+    expect(second.watching).toBe(true)
   })
 })

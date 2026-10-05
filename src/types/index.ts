@@ -267,8 +267,8 @@ export const AGENT_TOOLS = [
   },
   {
     name: 'repo_index',
-    description: 'Build, refresh, or report the cached repo semantic index used by repo_search/repo_plan for faster context.',
-    parameters: { path: 'string (optional)', force: 'boolean (optional, rebuild even if unchanged)' },
+    description: 'Build, refresh, and background-watch the cached repo semantic index used by repo_search/repo_plan for faster context.',
+    parameters: { path: 'string (optional)', force: 'boolean (optional, rebuild even if unchanged)', once: 'boolean (optional, do not start watcher)' },
   },
   {
     name: 'repo_plan',

@@ -82,19 +82,7 @@ export function ensureMonacoLanguage(language: string): Promise<unknown> {
 }
 
 self.MonacoEnvironment = {
-  async getWorker(_workerId: string, label: string) {
-    if (label === 'json') {
-      const worker = await import('monaco-editor/esm/vs/language/json/json.worker?worker')
-      return new worker.default()
-    }
-    if (label === 'css' || label === 'scss' || label === 'less') {
-      const worker = await import('monaco-editor/esm/vs/language/css/css.worker?worker')
-      return new worker.default()
-    }
-    if (label === 'html' || label === 'handlebars' || label === 'razor') {
-      const worker = await import('monaco-editor/esm/vs/language/html/html.worker?worker')
-      return new worker.default()
-    }
+  async getWorker() {
     return new EditorWorker()
   },
 }

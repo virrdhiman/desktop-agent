@@ -19,7 +19,7 @@ import { COMMAND_TIMEOUT_MS, formatCommandResult, resolveToolArgs } from '../too
 import { assessToolPolicy, checkpointTargets, resolvesInsideWorkspace, toolApprovalDetail, type PermissionMode } from '../toolPolicy'
 import { createCheckpoint } from '../checkpointStore'
 import { archiveOutputPaths, extractZipArchive, inspectZipArchive, type ArchiveInspection } from '../archiveStore'
-import { buildRepoIndex, buildRepoMap, repoIndexStats, searchRepo } from '../repoIndex'
+import { buildRepoIndex, buildRepoMap, repoIndexStats, searchRepo, startRepoIndexWatcher } from '../repoIndex'
 import { planRepoChange } from '../repoPlanner'
 import { previewEdits } from '../patchPreview'
 import { formatVsCodeContext, readVsCodeBridgeStatus, sendVsCodeBridgeCommand } from '../vscodeBridge'
@@ -198,10 +198,13 @@ export function registerToolHandlers() {
           }
           case 'repo_index': {
             const root = tool.args.path || tool.workspace || '.'
-            const stats = tool.args.force ? await buildRepoIndex(root, true) : await repoIndexStats(root)
+            const stats = tool.args.once
+              ? tool.args.force ? await buildRepoIndex(root, true) : await repoIndexStats(root)
+              : tool.args.force ? await buildRepoIndex(root, true) : await startRepoIndexWatcher(root)
             return {
               result: [
                 `Repo index ${stats.cached ? 'reused' : 'built'}: ${stats.files} files, ${stats.bytes} bytes.`,
+                `Background watcher: ${stats.watching ? 'on' : 'off'}`,
                 `Updated: ${new Date(stats.updatedAt).toISOString()}`,
                 `Fingerprint: ${stats.fingerprint.slice(0, 12)}`,
                 `Root: ${stats.root}`,

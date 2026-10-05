@@ -31,6 +31,11 @@ import { buildInlineEditHunks, rejectInlineEditHunk, summarizeInlineEdit, type I
 const loadMonacoEditor = () => import('../lib/monacoEditor')
 const Editor = lazy(loadMonacoEditor)
 
+const COMMON_SYMBOLS = [
+  'async', 'await', 'const', 'let', 'function', 'return', 'import', 'export', 'type', 'interface',
+  'class', 'extends', 'implements', 'try', 'catch', 'finally', 'Promise', 'Array', 'Record',
+]
+
 function getLanguage(filePath: string): string {
   const ext = filePath.split('.').pop()?.toLowerCase() || ''
   const map: Record<string, string> = {
@@ -60,6 +65,20 @@ function getIcon(filePath: string): string {
   return map[ext] || '📄'
 }
 
+function completionWords(text: string, filePaths: string[], openFiles: string[]): string[] {
+  const words = new Set<string>(COMMON_SYMBOLS)
+  const wordMatches = text.match(/\b[A-Za-z_$][\w$]{2,}\b/g) || []
+  for (const word of wordMatches) words.add(word)
+  for (const file of [...filePaths, ...openFiles]) {
+    const normalized = file.replace(/\\/g, '/')
+    const base = normalized.split('/').pop() || ''
+    const stem = base.replace(/\.[^.]+$/, '')
+    for (const part of normalized.split(/[/.\\_-]+/)) if (/^[A-Za-z_$][\w$]{2,}$/.test(part)) words.add(part)
+    if (/^[A-Za-z_$][\w$]{2,}$/.test(stem)) words.add(stem)
+  }
+  return [...words].slice(0, 500)
+}
+
 export default function CodeEditor() {
   const {
     selectedFile, setSelectedFile, fileContent, setFileContent,
@@ -75,6 +94,8 @@ export default function CodeEditor() {
   const [pendingReveal, setPendingReveal] = useState<WorkspaceReference | null>(null)
   const [dismissedInlineHunks, setDismissedInlineHunks] = useState<Set<string>>(() => new Set())
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null)
+  const completionProviderRef = useRef<Monaco.IDisposable | null>(null)
+  const completionWordsRef = useRef<string[]>([])
 
   const language = useMemo(() => selectedFile ? getLanguage(selectedFile) : 'plaintext', [selectedFile])
   const hasTsLanguageService = language === 'typescript' || language === 'javascript'
@@ -91,6 +112,13 @@ export default function CodeEditor() {
       ? buildInlineEditHunks(latestInlineEdit.before, latestInlineEdit.after).filter((hunk) => !dismissedInlineHunks.has(hunk.id))
       : []
   ), [dismissedInlineHunks, latestInlineEdit])
+  const localCompletionWords = useMemo(() => (
+    completionWords(editorContent, allFiles.map((file) => file.path), openFiles)
+  ), [allFiles, editorContent, openFiles])
+
+  useEffect(() => {
+    completionWordsRef.current = localCompletionWords
+  }, [localCompletionWords])
 
   useEffect(() => {
     setDismissedInlineHunks(new Set())
@@ -356,6 +384,32 @@ export default function CodeEditor() {
 
   const handleEditorMount = useCallback((editor: Monaco.editor.IStandaloneCodeEditor, monaco: typeof Monaco) => {
     editorRef.current = editor
+    completionProviderRef.current?.dispose()
+    completionProviderRef.current = monaco.languages.registerCompletionItemProvider(language, {
+      triggerCharacters: ['.', '/', '-', '_'],
+      provideCompletionItems(model, position) {
+        const word = model.getWordUntilPosition(position)
+        const range = {
+          startLineNumber: position.lineNumber,
+          endLineNumber: position.lineNumber,
+          startColumn: word.startColumn,
+          endColumn: word.endColumn,
+        }
+        const prefix = word.word.toLowerCase()
+        const suggestions = completionWordsRef.current
+          .filter((item) => !prefix || item.toLowerCase().includes(prefix))
+          .slice(0, 80)
+          .map((item) => ({
+            label: item,
+            kind: monaco.languages.CompletionItemKind.Text,
+            insertText: item,
+            range,
+            detail: 'VD local workspace',
+            sortText: item.toLowerCase().startsWith(prefix) ? `0${item}` : `1${item}`,
+          }))
+        return { suggestions }
+      },
+    })
     editor.addAction({
       id: 'vd.goToDefinition',
       label: 'VD: Go to Definition',
@@ -374,7 +428,12 @@ export default function CodeEditor() {
       keybindings: [monaco.KeyCode.F2],
       run: () => { void handleRenameSymbol() },
     })
-  }, [handleFindReferences, handleGoToDefinition, handleRenameSymbol])
+  }, [handleFindReferences, handleGoToDefinition, handleRenameSymbol, language])
+
+  useEffect(() => () => {
+    completionProviderRef.current?.dispose()
+    completionProviderRef.current = null
+  }, [])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -647,6 +706,10 @@ export default function CodeEditor() {
             cursorSmoothCaretAnimation: 'on',
             folding: true,
             formatOnPaste: true,
+            quickSuggestions: { other: true, comments: false, strings: false },
+            suggestOnTriggerCharacters: true,
+            tabCompletion: 'on',
+            wordBasedSuggestions: 'matchingDocuments',
             lineNumbers: 'on',
             glyphMargin: false,
             renderLineHighlight: 'all',

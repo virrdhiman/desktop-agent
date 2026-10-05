@@ -26,6 +26,7 @@ export type RepoIndexStats = {
   fingerprint: string
   updatedAt: number
   cached: boolean
+  watching?: boolean
 }
 
 type IndexedFile = RepoMapEntry & {
@@ -42,6 +43,13 @@ type RepoIndexCache = {
   files: IndexedFile[]
 }
 
+type RepoIndexWatcher = {
+  root: string
+  close: () => void
+  timer?: NodeJS.Timeout
+  lastEventAt: number
+}
+
 const TEXT_EXTS = new Set([
   '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.json', '.md', '.css', '.scss', '.html',
   '.py', '.go', '.rs', '.java', '.kt', '.swift', '.c', '.cpp', '.h', '.hpp', '.cs',
@@ -51,6 +59,7 @@ const SKIP_DIRS = new Set(['.git', 'node_modules', 'dist', 'dist-electron', 'rel
 const MAX_FILE_BYTES = 500_000
 const MAX_FILES = 2500
 const repoCaches = new Map<string, RepoIndexCache>()
+const repoWatchers = new Map<string, RepoIndexWatcher>()
 
 function languageFor(file: string): string {
   const ext = path.extname(file).slice(1).toLowerCase()
@@ -197,6 +206,49 @@ export async function repoIndexStats(root: string): Promise<RepoIndexStats> {
   return buildRepoIndex(root)
 }
 
+export async function startRepoIndexWatcher(root: string): Promise<RepoIndexStats> {
+  const workspace = path.resolve(root)
+  if (repoWatchers.has(workspace)) {
+    const stats = await buildRepoIndex(workspace)
+    return { ...stats, watching: true }
+  }
+
+  const schedule = () => {
+    const watcher = repoWatchers.get(workspace)
+    if (!watcher) return
+    watcher.lastEventAt = Date.now()
+    if (watcher.timer) clearTimeout(watcher.timer)
+    watcher.timer = setTimeout(() => {
+      void buildRepoIndex(workspace, true).catch(() => {})
+    }, 750)
+  }
+
+  let close = () => {}
+  try {
+    const watcher = fs.watch(workspace, { recursive: true }, (_event, filename) => {
+      const name = String(filename || '')
+      if (!name || shouldIgnoreWatchEvent(name)) return
+      schedule()
+    })
+    close = () => watcher.close()
+  } catch {
+    const interval = setInterval(schedule, 30_000)
+    close = () => clearInterval(interval)
+  }
+
+  repoWatchers.set(workspace, { root: workspace, close, lastEventAt: Date.now() })
+  const stats = await buildRepoIndex(workspace)
+  return { ...stats, watching: true }
+}
+
+export function stopRepoIndexWatchers(): void {
+  for (const watcher of repoWatchers.values()) {
+    if (watcher.timer) clearTimeout(watcher.timer)
+    watcher.close()
+  }
+  repoWatchers.clear()
+}
+
 function indexStats(workspace: string, cache: RepoIndexCache, cached: boolean): RepoIndexStats {
   return {
     root: workspace,
@@ -205,7 +257,18 @@ function indexStats(workspace: string, cache: RepoIndexCache, cached: boolean): 
     fingerprint: cache.fingerprint,
     updatedAt: cache.updatedAt,
     cached,
+    watching: repoWatchers.has(workspace),
   }
+}
+
+function shouldIgnoreWatchEvent(file: string): boolean {
+  const normalized = file.replace(/\\/g, '/')
+  if (normalized.includes('/')) {
+    const parts = normalized.split('/')
+    if (parts.some((part) => SKIP_DIRS.has(part))) return true
+  }
+  const base = path.basename(normalized)
+  return base.startsWith('.') && base !== '.env' || !isTextFile(base)
 }
 
 async function indexedFiles(root: string): Promise<IndexedFile[]> {

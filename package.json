@@ -54,6 +54,7 @@
     "agent:evals:import": "node scripts/hosted-eval-import.mjs",
     "icons": "node scripts/generate-icons.mjs",
     "verify": "npm run lint && npm test && npm run build",
+    "bundle:budget": "node scripts/bundle-budget.mjs",
     "security:audit": "npm audit --omit=dev --audit-level=high",
     "checksums": "node scripts/checksums.mjs",
     "release:notes": "node scripts/release-notes.mjs",
