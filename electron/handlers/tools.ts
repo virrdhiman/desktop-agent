@@ -22,7 +22,7 @@ import { archiveOutputPaths, extractZipArchive, inspectZipArchive, type ArchiveI
 import { buildRepoIndex, buildRepoMap, repoIndexStats, searchRepo, startRepoIndexWatcher } from '../repoIndex'
 import { planRepoChange } from '../repoPlanner'
 import { previewEdits } from '../patchPreview'
-import { formatVsCodeContext, readVsCodeBridgeStatus, sendVsCodeBridgeCommand } from '../vscodeBridge'
+import { formatVsCodeContext, installVsCodeBridge, openWorkspaceInVsCode, readVsCodeBridgeStatus, sendVsCodeBridgeCommand } from '../vscodeBridge'
 
 /** Git instances cache for tool execution */
 const toolGitInstances: Map<string, SimpleGit> = new Map()
@@ -42,6 +42,22 @@ export function registerToolHandlers() {
   ipcMain.handle('vscode:status', async (_event, workspace: string) => {
     try {
       return await readVsCodeBridgeStatus(workspace)
+    } catch (err: any) {
+      return { error: err.message }
+    }
+  })
+
+  ipcMain.handle('vscode:installBridge', async () => {
+    try {
+      return { result: await installVsCodeBridge() }
+    } catch (err: any) {
+      return { error: err.message }
+    }
+  })
+
+  ipcMain.handle('vscode:openWorkspace', async (_event, workspace: string) => {
+    try {
+      return { result: await openWorkspaceInVsCode(workspace) }
     } catch (err: any) {
       return { error: err.message }
     }

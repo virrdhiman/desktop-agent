@@ -64,8 +64,28 @@ export default function VsCodeBridgePanel() {
     await refresh()
   }
 
+  const runSetupAction = async (label: string, action: () => Promise<{ result?: string; error?: string } | void>) => {
+    setLoading(true)
+    try {
+      const result = await action()
+      const text = result && typeof result === 'object' && 'error' in result
+        ? result.error || `${label} failed.`
+        : result && typeof result === 'object' && 'result' in result
+          ? result.result || `${label} finished.`
+          : `${label} started.`
+      setActionResult(text)
+      addTerminalEntry({ id: `${Date.now()}-vscode-setup`, type: text.includes('failed') ? 'error' : 'success', content: `${label}: ${text}`, timestamp: Date.now() })
+    } catch (err: any) {
+      setActionResult(err.message || `${label} failed.`)
+    } finally {
+      setLoading(false)
+      await refresh()
+    }
+  }
+
   const connected = !!status?.connected
   const activeFile = status?.state?.activeFile
+  const setup = status?.setup
 
   if (!workspacePath) {
     return (
@@ -97,6 +117,46 @@ export default function VsCodeBridgePanel() {
           <Row label="Bridge file" value={status?.bridgeFile || ''} />
           <Row label="Pending commands" value={String(status?.commandsPending ?? 0)} />
           <Row label="Last export" value={`${fmtTime(status?.state?.updatedAt)}${status?.ageSeconds == null ? '' : ` (${status.ageSeconds}s ago)`}`} />
+        </section>
+
+        <section className="card" style={{ display: 'grid', gap: 10 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <h3 style={{ fontSize: 13 }}>VS Code Setup</h3>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {!setup?.vscodeAvailable && (
+                <button
+                  className="btn btn-sm btn-primary"
+                  onClick={() => setup?.downloadUrl && void runSetupAction('Open VS Code Download', () => window.api.openPath(setup.downloadUrl))}
+                  disabled={loading || !setup?.downloadUrl}
+                >
+                  Install VS Code
+                </button>
+              )}
+              {setup?.vscodeAvailable && (
+                <button
+                  className="btn btn-sm"
+                  onClick={() => void runSetupAction('Open Workspace in VS Code', () => window.api.vscodeOpenWorkspace(workspacePath))}
+                  disabled={loading}
+                >
+                  Open Workspace
+                </button>
+              )}
+              {setup?.vscodeAvailable && setup.installReady && (
+                <button
+                  className="btn btn-sm btn-primary"
+                  onClick={() => void runSetupAction('Install VD Agent Bridge', () => window.api.vscodeInstallBridge())}
+                  disabled={loading}
+                >
+                  Install Bridge
+                </button>
+              )}
+            </div>
+          </div>
+          <Row label="VS Code" value={setup?.vscodeAvailable ? `Found${setup.vscodeVersion ? ` (${setup.vscodeVersion})` : ''}` : 'Not found'} />
+          <Row label="CLI" value={setup?.vscodeCommand || <span style={{ color: 'var(--text-muted)' }}>Install VS Code, then refresh</span>} />
+          <Row label="Bridge package" value={setup?.installReady ? setup.vsixPath : `${setup?.vsixPath || ''} (missing)`} />
+          <Row label="Setup" value={setup?.message || 'Checking VS Code setup...'} />
+          {setup?.installCommand && <Row label="Manual command" value={<code>{setup.installCommand}</code>} />}
         </section>
 
         <section className="card" style={{ display: 'grid', gap: 10 }}>
@@ -164,9 +224,9 @@ export default function VsCodeBridgePanel() {
         </section>
 
         <section className="card" style={{ display: 'grid', gap: 8 }}>
-          <h3 style={{ fontSize: 13 }}>Install Check</h3>
+          <h3 style={{ fontSize: 13 }}>How It Works</h3>
           <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-            Install the `.vsix`, open this same workspace in VS Code, then run `VD Agent: Export Workspace Context`.
+            Install the local bridge, open this same workspace in VS Code, then run `VD Agent: Export Workspace Context`.
             The agent can then read active editor context and send open/edit/diff commands through the bridge.
           </div>
         </section>

@@ -79,6 +79,8 @@ contextBridge.exposeInMainWorld('api', {
   // Tools the agent calls autonomously (definitions in src/types AGENT_TOOLS)
   toolExecute: (tool: { name: string; args: Record<string, any>; workspace?: string; sessionId?: string; taskId?: string }) => invokeWithTimeout('tool:execute', tool),
   vscodeStatus: (workspace: string) => invokeWithTimeout('vscode:status', workspace),
+  vscodeInstallBridge: () => invokeWithTimeout('vscode:installBridge'),
+  vscodeOpenWorkspace: (workspace: string) => invokeWithTimeout('vscode:openWorkspace', workspace),
   onCheckpointCreated: (cb: (checkpoint: CheckpointSummary) => void) => {
     const listener = (_e: unknown, checkpoint: CheckpointSummary) => cb(checkpoint)
     ipcRenderer.on('checkpoint:created', listener)
@@ -155,6 +157,16 @@ export type VsCodeBridgeStatus = {
   commandsPending: number
   ageSeconds?: number
   message: string
+  setup: {
+    vscodeAvailable: boolean
+    vscodeCommand?: string
+    vscodeVersion?: string
+    vsixPath: string
+    installReady: boolean
+    installCommand?: string
+    downloadUrl: string
+    message: string
+  }
   state: null | {
     version: 1
     workspacePath: string
@@ -209,6 +221,8 @@ export type ElectronAPI = {
   onTerminalExit: (cb: (termId: string, exitCode: number) => void) => void
   toolExecute: (tool: { name: string; args: Record<string, any>; workspace?: string; sessionId?: string; taskId?: string }) => Promise<{ result?: string; error?: string }>
   vscodeStatus: (workspace: string) => Promise<VsCodeBridgeStatus | { error: string }>
+  vscodeInstallBridge: () => Promise<{ result?: string; error?: string }>
+  vscodeOpenWorkspace: (workspace: string) => Promise<{ result?: string; error?: string }>
   onCheckpointCreated: (cb: (checkpoint: CheckpointSummary) => void) => () => void
   loadSettings: () => Promise<Settings>
   saveSettings: (settings: Settings) => Promise<{ success: boolean } | { error: string }>

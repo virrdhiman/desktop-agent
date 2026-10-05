@@ -12,6 +12,10 @@ import { ipcMain, shell } from 'electron'
 
 export function registerShellHandlers() {
   ipcMain.handle('shell:openPath', async (_event, targetPath: string) => {
+    if (/^https?:\/\//i.test(targetPath)) {
+      await shell.openExternal(targetPath)
+      return
+    }
     await shell.openPath(targetPath)
   })
 

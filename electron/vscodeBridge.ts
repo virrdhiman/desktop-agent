@@ -1,6 +1,8 @@
 import fs from 'fs'
 import path from 'path'
 import crypto from 'crypto'
+import { execFile } from 'child_process'
+import { promisify } from 'util'
 
 export type VsCodeBridgeState = {
   version: 1
@@ -24,6 +26,9 @@ const COMMAND_DIR = path.join('.vd-agent', 'commands')
 const RESULT_DIR = path.join('.vd-agent', 'command-results')
 const LAST_COMMAND_FILE = path.join('.vd-agent', 'vscode-last-command.json')
 const DEFAULT_COMMAND_TIMEOUT_MS = 8_000
+const VSCODE_DOWNLOAD_URL = 'https://code.visualstudio.com/Download'
+const VSIX_NAME = 'vd-agent-vscode-bridge-0.1.0.vsix'
+const execFileAsync = promisify(execFile)
 
 type VsCodeBridgeCommand = {
   action: 'open_file' | 'apply_edit' | 'show_diff' | 'run_command'
@@ -45,8 +50,22 @@ export type VsCodeBridgeStatus = {
   state: VsCodeBridgeState | null
   lastResult?: VsCodeBridgeCommandResult
   ageSeconds?: number
+  setup: VsCodeBridgeSetup
   message: string
 }
+
+export type VsCodeBridgeSetup = {
+  vscodeAvailable: boolean
+  vscodeCommand?: string
+  vscodeVersion?: string
+  vsixPath: string
+  installReady: boolean
+  installCommand?: string
+  downloadUrl: string
+  message: string
+}
+
+let setupCache: { at: number; value: Promise<VsCodeBridgeSetup> } | null = null
 
 function inside(root: string, target: string): boolean {
   const rel = path.relative(path.resolve(root), path.resolve(target))
@@ -107,6 +126,7 @@ export async function formatVsCodeContext(workspace: string): Promise<string> {
 
 export async function readVsCodeBridgeStatus(workspace: string): Promise<VsCodeBridgeStatus> {
   const root = path.resolve(workspace)
+  const setup = await resolveVsCodeBridgeSetup()
   const state = await loadVsCodeBridgeState(root)
   const commandDir = path.join(root, COMMAND_DIR)
   const commandsPending = (await fs.promises.readdir(commandDir).catch(() => []))
@@ -120,10 +140,40 @@ export async function readVsCodeBridgeStatus(workspace: string): Promise<VsCodeB
     state,
     lastResult: sanitizeCommandResult(lastResult),
     ageSeconds,
+    setup,
     message: state
       ? `Connected${ageSeconds == null ? '' : `, exported ${ageSeconds}s ago`}.`
-      : 'Not connected. Install the VD Agent Bridge extension and run "VD Agent: Export Workspace Context" in VS Code.',
+      : setup.vscodeAvailable
+        ? 'Not connected. Install the VD Agent Bridge, open this workspace in VS Code, then run "VD Agent: Export Workspace Context".'
+        : 'Not connected. Install VS Code first, then install the free local VD Agent Bridge.',
   }
+}
+
+export async function installVsCodeBridge(): Promise<string> {
+  const setup = await resolveVsCodeBridgeSetup(true)
+  if (!setup.vscodeCommand) {
+    throw new Error('VS Code CLI was not found. Install VS Code, then make sure the "code" command is available.')
+  }
+  if (!setup.installReady) {
+    throw new Error(`VS Code bridge package was not found at ${setup.vsixPath}. Run npm run vscode:package first.`)
+  }
+  const output = await runCodeCli(setup.vscodeCommand, ['--install-extension', setup.vsixPath, '--force'], 30_000)
+  setupCache = null
+  return [
+    'VD Agent Bridge install command finished.',
+    output || 'VS Code did not print extra output.',
+    'Open this repository in VS Code and run "VD Agent: Export Workspace Context" from the Command Palette.',
+  ].join('\n')
+}
+
+export async function openWorkspaceInVsCode(workspace: string): Promise<string> {
+  const setup = await resolveVsCodeBridgeSetup()
+  if (!setup.vscodeCommand) {
+    throw new Error('VS Code CLI was not found. Install VS Code first.')
+  }
+  const root = path.resolve(workspace)
+  await runCodeCli(setup.vscodeCommand, [root], 15_000)
+  return `Opened workspace in VS Code: ${root}`
 }
 
 export async function sendVsCodeBridgeCommand(
@@ -165,6 +215,124 @@ async function waitForCommandResult(file: string, timeoutMs: number): Promise<Vs
     await new Promise((resolve) => setTimeout(resolve, 150))
   }
   return null
+}
+
+async function resolveVsCodeBridgeSetup(force = false): Promise<VsCodeBridgeSetup> {
+  if (!force && setupCache && Date.now() - setupCache.at < 10_000) return setupCache.value
+  setupCache = { at: Date.now(), value: detectVsCodeBridgeSetup() }
+  return setupCache.value
+}
+
+async function detectVsCodeBridgeSetup(): Promise<VsCodeBridgeSetup> {
+  const vsixPath = resolveVsixPath()
+  const installReady = fs.existsSync(vsixPath)
+  const cli = await findCodeCli()
+  if (!cli) {
+    return {
+      vscodeAvailable: false,
+      vsixPath,
+      installReady,
+      downloadUrl: VSCODE_DOWNLOAD_URL,
+      message: 'VS Code CLI was not found. Install VS Code for free, then reopen VD Agent or refresh this panel.',
+    }
+  }
+  return {
+    vscodeAvailable: true,
+    vscodeCommand: cli.command,
+    vscodeVersion: cli.version,
+    vsixPath,
+    installReady,
+    installCommand: `code --install-extension "${vsixPath}" --force`,
+    downloadUrl: VSCODE_DOWNLOAD_URL,
+    message: installReady
+      ? 'VS Code is available. Install the local bridge package, then open this workspace in VS Code.'
+      : 'VS Code is available, but the bridge package is missing. Run npm run vscode:package.',
+  }
+}
+
+async function findCodeCli(): Promise<{ command: string; version: string } | null> {
+  for (const command of codeCliCandidates()) {
+    const resolvedCommand = await resolveCodeCommand(command)
+    if (path.isAbsolute(resolvedCommand) && !fs.existsSync(resolvedCommand)) continue
+    try {
+      const version = (await runCodeCli(resolvedCommand, ['--version'], 5_000)).split(/\r?\n/)[0]?.trim()
+      if (version) return { command: resolvedCommand, version }
+    } catch {
+      // Try the next known command/location.
+    }
+  }
+  return null
+}
+
+function codeCliCandidates(): string[] {
+  const candidates = ['code', 'code-insiders']
+  if (process.platform === 'win32') {
+    const local = process.env.LOCALAPPDATA || ''
+    const programFiles = process.env.ProgramFiles || ''
+    const programFilesX86 = process.env['ProgramFiles(x86)'] || ''
+    candidates.push(
+      path.join(local, 'Programs', 'Microsoft VS Code', 'bin', 'code.cmd'),
+      path.join(local, 'Programs', 'Microsoft VS Code Insiders', 'bin', 'code-insiders.cmd'),
+      path.join(programFiles, 'Microsoft VS Code', 'bin', 'code.cmd'),
+      path.join(programFilesX86, 'Microsoft VS Code', 'bin', 'code.cmd'),
+    )
+  } else if (process.platform === 'darwin') {
+    candidates.push(
+      '/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code',
+      '/Applications/Visual Studio Code - Insiders.app/Contents/Resources/app/bin/code-insiders',
+    )
+  } else {
+    candidates.push('/usr/local/bin/code', '/usr/bin/code', '/snap/bin/code')
+  }
+  return [...new Set(candidates.filter(Boolean))]
+}
+
+function resolveVsixPath(): string {
+  const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath
+  const candidates = [
+    path.join(process.cwd(), 'vscode-extension', VSIX_NAME),
+    path.join(process.cwd(), 'release', VSIX_NAME),
+    resourcesPath ? path.join(resourcesPath, VSIX_NAME) : '',
+    resourcesPath ? path.join(resourcesPath, 'vscode-extension', VSIX_NAME) : '',
+  ].filter(Boolean)
+  return candidates.find((candidate) => fs.existsSync(candidate)) || candidates[0]
+}
+
+async function runCodeCli(command: string, args: string[], timeoutMs: number): Promise<string> {
+  const isWindowsCommandScript = process.platform === 'win32' && /\.(cmd|bat)$/i.test(command)
+  const result = isWindowsCommandScript
+    ? await execFileAsync(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', [command, ...args].map(quoteCmdArg).join(' ')], {
+      timeout: timeoutMs,
+      windowsHide: true,
+      shell: false,
+      maxBuffer: 1_000_000,
+    })
+    : await execFileAsync(command, args, {
+    timeout: timeoutMs,
+    windowsHide: true,
+    shell: false,
+    maxBuffer: 1_000_000,
+  })
+  return `${result.stdout || ''}${result.stderr ? `\n${result.stderr}` : ''}`.trim()
+}
+
+async function resolveCodeCommand(command: string): Promise<string> {
+  if (process.platform !== 'win32' || path.isAbsolute(command)) return command
+  try {
+    const result = await execFileAsync('where.exe', [command], {
+      timeout: 3_000,
+      windowsHide: true,
+      shell: false,
+      maxBuffer: 100_000,
+    })
+    return String(result.stdout || '').split(/\r?\n/).map((line) => line.trim()).find(Boolean) || command
+  } catch {
+    return command
+  }
+}
+
+function quoteCmdArg(value: string): string {
+  return `"${String(value).replace(/"/g, '\\"')}"`
 }
 
 async function readJson<T>(file: string): Promise<T | null> {

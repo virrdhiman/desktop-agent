@@ -33,13 +33,28 @@ Code command. Source code, selections, commands, and results stay local.
 
 ## Install From VSIX
 
-Build a local one-click package:
+VD Agent can install the bridge from its `VS Code Bridge` panel when VS Code is
+installed and the `code` command is available. This path is free and does not
+require marketplace publishing, certificates, or hosted accounts.
+
+For development builds, create the local one-click package:
 
 ```powershell
 npm run vscode:package
 ```
 
-Install from the command line:
+This writes:
+
+```text
+release/vd-agent-vscode-bridge-0.1.0.vsix
+vscode-extension/vd-agent-vscode-bridge-0.1.0.vsix
+```
+
+Install from VD Agent: open the `VS Code Bridge` panel, click `Install Bridge`,
+then click `Open Workspace`. If VS Code is missing, click `Install VS Code` and
+install the free VS Code app first.
+
+Or install from the command line:
 
 ```powershell
 code --install-extension "release/vd-agent-vscode-bridge-0.1.0.vsix"

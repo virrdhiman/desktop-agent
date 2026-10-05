@@ -7,6 +7,9 @@ edit actions.
 
 ## Install From VSIX
 
+In VD Agent, open the `VS Code Bridge` panel and click `Install Bridge`. The app
+uses this local `.vsix`; no marketplace account or paid service is needed.
+
 Build the extension package from the VD Agent repo:
 
 ```powershell

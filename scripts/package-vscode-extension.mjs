@@ -8,6 +8,7 @@ const releaseDir = path.join(root, 'release')
 const manifestPath = path.join(extensionDir, 'package.json')
 const pkg = JSON.parse(await fs.promises.readFile(manifestPath, 'utf8'))
 const outPath = path.join(releaseDir, `${pkg.name}-${pkg.version}.vsix`)
+const extensionOutPath = path.join(extensionDir, `${pkg.name}-${pkg.version}.vsix`)
 
 function xmlEscape(value) {
   return String(value)
@@ -65,6 +66,7 @@ async function addDirectory(zip, sourceDir, zipDir) {
   const entries = await fs.promises.readdir(sourceDir, { withFileTypes: true })
   for (const entry of entries) {
     if (entry.name === 'node_modules' || entry.name === '.vscode') continue
+    if (entry.name.endsWith('.vsix')) continue
     const source = path.join(sourceDir, entry.name)
     const target = `${zipDir}/${entry.name}`.replace(/\\/g, '/')
     if (entry.isDirectory()) await addDirectory(zip, source, target)
@@ -87,4 +89,6 @@ await new Promise((resolve, reject) => {
   zip.end()
 })
 
+await fs.promises.copyFile(outPath, extensionOutPath)
 console.log(`Created ${outPath}`)
+console.log(`Copied ${extensionOutPath}`)
