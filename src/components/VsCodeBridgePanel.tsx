@@ -117,6 +117,12 @@ export default function VsCodeBridgePanel() {
           <Row label="Bridge file" value={status?.bridgeFile || ''} />
           <Row label="Pending commands" value={String(status?.commandsPending ?? 0)} />
           <Row label="Last export" value={`${fmtTime(status?.state?.updatedAt)}${status?.ageSeconds == null ? '' : ` (${status.ageSeconds}s ago)`}`} />
+          <Row
+            label="VS Code index"
+            value={status?.state?.index
+              ? `${status.state.index.files} files, ${status.state.index.symbols} symbols, ${fmtTime(status.state.index.updatedAt)}`
+              : <span style={{ color: 'var(--text-muted)' }}>Not exported yet</span>}
+          />
         </section>
 
         <section className="card" style={{ display: 'grid', gap: 10 }}>

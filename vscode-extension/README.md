@@ -5,6 +5,10 @@ selection, visible files, and open files into `.vd-agent/vscode-bridge.json`,
 and processes local VD Agent commands for open-file, diff-preview, and exact
 edit actions.
 
+It also maintains a local workspace index, offers lightweight symbol/word inline
+completions, and provides commands to accept or reject the last VD Agent diff
+preview directly inside VS Code.
+
 ## Install From VSIX
 
 In VD Agent, open the `VS Code Bridge` panel and click `Install Bridge`. The app
@@ -19,7 +23,7 @@ npm run vscode:package
 Install it in VS Code:
 
 ```powershell
-code --install-extension "release/vd-agent-vscode-bridge-0.1.0.vsix"
+code --install-extension "release/vd-agent-vscode-bridge-0.2.0.vsix"
 ```
 
 Or use VS Code: Extensions panel -> `...` -> Install from VSIX -> choose the

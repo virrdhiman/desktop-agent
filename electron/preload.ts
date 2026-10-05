@@ -176,6 +176,7 @@ export type VsCodeBridgeStatus = {
     selection?: { text: string; startLine: number; startColumn: number; endLine: number; endColumn: number }
     visibleFiles: string[]
     openFiles: string[]
+    index?: { updatedAt: number; files: number; symbols: number; bytes?: number }
   }
   lastResult?: { id: string; updatedAt: number; ok: boolean; message: string; action?: string }
 }

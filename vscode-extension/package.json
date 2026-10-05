@@ -1,8 +1,8 @@
 {
   "name": "vd-agent-vscode-bridge",
   "displayName": "VD Agent Bridge",
-  "description": "Exports VS Code workspace/editor context and accepts local VD Agent editor commands.",
-  "version": "0.1.0",
+  "description": "Exports VS Code workspace/editor context, local index data, inline suggestions, and VD Agent editor commands.",
+  "version": "0.2.0",
   "publisher": "virender-dhiman",
   "license": "SEE LICENSE IN ../LICENSE",
   "engines": {
@@ -13,7 +13,12 @@
     "onStartupFinished",
     "onCommand:vdAgent.exportContext",
     "onCommand:vdAgent.openBridgeFile",
-    "onCommand:vdAgent.processCommands"
+    "onCommand:vdAgent.processCommands",
+    "onCommand:vdAgent.rebuildIndex",
+    "onCommand:vdAgent.openIndexFile",
+    "onCommand:vdAgent.acceptLastPreview",
+    "onCommand:vdAgent.rejectLastPreview",
+    "onCommand:vdAgent.showStatus"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -29,8 +34,44 @@
       {
         "command": "vdAgent.processCommands",
         "title": "VD Agent: Process Pending Bridge Commands"
+      },
+      {
+        "command": "vdAgent.rebuildIndex",
+        "title": "VD Agent: Rebuild Local Workspace Index"
+      },
+      {
+        "command": "vdAgent.openIndexFile",
+        "title": "VD Agent: Open Local Workspace Index"
+      },
+      {
+        "command": "vdAgent.acceptLastPreview",
+        "title": "VD Agent: Accept Last Previewed Edit"
+      },
+      {
+        "command": "vdAgent.rejectLastPreview",
+        "title": "VD Agent: Reject Last Previewed Edit"
+      },
+      {
+        "command": "vdAgent.showStatus",
+        "title": "VD Agent: Show Bridge Status"
       }
     ],
+    "menus": {
+      "commandPalette": [
+        { "command": "vdAgent.exportContext" },
+        { "command": "vdAgent.processCommands" },
+        { "command": "vdAgent.rebuildIndex" },
+        { "command": "vdAgent.acceptLastPreview" },
+        { "command": "vdAgent.rejectLastPreview" },
+        { "command": "vdAgent.showStatus" }
+      ],
+      "editor/title": [
+        {
+          "command": "vdAgent.exportContext",
+          "group": "navigation"
+        }
+      ]
+    },
     "configuration": {
       "title": "VD Agent Bridge",
       "properties": {
@@ -45,6 +86,23 @@
           "minimum": 1000,
           "maximum": 200000,
           "description": "Maximum selected text characters written into the local bridge file."
+        },
+        "vdAgentBridge.inlineCompletion": {
+          "type": "boolean",
+          "default": true,
+          "description": "Offer lightweight local inline completions from workspace symbols and open files."
+        },
+        "vdAgentBridge.autoIndex": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically maintain a local workspace index under .vd-agent for VD Agent context."
+        },
+        "vdAgentBridge.maxIndexedFiles": {
+          "type": "number",
+          "default": 2000,
+          "minimum": 100,
+          "maximum": 10000,
+          "description": "Maximum workspace files indexed by the local VD Agent Bridge."
         }
       }
     }

@@ -17,12 +17,15 @@ The bridge writes a local file at:
 .vd-agent/commands/*.json
 .vd-agent/command-results/*.json
 .vd-agent/vscode-last-command.json
+.vd-agent/vscode-index.json
+.vd-agent/vscode-last-preview.json
 ```
 
 The context file includes the active file, active language, selected text,
-visible editors, and open text documents. Command files let VD Agent ask VS Code
-to open files, apply exact edits, reveal diff previews, or run a specific VS
-Code command. Source code, selections, commands, and results stay local.
+visible editors, open text documents, and a summary of the VS Code-side local
+index. Command files let VD Agent ask VS Code to open files, apply exact edits,
+reveal diff previews, or run a specific VS Code command. Source code,
+selections, commands, previews, index data, and results stay local.
 
 ## Install From Source
 
@@ -46,8 +49,8 @@ npm run vscode:package
 This writes:
 
 ```text
-release/vd-agent-vscode-bridge-0.1.0.vsix
-vscode-extension/vd-agent-vscode-bridge-0.1.0.vsix
+release/vd-agent-vscode-bridge-0.2.0.vsix
+vscode-extension/vd-agent-vscode-bridge-0.2.0.vsix
 ```
 
 Install from VD Agent: open the `VS Code Bridge` panel, click `Install Bridge`,
@@ -57,7 +60,7 @@ install the free VS Code app first.
 Or install from the command line:
 
 ```powershell
-code --install-extension "release/vd-agent-vscode-bridge-0.1.0.vsix"
+code --install-extension "release/vd-agent-vscode-bridge-0.2.0.vsix"
 ```
 
 Or install from VS Code: Extensions panel -> `...` -> Install from VSIX -> pick
@@ -67,6 +70,19 @@ After install, open the same repository in VS Code and VD Agent, then run
 `VD Agent: Export Workspace Context`. The VD Agent `VS Code` panel shows
 connected/not connected, active file, pending commands, and the last command
 result.
+
+## VS Code-Native Features
+
+The extension also adds no-cost VS Code-side polish:
+
+- `VD Agent: Rebuild Local Workspace Index` writes a local symbol/token index
+  for faster context and status reporting.
+- Lightweight inline completions suggest workspace words and symbols without a
+  paid AI autocomplete service.
+- `VD Agent: Accept Last Previewed Edit` and `VD Agent: Reject Last Previewed
+  Edit` let users review a bridge diff in VS Code before applying it.
+- The VS Code status bar item opens a bridge status dialog with pending command,
+  index, and preview state.
 
 ## Use From VD Agent
 
