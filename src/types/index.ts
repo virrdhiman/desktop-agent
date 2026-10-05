@@ -216,7 +216,7 @@ export interface TerminalTab {
   cwd: string
 }
 
-export type Panel = 'chat' | 'files' | 'git' | 'terminal' | 'settings' | 'tasks' | 'branches' | 'sessions' | 'search'
+export type Panel = 'chat' | 'files' | 'git' | 'terminal' | 'settings' | 'tasks' | 'branches' | 'sessions' | 'search' | 'vscode'
 
 // Tool definitions the agent can use
 export const AGENT_TOOLS = [
@@ -264,6 +264,11 @@ export const AGENT_TOOLS = [
     name: 'repo_map',
     description: 'Build a local repository map with files, languages, sizes, imports, test markers, and top symbols. Use before broad multi-file changes.',
     parameters: { path: 'string (optional)', limit: 'number (optional, default 160)' },
+  },
+  {
+    name: 'repo_index',
+    description: 'Build, refresh, or report the cached repo semantic index used by repo_search/repo_plan for faster context.',
+    parameters: { path: 'string (optional)', force: 'boolean (optional, rebuild even if unchanged)' },
   },
   {
     name: 'repo_plan',

@@ -68,6 +68,102 @@ function traceText(value: string, max = 6_000): string {
   return `${text.slice(0, max)}\n[truncated]`
 }
 
+function parseToolJson(content: string): { name: string; args?: Record<string, any> } | null {
+  try {
+    const parsed = JSON.parse(content.trim())
+    return parsed && typeof parsed.name === 'string' ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+function toolIcon(name: string): string {
+  if (name.startsWith('git_')) return '🔀'
+  if (name.startsWith('vscode_')) return '⌘'
+  if (name.startsWith('web3_')) return '⛓️'
+  if (name === 'web_search') return '🌐'
+  if (name.startsWith('image')) return '🖼️'
+  if (name.startsWith('speech') || name.startsWith('text_to_speech')) return '🎤'
+  if (name === 'code_review') return '🔍'
+  if (name.includes('edit') || name.includes('write') || name.includes('create')) return '✎'
+  return '⚡'
+}
+
+function toolArgsSummary(args: Record<string, any> = {}): string {
+  return Object.entries(args)
+    .filter(([key]) => !['content', 'old_string', 'new_string', 'edits'].includes(key))
+    .map(([key, value]) => `${key}=${String(value).slice(0, 80)}`)
+    .join(', ')
+}
+
+function ToolPreview({ tool, afterTool }: { tool: { name: string; args?: Record<string, any> }; afterTool?: string }) {
+  const args = tool.args || {}
+  const edits = Array.isArray(args.edits) ? args.edits : []
+  const singleEdit = (tool.name === 'edit_file' || tool.name === 'vscode_apply_edit' || tool.name === 'vscode_show_diff') &&
+    args.path && typeof args.old_string === 'string' && typeof args.new_string === 'string'
+  const writeEdit = (tool.name === 'write_file' || tool.name === 'create_file') && args.path && typeof args.content === 'string'
+  const previewOnly = tool.name === 'preview_edits' || tool.name === 'vscode_show_diff'
+
+  return (
+    <div style={{
+      margin: '6px 0',
+      border: '1px solid var(--border)',
+      borderRadius: 8,
+      overflow: 'hidden',
+      background: 'rgba(59,130,246,0.06)',
+    }}>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 8,
+        padding: '7px 10px',
+        borderBottom: '1px solid var(--border)',
+        background: 'var(--bg-tertiary)',
+      }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontFamily: 'monospace' }}>
+          {toolIcon(tool.name)}
+          <strong>{tool.name}</strong>
+          {toolArgsSummary(args) && <span style={{ color: 'var(--text-muted)' }}>({toolArgsSummary(args)})</span>}
+        </span>
+        {(singleEdit || writeEdit || edits.length > 0) && (
+          <span className={`badge ${previewOnly ? 'badge-yellow' : 'badge-blue'}`}>
+            {previewOnly ? 'Preview' : 'Patch'}
+          </span>
+        )}
+      </div>
+
+      <div style={{ padding: 8, display: 'grid', gap: 8 }}>
+        {singleEdit && (
+          <DiffViewer filePath={args.path} oldContent={args.old_string} newContent={args.new_string} collapsed={previewOnly} />
+        )}
+        {writeEdit && (
+          <DiffViewer filePath={args.path} oldContent="" newContent={args.content} />
+        )}
+        {edits.map((edit: any, index: number) => (
+          edit?.path && typeof edit.old_string === 'string' && typeof edit.new_string === 'string'
+            ? <DiffViewer key={`${edit.path}-${index}`} filePath={edit.path} oldContent={edit.old_string} newContent={edit.new_string} collapsed={index > 1} />
+            : null
+        ))}
+        {!singleEdit && !writeEdit && edits.length === 0 && (
+          <pre style={{
+            margin: 0,
+            padding: 10,
+            background: '#0d1117',
+            borderRadius: 6,
+            overflow: 'auto',
+            fontSize: 12,
+            whiteSpace: 'pre-wrap',
+          }}>
+            {JSON.stringify(tool.args || {}, null, 2)}
+          </pre>
+        )}
+        {afterTool && <div style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>{afterTool}</div>}
+      </div>
+    </div>
+  )
+}
+
 // Simple markdown renderer component
 function MarkdownContent({ content }: { content: string }) {
   // Parse markdown into blocks
@@ -77,6 +173,10 @@ function MarkdownContent({ content }: { content: string }) {
     <div style={{ lineHeight: 1.7 }}>
       {blocks.map((block, i) => {
         if (block.type === 'code') {
+          if (block.lang === 'tool') {
+            const tool = parseToolJson(block.content)
+            if (tool) return <ToolPreview key={i} tool={tool} />
+          }
           return (
             <div key={i} style={{ margin: '8px 0', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)' }}>
               <div style={{
@@ -1360,40 +1460,9 @@ export default function AgentChat() {
                         const toolJson = toolEnd >= 0 ? part.slice(0, toolEnd) : part
                         const afterTool = toolEnd >= 0 ? part.slice(toolEnd + 3) : ''
                         try {
-                          const tool = JSON.parse(toolJson.trim())
-                          const isEditTool = tool.name === 'edit_file'
-                          const isWriteTool = tool.name === 'write_file' || tool.name === 'create_file'
-                          const toolIcon = tool.name.startsWith('git_') ? '🔀' : tool.name.startsWith('web3_') ? '⛓️' : tool.name === 'web_search' ? '🌐' : tool.name.startsWith('image') ? '🖼️' : tool.name.startsWith('speech') || tool.name.startsWith('text_to_speech') ? '🎤' : tool.name === 'code_review' ? '🔍' : '⚡'
-                          return (
-                            <div key={i} style={{ margin: '4px 0' }}>
-                              <span style={{
-                                display: 'inline-flex', alignItems: 'center', gap: 4,
-                                padding: '3px 10px', marginBottom: 4,
-                                background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.25)',
-                                borderRadius: 6, fontSize: 12, fontFamily: 'monospace',
-                              }}>
-                                {toolIcon} <span style={{ fontWeight: 600 }}>{tool.name}</span>
-                                <span style={{ color: 'var(--text-muted)', marginLeft: 4 }}>
-                                  ({Object.entries(tool.args || {}).map(([k, v]) => `${k}=${String(v).slice(0, 50)}`).join(', ')})
-                                </span>
-                              </span>
-                              {isEditTool && tool.args.path && tool.args.old_string && tool.args.new_string && (
-                                <DiffViewer
-                                  filePath={tool.args.path}
-                                  oldContent={tool.args.old_string}
-                                  newContent={tool.args.new_string}
-                                />
-                              )}
-                              {(isWriteTool) && tool.args.path && tool.args.content && (
-                                <DiffViewer
-                                  filePath={tool.args.path}
-                                  oldContent=""
-                                  newContent={tool.args.content}
-                                />
-                              )}
-                              {afterTool && <span style={{ fontSize: 13 }}>{afterTool}</span>}
-                            </div>
-                          )
+                          const tool = parseToolJson(toolJson)
+                          if (tool) return <ToolPreview key={i} tool={tool} afterTool={afterTool} />
+                          return <span key={i}>```tool{part}</span>
                         } catch {
                           return <span key={i}>```tool{part}</span>
                         }

@@ -19,10 +19,10 @@ import { COMMAND_TIMEOUT_MS, formatCommandResult, resolveToolArgs } from '../too
 import { assessToolPolicy, checkpointTargets, resolvesInsideWorkspace, toolApprovalDetail, type PermissionMode } from '../toolPolicy'
 import { createCheckpoint } from '../checkpointStore'
 import { archiveOutputPaths, extractZipArchive, inspectZipArchive, type ArchiveInspection } from '../archiveStore'
-import { buildRepoMap, searchRepo } from '../repoIndex'
+import { buildRepoIndex, buildRepoMap, repoIndexStats, searchRepo } from '../repoIndex'
 import { planRepoChange } from '../repoPlanner'
 import { previewEdits } from '../patchPreview'
-import { formatVsCodeContext, sendVsCodeBridgeCommand } from '../vscodeBridge'
+import { formatVsCodeContext, readVsCodeBridgeStatus, sendVsCodeBridgeCommand } from '../vscodeBridge'
 
 /** Git instances cache for tool execution */
 const toolGitInstances: Map<string, SimpleGit> = new Map()
@@ -39,6 +39,14 @@ async function loadToolSettings(): Promise<any> {
 }
 
 export function registerToolHandlers() {
+  ipcMain.handle('vscode:status', async (_event, workspace: string) => {
+    try {
+      return await readVsCodeBridgeStatus(workspace)
+    } catch (err: any) {
+      return { error: err.message }
+    }
+  })
+
   ipcMain.handle(
     'tool:execute',
     async (event, tool: { name: string; args: Record<string, any>; workspace?: string; sessionId?: string; taskId?: string }) => {
@@ -187,6 +195,18 @@ export function registerToolHandlers() {
               return `${entry.path} (${entry.language}${kind}, ${entry.bytes} bytes)${symbols}${imports}`
             })
             return { result: lines.length ? `Repo map (${lines.length} files):\n${lines.join('\n')}` : 'No indexable text files found.' }
+          }
+          case 'repo_index': {
+            const root = tool.args.path || tool.workspace || '.'
+            const stats = tool.args.force ? await buildRepoIndex(root, true) : await repoIndexStats(root)
+            return {
+              result: [
+                `Repo index ${stats.cached ? 'reused' : 'built'}: ${stats.files} files, ${stats.bytes} bytes.`,
+                `Updated: ${new Date(stats.updatedAt).toISOString()}`,
+                `Fingerprint: ${stats.fingerprint.slice(0, 12)}`,
+                `Root: ${stats.root}`,
+              ].join('\n'),
+            }
           }
           case 'repo_plan': {
             const root = tool.args.path || tool.workspace || '.'

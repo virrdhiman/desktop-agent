@@ -18,6 +18,7 @@ describe('resolveToolArgs', () => {
   it('defaults directory tools and run_command to the workspace', () => {
     expect(resolveToolArgs('list_files', {}, ws).path).toBe(ws)
     expect(resolveToolArgs('repo_search', { query: 'agent' }, ws).path).toBe(ws)
+    expect(resolveToolArgs('repo_index', {}, ws).path).toBe(ws)
     expect(resolveToolArgs('repo_plan', { query: 'agent loop' }, ws).path).toBe(ws)
     expect(resolveToolArgs('vscode_context', {}, ws).path).toBe(ws)
     expect(resolveToolArgs('vscode_open', { path: 'src/app.ts' }, ws).path).toBe(path.join(ws, 'src', 'app.ts'))

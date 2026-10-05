@@ -78,6 +78,7 @@ contextBridge.exposeInMainWorld('api', {
   // ═══ Agent Tools ══════════════════════════════════════════════════════════════
   // Tools the agent calls autonomously (definitions in src/types AGENT_TOOLS)
   toolExecute: (tool: { name: string; args: Record<string, any>; workspace?: string; sessionId?: string; taskId?: string }) => invokeWithTimeout('tool:execute', tool),
+  vscodeStatus: (workspace: string) => invokeWithTimeout('vscode:status', workspace),
   onCheckpointCreated: (cb: (checkpoint: CheckpointSummary) => void) => {
     const listener = (_e: unknown, checkpoint: CheckpointSummary) => cb(checkpoint)
     ipcRenderer.on('checkpoint:created', listener)
@@ -148,6 +149,24 @@ export type ConversationRecord = ConversationInput & { version: number; title: s
 export type LspLocation = { path: string; line: number; column: number; preview: string }
 export type LspDiagnostic = LspLocation & { message: string; severity: 'error' | 'warning' | 'info' }
 export type LspRenameResult = { replacements: number; updatedFiles: string[]; errors: { path: string; error: string }[] }
+export type VsCodeBridgeStatus = {
+  connected: boolean
+  bridgeFile: string
+  commandsPending: number
+  ageSeconds?: number
+  message: string
+  state: null | {
+    version: 1
+    workspacePath: string
+    updatedAt: number
+    activeFile?: string
+    activeLanguage?: string
+    selection?: { text: string; startLine: number; startColumn: number; endLine: number; endColumn: number }
+    visibleFiles: string[]
+    openFiles: string[]
+  }
+  lastResult?: { id: string; updatedAt: number; ok: boolean; message: string; action?: string }
+}
 export type AiChatResult =
   | { content: string; model?: string; models?: string[] }
   | { error: string; kind?: 'auth' | 'retry-model' | 'other' | 'cancelled'; status?: number; models?: string[] }
@@ -189,6 +208,7 @@ export type ElectronAPI = {
   onTerminalData: (cb: (termId: string, data: string) => void) => void
   onTerminalExit: (cb: (termId: string, exitCode: number) => void) => void
   toolExecute: (tool: { name: string; args: Record<string, any>; workspace?: string; sessionId?: string; taskId?: string }) => Promise<{ result?: string; error?: string }>
+  vscodeStatus: (workspace: string) => Promise<VsCodeBridgeStatus | { error: string }>
   onCheckpointCreated: (cb: (checkpoint: CheckpointSummary) => void) => () => void
   loadSettings: () => Promise<Settings>
   saveSettings: (settings: Settings) => Promise<{ success: boolean } | { error: string }>

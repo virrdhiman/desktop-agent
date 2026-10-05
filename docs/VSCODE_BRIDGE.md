@@ -16,6 +16,7 @@ The bridge writes a local file at:
 .vd-agent/vscode-bridge.json
 .vd-agent/commands/*.json
 .vd-agent/command-results/*.json
+.vd-agent/vscode-last-command.json
 ```
 
 The context file includes the active file, active language, selected text,
@@ -30,8 +31,27 @@ Code command. Source code, selections, commands, and results stay local.
 3. Open your project folder in that host window.
 4. Run `VD Agent: Export Workspace Context` from the Command Palette.
 
-For everyday use, package the extension with `vsce` or copy the folder into
-your VS Code extensions development workflow.
+## Install From VSIX
+
+Build a local one-click package:
+
+```powershell
+npm run vscode:package
+```
+
+Install from the command line:
+
+```powershell
+code --install-extension "release/vd-agent-vscode-bridge-0.1.0.vsix"
+```
+
+Or install from VS Code: Extensions panel -> `...` -> Install from VSIX -> pick
+the generated file under `release/`.
+
+After install, open the same repository in VS Code and VD Agent, then run
+`VD Agent: Export Workspace Context`. The VD Agent `VS Code` panel shows
+connected/not connected, active file, pending commands, and the last command
+result.
 
 ## Use From VD Agent
 

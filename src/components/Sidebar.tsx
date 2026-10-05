@@ -25,6 +25,7 @@ const PANELS: { id: Panel; icon: string; label: string; shortcut?: string }[] = 
   { id: 'branches', icon: '🌿', label: 'Branches' },
   { id: 'tasks', icon: '📋', label: 'Tasks' },
   { id: 'sessions', icon: '💾', label: 'Sessions' },
+  { id: 'vscode', icon: '⌘', label: 'VS Code' },
   { id: 'terminal', icon: '⬛', label: 'Terminal', shortcut: 'Ctrl+`' },
   { id: 'settings', icon: '⚙️', label: 'Settings' },
 ]

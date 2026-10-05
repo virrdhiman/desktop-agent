@@ -1,0 +1,31 @@
+# VD Agent Bridge
+
+Local VS Code companion extension for VD Agent. It exports the active editor,
+selection, visible files, and open files into `.vd-agent/vscode-bridge.json`,
+and processes local VD Agent commands for open-file, diff-preview, and exact
+edit actions.
+
+## Install From VSIX
+
+Build the extension package from the VD Agent repo:
+
+```powershell
+npm run vscode:package
+```
+
+Install it in VS Code:
+
+```powershell
+code --install-extension "release/vd-agent-vscode-bridge-0.1.0.vsix"
+```
+
+Or use VS Code: Extensions panel -> `...` -> Install from VSIX -> choose the
+file in `release/`.
+
+## Use
+
+1. Open the same repository folder in VS Code and VD Agent.
+2. In VS Code, run `VD Agent: Export Workspace Context`.
+3. In VD Agent, open the VS Code panel and confirm it says `Connected`.
+
+The bridge is local-only. It writes workspace files under `.vd-agent/`.

@@ -1,5 +1,6 @@
 import fs from 'fs'
 import path from 'path'
+import crypto from 'crypto'
 
 export type RepoSearchHit = {
   path: string
@@ -18,6 +19,29 @@ export type RepoMapEntry = {
   testLike: boolean
 }
 
+export type RepoIndexStats = {
+  root: string
+  files: number
+  bytes: number
+  fingerprint: string
+  updatedAt: number
+  cached: boolean
+}
+
+type IndexedFile = RepoMapEntry & {
+  absPath: string
+  modifiedMs: number
+  text: string
+  tokens: string[]
+  vector: Map<string, number>
+}
+
+type RepoIndexCache = {
+  fingerprint: string
+  updatedAt: number
+  files: IndexedFile[]
+}
+
 const TEXT_EXTS = new Set([
   '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.json', '.md', '.css', '.scss', '.html',
   '.py', '.go', '.rs', '.java', '.kt', '.swift', '.c', '.cpp', '.h', '.hpp', '.cs',
@@ -26,6 +50,7 @@ const TEXT_EXTS = new Set([
 const SKIP_DIRS = new Set(['.git', 'node_modules', 'dist', 'dist-electron', 'release', 'coverage', '.vite', '.next', 'out', 'build', 'target'])
 const MAX_FILE_BYTES = 500_000
 const MAX_FILES = 2500
+const repoCaches = new Map<string, RepoIndexCache>()
 
 function languageFor(file: string): string {
   const ext = path.extname(file).slice(1).toLowerCase()
@@ -105,8 +130,8 @@ function isTestLike(file: string): boolean {
   return /(^|\/)(__tests__|tests?|specs?)\//.test(normalized) || /\.(test|spec)\.[a-z0-9]+$/.test(normalized)
 }
 
-async function walkTextFiles(root: string): Promise<string[]> {
-  const files: string[] = []
+async function walkTextFiles(root: string): Promise<{ file: string; size: number; modifiedMs: number }[]> {
+  const files: { file: string; size: number; modifiedMs: number }[] = []
   async function walk(dir: string, depth: number) {
     if (files.length >= MAX_FILES || depth > 10) return
     const entries = await fs.promises.readdir(dir, { withFileTypes: true }).catch(() => [])
@@ -119,7 +144,7 @@ async function walkTextFiles(root: string): Promise<string[]> {
       const file = path.join(dir, entry.name)
       if (!isTextFile(file)) continue
       const stat = await fs.promises.stat(file).catch(() => null)
-      if (stat && stat.size <= MAX_FILE_BYTES) files.push(file)
+      if (stat && stat.size <= MAX_FILE_BYTES) files.push({ file, size: stat.size, modifiedMs: Math.round(stat.mtimeMs) })
       if (files.length >= MAX_FILES) break
     }
   }
@@ -127,40 +152,92 @@ async function walkTextFiles(root: string): Promise<string[]> {
   return files
 }
 
-export async function buildRepoMap(root: string, limit = 200): Promise<RepoMapEntry[]> {
+function fingerprintFiles(workspace: string, files: { file: string; size: number; modifiedMs: number }[]): string {
+  const hash = crypto.createHash('sha1')
+  for (const item of files) hash.update(`${relative(workspace, item.file)}:${item.size}:${item.modifiedMs}\n`)
+  return hash.digest('hex')
+}
+
+export async function buildRepoIndex(root: string, force = false): Promise<RepoIndexStats> {
   const workspace = path.resolve(root)
-  const files = await walkTextFiles(workspace)
-  const entries: RepoMapEntry[] = []
-  for (const file of files.slice(0, Math.max(1, limit))) {
-    const text = await fs.promises.readFile(file, 'utf-8').catch(() => '')
-    entries.push({
-      path: relative(workspace, file),
+  const candidates = await walkTextFiles(workspace)
+  const fingerprint = fingerprintFiles(workspace, candidates)
+  const existing = repoCaches.get(workspace)
+  if (!force && existing?.fingerprint === fingerprint) {
+    return indexStats(workspace, existing, true)
+  }
+
+  const files: IndexedFile[] = []
+  for (const item of candidates) {
+    const text = await fs.promises.readFile(item.file, 'utf-8').catch(() => '')
+    const symbols = extractSymbols(text, 20)
+    const imports = extractImports(text, 12)
+    const tokens = tokenize(`${relative(workspace, item.file)} ${symbols.join(' ')} ${imports.join(' ')} ${text.slice(0, 80_000)}`)
+    files.push({
+      path: relative(workspace, item.file),
+      absPath: item.file,
       bytes: Buffer.byteLength(text),
-      language: languageFor(file),
-      symbols: extractSymbols(text, 12),
-      imports: extractImports(text, 8),
-      testLike: isTestLike(file),
+      language: languageFor(item.file),
+      symbols,
+      imports,
+      testLike: isTestLike(item.file),
+      modifiedMs: item.modifiedMs,
+      text,
+      tokens,
+      vector: vector(tokens),
     })
   }
-  return entries
+
+  const cache: RepoIndexCache = { fingerprint, updatedAt: Date.now(), files }
+  repoCaches.set(workspace, cache)
+  return indexStats(workspace, cache, false)
+}
+
+export async function repoIndexStats(root: string): Promise<RepoIndexStats> {
+  return buildRepoIndex(root)
+}
+
+function indexStats(workspace: string, cache: RepoIndexCache, cached: boolean): RepoIndexStats {
+  return {
+    root: workspace,
+    files: cache.files.length,
+    bytes: cache.files.reduce((sum, file) => sum + file.bytes, 0),
+    fingerprint: cache.fingerprint,
+    updatedAt: cache.updatedAt,
+    cached,
+  }
+}
+
+async function indexedFiles(root: string): Promise<IndexedFile[]> {
+  const workspace = path.resolve(root)
+  await buildRepoIndex(workspace)
+  return repoCaches.get(workspace)?.files || []
+}
+
+export async function buildRepoMap(root: string, limit = 200): Promise<RepoMapEntry[]> {
+  const files = await indexedFiles(root)
+  return files.slice(0, Math.max(1, limit)).map(({ path, bytes, language, symbols, imports, testLike }) => ({
+    path,
+    bytes,
+    language,
+    symbols: symbols.slice(0, 12),
+    imports: imports.slice(0, 8),
+    testLike,
+  }))
 }
 
 export async function searchRepo(root: string, query: string, limit = 30): Promise<RepoSearchHit[]> {
-  const workspace = path.resolve(root)
   const tokens = tokenize(query)
   if (tokens.length === 0) return []
   const queryVector = vector(tokens)
   const hits: RepoSearchHit[] = []
-  for (const file of await walkTextFiles(workspace)) {
-    const rel = relative(workspace, file)
-    const relLower = normalizeText(rel)
-    const text = await fs.promises.readFile(file, 'utf-8').catch(() => '')
-    const symbols = extractSymbols(text)
-    const symbolText = normalizeText(symbols.join(' '))
-    const semanticScore = Math.round(cosine(queryVector, vector(tokenize(`${rel} ${symbols.join(' ')} ${text.slice(0, 40_000)}`))) * 25)
+  for (const file of await indexedFiles(root)) {
+    const relLower = normalizeText(file.path)
+    const symbolText = normalizeText(file.symbols.join(' '))
+    const semanticScore = Math.round(cosine(queryVector, file.vector) * 25)
     const pathScore = tokens.filter((token) => relLower.includes(token)).length * 12
     const symbolScore = tokens.filter((token) => symbolText.includes(token)).length * 10
-    const lines = text.split(/\r?\n/)
+    const lines = file.text.split(/\r?\n/)
     let bestLine = 1
     let bestScore = pathScore + symbolScore + semanticScore
     let bestReason = [pathScore ? 'path' : '', symbolScore ? 'symbol' : '', semanticScore ? 'semantic' : ''].filter(Boolean).join('+')
@@ -179,7 +256,7 @@ export async function searchRepo(root: string, query: string, limit = 30): Promi
       const from = Math.max(0, bestLine - 2)
       const to = Math.min(lines.length, bestLine + 1)
       const snippet = lines.slice(from, to).map((line, index) => `${from + index + 1}: ${line}`).join('\n')
-      hits.push({ path: rel, line: bestLine, score: bestScore, reason: bestReason || 'match', snippet })
+      hits.push({ path: file.path, line: bestLine, score: bestScore, reason: bestReason || 'match', snippet })
     }
   }
   return hits.sort((a, b) => b.score - a.score || a.path.localeCompare(b.path)).slice(0, Math.max(1, limit))

@@ -6,6 +6,7 @@ const BRIDGE_DIR = '.vd-agent'
 const BRIDGE_FILE = 'vscode-bridge.json'
 const COMMAND_DIR = path.join(BRIDGE_DIR, 'commands')
 const RESULT_DIR = path.join(BRIDGE_DIR, 'command-results')
+const LAST_COMMAND_FILE = 'vscode-last-command.json'
 
 let exportTimer
 const processing = new Set()
@@ -98,11 +99,11 @@ async function processCommandFile(commandFile, root) {
       throw new Error('Command must include id and action.')
     }
     const result = await executeBridgeCommand(root, command)
-    await writeCommandResult(root, command.id, { ok: true, message: result || 'Command completed.' })
+    await writeCommandResult(root, command.id, { ok: true, message: result || 'Command completed.', action: command.action })
     await exportContext()
   } catch (err) {
     const id = typeof command?.id === 'string' ? command.id : path.basename(commandFile, '.json')
-    await writeCommandResult(root, id, { ok: false, message: String(err && err.message ? err.message : err) })
+    await writeCommandResult(root, id, { ok: false, message: String(err && err.message ? err.message : err), action: command?.action })
   } finally {
     await fs.promises.unlink(resolved).catch(() => {})
     processing.delete(resolved)
@@ -184,7 +185,9 @@ async function writeCommandResult(root, id, patch) {
   const dir = path.join(root, RESULT_DIR)
   await fs.promises.mkdir(dir, { recursive: true })
   const target = path.join(dir, `${id}.json`)
-  await fs.promises.writeFile(target, `${JSON.stringify({ id, updatedAt: Date.now(), ...patch }, null, 2)}\n`, 'utf8')
+  const result = { id, updatedAt: Date.now(), ...patch }
+  await fs.promises.writeFile(target, `${JSON.stringify(result, null, 2)}\n`, 'utf8')
+  await fs.promises.writeFile(path.join(root, BRIDGE_DIR, LAST_COMMAND_FILE), `${JSON.stringify(result, null, 2)}\n`, 'utf8')
 }
 
 function activeWorkspaceFolder() {

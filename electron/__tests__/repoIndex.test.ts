@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { buildRepoMap, searchRepo } from '../repoIndex'
+import { buildRepoIndex, buildRepoMap, searchRepo } from '../repoIndex'
 
 let root: string
 
@@ -44,5 +44,16 @@ describe('repoIndex', () => {
     expect(hits[0].reason).toContain('semantic')
     expect(hits[0].snippet).toContain('queryQueue')
     expect(hits[0].line).toBeGreaterThan(0)
+  })
+
+  it('reuses the semantic cache until files change', async () => {
+    const first = await buildRepoIndex(root)
+    expect(first.cached).toBe(false)
+    const second = await buildRepoIndex(root)
+    expect(second.cached).toBe(true)
+    fs.writeFileSync(path.join(root, 'src', 'new.ts'), 'export const NewSymbol = 1\n')
+    const third = await buildRepoIndex(root)
+    expect(third.cached).toBe(false)
+    expect(third.files).toBeGreaterThan(first.files)
   })
 })

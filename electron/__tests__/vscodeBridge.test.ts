@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { formatVsCodeContext, loadVsCodeBridgeState, sendVsCodeBridgeCommand } from '../vscodeBridge'
+import { formatVsCodeContext, loadVsCodeBridgeState, readVsCodeBridgeStatus, sendVsCodeBridgeCommand } from '../vscodeBridge'
 
 let root: string
 
@@ -44,6 +44,33 @@ describe('vscodeBridge', () => {
   it('returns setup guidance when no bridge file exists', async () => {
     fs.rmSync(path.join(root, '.vd-agent'), { recursive: true, force: true })
     await expect(formatVsCodeContext(root)).resolves.toContain('No VS Code bridge state found')
+  })
+
+  it('reports bridge status and last command result', async () => {
+    fs.writeFileSync(path.join(root, '.vd-agent', 'vscode-bridge.json'), JSON.stringify({
+      version: 1,
+      workspacePath: root,
+      updatedAt: Date.now(),
+      activeFile: path.join(root, 'src', 'app.ts'),
+      activeLanguage: 'typescript',
+      visibleFiles: [path.join(root, 'src', 'app.ts')],
+      openFiles: [path.join(root, 'src', 'app.ts')],
+    }))
+    fs.mkdirSync(path.join(root, '.vd-agent', 'commands'), { recursive: true })
+    fs.writeFileSync(path.join(root, '.vd-agent', 'commands', 'pending.json'), '{}')
+    fs.writeFileSync(path.join(root, '.vd-agent', 'vscode-last-command.json'), JSON.stringify({
+      id: '1',
+      updatedAt: 456,
+      ok: true,
+      action: 'open_file',
+      message: 'Opened src/app.ts',
+    }))
+
+    const status = await readVsCodeBridgeStatus(root)
+    expect(status.connected).toBe(true)
+    expect(status.commandsPending).toBe(1)
+    expect(status.state?.activeFile).toBe('src/app.ts')
+    expect(status.lastResult?.action).toBe('open_file')
   })
 
   it('queues a VS Code command and reads the bridge result', async () => {

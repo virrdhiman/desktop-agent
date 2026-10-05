@@ -22,6 +22,7 @@ export type VsCodeBridgeState = {
 const BRIDGE_FILE = path.join('.vd-agent', 'vscode-bridge.json')
 const COMMAND_DIR = path.join('.vd-agent', 'commands')
 const RESULT_DIR = path.join('.vd-agent', 'command-results')
+const LAST_COMMAND_FILE = path.join('.vd-agent', 'vscode-last-command.json')
 const DEFAULT_COMMAND_TIMEOUT_MS = 8_000
 
 type VsCodeBridgeCommand = {
@@ -29,10 +30,21 @@ type VsCodeBridgeCommand = {
   args: Record<string, unknown>
 }
 
-type VsCodeBridgeCommandResult = {
+export type VsCodeBridgeCommandResult = {
   id: string
   updatedAt: number
   ok: boolean
+  message: string
+  action?: string
+}
+
+export type VsCodeBridgeStatus = {
+  connected: boolean
+  bridgeFile: string
+  commandsPending: number
+  state: VsCodeBridgeState | null
+  lastResult?: VsCodeBridgeCommandResult
+  ageSeconds?: number
   message: string
 }
 
@@ -93,6 +105,27 @@ export async function formatVsCodeContext(workspace: string): Promise<string> {
   return lines.join('\n')
 }
 
+export async function readVsCodeBridgeStatus(workspace: string): Promise<VsCodeBridgeStatus> {
+  const root = path.resolve(workspace)
+  const state = await loadVsCodeBridgeState(root)
+  const commandDir = path.join(root, COMMAND_DIR)
+  const commandsPending = (await fs.promises.readdir(commandDir).catch(() => []))
+    .filter((entry) => entry.endsWith('.json')).length
+  const lastResult = await readJson<VsCodeBridgeCommandResult>(path.join(root, LAST_COMMAND_FILE))
+  const ageSeconds = state?.updatedAt ? Math.max(0, Math.round((Date.now() - state.updatedAt) / 1000)) : undefined
+  return {
+    connected: !!state,
+    bridgeFile: path.join(root, BRIDGE_FILE),
+    commandsPending,
+    state,
+    lastResult: sanitizeCommandResult(lastResult),
+    ageSeconds,
+    message: state
+      ? `Connected${ageSeconds == null ? '' : `, exported ${ageSeconds}s ago`}.`
+      : 'Not connected. Install the VD Agent Bridge extension and run "VD Agent: Export Workspace Context" in VS Code.',
+  }
+}
+
 export async function sendVsCodeBridgeCommand(
   workspace: string,
   command: VsCodeBridgeCommand,
@@ -132,6 +165,27 @@ async function waitForCommandResult(file: string, timeoutMs: number): Promise<Vs
     await new Promise((resolve) => setTimeout(resolve, 150))
   }
   return null
+}
+
+async function readJson<T>(file: string): Promise<T | null> {
+  const raw = await fs.promises.readFile(file, 'utf8').catch(() => '')
+  if (!raw) return null
+  try {
+    return JSON.parse(raw) as T
+  } catch {
+    return null
+  }
+}
+
+function sanitizeCommandResult(result: VsCodeBridgeCommandResult | null): VsCodeBridgeCommandResult | undefined {
+  if (!result || typeof result !== 'object' || typeof result.ok !== 'boolean') return undefined
+  return {
+    id: typeof result.id === 'string' ? result.id : '',
+    updatedAt: Number(result.updatedAt || 0),
+    ok: result.ok,
+    message: typeof result.message === 'string' ? result.message.slice(0, 2_000) : '',
+    action: typeof result.action === 'string' ? result.action : undefined,
+  }
 }
 
 function sanitizeSelection(selection: unknown): VsCodeBridgeState['selection'] | undefined {

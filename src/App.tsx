@@ -30,6 +30,7 @@ import BranchManager from './components/BranchManager'
 import SessionsPanel from './components/SessionsPanel'
 import SearchResults from './components/SearchResults'
 import CommandPalette from './components/CommandPalette'
+import VsCodeBridgePanel from './components/VsCodeBridgePanel'
 
 export default function App() {
   const {
@@ -71,6 +72,7 @@ export default function App() {
         window.api.walkDirectory(activeWorkspace).then((files) => {
           setAllFiles(files)
         })
+        void window.api.toolExecute({ name: 'repo_index', args: {}, workspace: activeWorkspace }).catch(() => {})
       } catch (err: any) {
         console.warn(`Failed to initialize VD Agent: ${err?.message || err}`)
       }
@@ -157,6 +159,7 @@ export default function App() {
             {activePanel === 'branches' && <BranchManager />}
             {activePanel === 'tasks' && <TaskPanel />}
             {activePanel === 'sessions' && <SessionsPanel />}
+            {activePanel === 'vscode' && <VsCodeBridgePanel />}
             {activePanel === 'search' && <SearchResults />}
             {activePanel === 'terminal' && <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}><MultiTerminal /></div>}
             {activePanel === 'settings' && <SettingsPanel />}
