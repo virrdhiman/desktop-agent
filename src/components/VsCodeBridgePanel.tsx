@@ -64,6 +64,10 @@ export default function VsCodeBridgePanel() {
     await refresh()
   }
 
+  const runVsCodeCommand = async (command: string) => {
+    await runTool('vscode_command', { command })
+  }
+
   const runSetupAction = async (label: string, action: () => Promise<{ result?: string; error?: string } | void>) => {
     setLoading(true)
     try {
@@ -120,9 +124,30 @@ export default function VsCodeBridgePanel() {
           <Row
             label="VS Code index"
             value={status?.state?.index
-              ? `${status.state.index.files} files, ${status.state.index.symbols} symbols, ${fmtTime(status.state.index.updatedAt)}`
+              ? `${status.state.index.files} files, ${status.state.index.symbols} symbols, ${status.state.index.imports || 0} imports, ${status.state.index.semanticFiles || 0} semantic files, ${fmtTime(status.state.index.updatedAt)}`
               : <span style={{ color: 'var(--text-muted)' }}>Not exported yet</span>}
           />
+        </section>
+
+        <section className="card" style={{ display: 'grid', gap: 10 }}>
+          <h3 style={{ fontSize: 13 }}>VS Code Actions</h3>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button className="btn btn-sm" disabled={!connected || loading} onClick={() => void runVsCodeCommand('vdAgent.openDashboard')}>
+              Dashboard
+            </button>
+            <button className="btn btn-sm" disabled={!connected || loading} onClick={() => void runVsCodeCommand('vdAgent.rebuildIndex')}>
+              Rebuild Index
+            </button>
+            <button className="btn btn-sm" disabled={!connected || loading} onClick={() => void runVsCodeCommand('vdAgent.processCommands')}>
+              Process Commands
+            </button>
+            <button className="btn btn-sm" disabled={!connected || loading} onClick={() => void runVsCodeCommand('vdAgent.acceptLastPreview')}>
+              Accept Preview
+            </button>
+            <button className="btn btn-sm" disabled={!connected || loading} onClick={() => void runVsCodeCommand('vdAgent.rejectLastPreview')}>
+              Reject Preview
+            </button>
+          </div>
         </section>
 
         <section className="card" style={{ display: 'grid', gap: 10 }}>

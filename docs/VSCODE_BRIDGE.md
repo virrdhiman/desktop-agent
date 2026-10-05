@@ -49,8 +49,8 @@ npm run vscode:package
 This writes:
 
 ```text
-release/vd-agent-vscode-bridge-0.2.0.vsix
-vscode-extension/vd-agent-vscode-bridge-0.2.0.vsix
+release/vd-agent-vscode-bridge-0.3.0.vsix
+vscode-extension/vd-agent-vscode-bridge-0.3.0.vsix
 ```
 
 Install from VD Agent: open the `VS Code Bridge` panel, click `Install Bridge`,
@@ -60,7 +60,7 @@ install the free VS Code app first.
 Or install from the command line:
 
 ```powershell
-code --install-extension "release/vd-agent-vscode-bridge-0.2.0.vsix"
+code --install-extension "release/vd-agent-vscode-bridge-0.3.0.vsix"
 ```
 
 Or install from VS Code: Extensions panel -> `...` -> Install from VSIX -> pick
@@ -81,6 +81,10 @@ The extension also adds no-cost VS Code-side polish:
   paid AI autocomplete service.
 - `VD Agent: Accept Last Previewed Edit` and `VD Agent: Reject Last Previewed
   Edit` let users review a bridge diff in VS Code before applying it.
+- Preview files show CodeLens actions for accepting or rejecting the latest VD
+  Agent preview directly above the diff content.
+- `VD Agent: Open Bridge Dashboard` opens a local dashboard with context,
+  pending commands, index, and preview controls.
 - The VS Code status bar item opens a bridge status dialog with pending command,
   index, and preview state.
 

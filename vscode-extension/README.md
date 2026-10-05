@@ -23,7 +23,7 @@ npm run vscode:package
 Install it in VS Code:
 
 ```powershell
-code --install-extension "release/vd-agent-vscode-bridge-0.2.0.vsix"
+code --install-extension "release/vd-agent-vscode-bridge-0.3.0.vsix"
 ```
 
 Or use VS Code: Extensions panel -> `...` -> Install from VSIX -> choose the

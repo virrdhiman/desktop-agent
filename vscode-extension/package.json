@@ -2,7 +2,7 @@
   "name": "vd-agent-vscode-bridge",
   "displayName": "VD Agent Bridge",
   "description": "Exports VS Code workspace/editor context, local index data, inline suggestions, and VD Agent editor commands.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "virender-dhiman",
   "license": "SEE LICENSE IN ../LICENSE",
   "engines": {
@@ -18,7 +18,8 @@
     "onCommand:vdAgent.openIndexFile",
     "onCommand:vdAgent.acceptLastPreview",
     "onCommand:vdAgent.rejectLastPreview",
-    "onCommand:vdAgent.showStatus"
+    "onCommand:vdAgent.showStatus",
+    "onCommand:vdAgent.openDashboard"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -54,6 +55,10 @@
       {
         "command": "vdAgent.showStatus",
         "title": "VD Agent: Show Bridge Status"
+      },
+      {
+        "command": "vdAgent.openDashboard",
+        "title": "VD Agent: Open Bridge Dashboard"
       }
     ],
     "menus": {
@@ -63,7 +68,8 @@
         { "command": "vdAgent.rebuildIndex" },
         { "command": "vdAgent.acceptLastPreview" },
         { "command": "vdAgent.rejectLastPreview" },
-        { "command": "vdAgent.showStatus" }
+        { "command": "vdAgent.showStatus" },
+        { "command": "vdAgent.openDashboard" }
       ],
       "editor/title": [
         {
@@ -103,6 +109,13 @@
           "minimum": 100,
           "maximum": 10000,
           "description": "Maximum workspace files indexed by the local VD Agent Bridge."
+        },
+        "vdAgentBridge.maxSemanticSymbolFiles": {
+          "type": "number",
+          "default": 350,
+          "minimum": 0,
+          "maximum": 2000,
+          "description": "Maximum files where VS Code symbol providers are used while building the local index."
         }
       }
     }

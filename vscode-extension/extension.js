@@ -20,6 +20,7 @@ let exportTimer
 let indexTimer
 let latestIndex = null
 let statusBar
+let dashboardPanel = null
 const processing = new Set()
 
 function activate(context) {
@@ -51,6 +52,12 @@ function activate(context) {
     vscode.commands.registerCommand('vdAgent.acceptLastPreview', acceptLastPreview),
     vscode.commands.registerCommand('vdAgent.rejectLastPreview', rejectLastPreview),
     vscode.commands.registerCommand('vdAgent.showStatus', showBridgeStatus),
+    vscode.commands.registerCommand('vdAgent.openDashboard', openDashboard),
+    vscode.languages.registerCodeLensProvider({ scheme: 'file', pattern: `**/${BRIDGE_DIR}/diff-previews/*` }, {
+      provideCodeLenses(document) {
+        return previewCodeLenses(document)
+      },
+    }),
     vscode.languages.registerInlineCompletionItemProvider({ pattern: '**/*' }, {
       provideInlineCompletionItems(document, position) {
         return provideLocalInlineCompletions(document, position)
@@ -131,7 +138,9 @@ async function rebuildIndex() {
   const root = folder.uri.fsPath
   const targetDir = path.join(root, BRIDGE_DIR)
   const target = path.join(targetDir, INDEX_FILE)
-  const maxIndexedFiles = vscode.workspace.getConfiguration('vdAgentBridge').get('maxIndexedFiles', 2000)
+  const config = vscode.workspace.getConfiguration('vdAgentBridge')
+  const maxIndexedFiles = config.get('maxIndexedFiles', 2000)
+  const maxSemanticSymbolFiles = config.get('maxSemanticSymbolFiles', 350)
   const uris = await vscode.workspace.findFiles(
     '**/*',
     '{**/.git/**,**/node_modules/**,**/dist/**,**/dist-electron/**,**/release/**,**/coverage/**,**/.vite/**,**/.next/**,**/out/**,**/build/**,**/target/**,**/.vd-agent/**}',
@@ -139,19 +148,25 @@ async function rebuildIndex() {
   )
   const files = []
   let totalBytes = 0
+  let semanticFiles = 0
   for (const uri of uris) {
     if (uri.scheme !== 'file' || !isTextFile(uri.fsPath) || !isFileInside(root, uri.fsPath)) continue
     const stat = await fs.promises.stat(uri.fsPath).catch(() => null)
     if (!stat || stat.size > MAX_FILE_BYTES) continue
     const text = await fs.promises.readFile(uri.fsPath, 'utf8').catch(() => '')
-    const symbols = extractSymbols(text, 16)
-    const tokens = tokenize(`${vscode.workspace.asRelativePath(uri)} ${symbols.join(' ')} ${text.slice(0, 40000)}`).slice(0, 80)
+    const semanticSymbols = semanticFiles < maxSemanticSymbolFiles ? await extractVsCodeSymbols(uri) : []
+    if (semanticSymbols.length) semanticFiles += 1
+    const regexSymbols = extractSymbols(text, 16)
+    const symbols = unique([...semanticSymbols, ...regexSymbols]).slice(0, 32)
+    const imports = extractImports(text, 24)
+    const tokens = tokenize(`${vscode.workspace.asRelativePath(uri)} ${symbols.join(' ')} ${imports.join(' ')} ${text.slice(0, 40000)}`).slice(0, 120)
     totalBytes += Buffer.byteLength(text)
     files.push({
       path: vscode.workspace.asRelativePath(uri),
       language: languageFor(uri.fsPath),
       bytes: Buffer.byteLength(text),
       symbols,
+      imports,
       tokens,
     })
   }
@@ -162,6 +177,8 @@ async function rebuildIndex() {
     files,
     fileCount: files.length,
     symbolCount: files.reduce((sum, file) => sum + file.symbols.length, 0),
+    importCount: files.reduce((sum, file) => sum + file.imports.length, 0),
+    semanticFiles,
     totalBytes,
   }
   await fs.promises.mkdir(targetDir, { recursive: true })
@@ -178,6 +195,8 @@ async function readIndexSummary(root) {
     updatedAt: Number(index.updatedAt || 0),
     files: Number(index.fileCount || index.files?.length || 0),
     symbols: Number(index.symbolCount || 0),
+    imports: Number(index.importCount || 0),
+    semanticFiles: Number(index.semanticFiles || 0),
     bytes: Number(index.totalBytes || 0),
   }
 }
@@ -370,6 +389,93 @@ async function showBridgeStatus() {
   vscode.window.showInformationMessage('VD Agent Bridge status', { modal: true, detail })
 }
 
+function previewCodeLenses(document) {
+  if (!document.uri.fsPath.includes(`${path.sep}${BRIDGE_DIR}${path.sep}diff-previews${path.sep}`)) return []
+  const top = new vscode.Range(0, 0, 0, 0)
+  return [
+    new vscode.CodeLens(top, { title: '$(check) Accept VD Agent Preview', command: 'vdAgent.acceptLastPreview' }),
+    new vscode.CodeLens(top, { title: '$(close) Reject VD Agent Preview', command: 'vdAgent.rejectLastPreview' }),
+    new vscode.CodeLens(top, { title: '$(info) Bridge Status', command: 'vdAgent.showStatus' }),
+  ]
+}
+
+async function openDashboard() {
+  const folder = activeWorkspaceFolder()
+  if (!folder) return vscode.window.showWarningMessage('Open a workspace before opening the VD Agent dashboard.')
+  if (dashboardPanel) {
+    dashboardPanel.reveal(vscode.ViewColumn.Beside)
+    dashboardPanel.webview.html = await dashboardHtml(folder.uri.fsPath)
+    return
+  }
+  dashboardPanel = vscode.window.createWebviewPanel(
+    'vdAgentBridge',
+    'VD Agent Bridge',
+    vscode.ViewColumn.Beside,
+    { enableScripts: true },
+  )
+  dashboardPanel.onDidDispose(() => { dashboardPanel = null })
+  dashboardPanel.webview.onDidReceiveMessage(async (message) => {
+    if (message?.command === 'export') await exportContext()
+    if (message?.command === 'index') await rebuildIndex()
+    if (message?.command === 'process') await processAllCommands()
+    if (message?.command === 'accept') await acceptLastPreview()
+    if (message?.command === 'reject') await rejectLastPreview()
+    if (dashboardPanel) dashboardPanel.webview.html = await dashboardHtml(folder.uri.fsPath)
+  })
+  dashboardPanel.webview.html = await dashboardHtml(folder.uri.fsPath)
+}
+
+async function dashboardHtml(root) {
+  const index = await readIndexSummary(root)
+  const pending = (await fs.promises.readdir(path.join(root, COMMAND_DIR)).catch(() => []))
+    .filter((entry) => entry.endsWith('.json')).length
+  const preview = await readJson(path.join(root, BRIDGE_DIR, LAST_PREVIEW_FILE))
+  const bridge = await readJson(path.join(root, BRIDGE_DIR, BRIDGE_FILE))
+  const nonce = String(Date.now())
+  const activeFile = bridge?.activeFile ? vscode.workspace.asRelativePath(bridge.activeFile) : 'None'
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
+<style>
+  body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); padding: 18px; }
+  h1 { font-size: 18px; margin: 0 0 14px; }
+  .grid { display: grid; gap: 10px; }
+  .row { display: grid; grid-template-columns: 140px 1fr; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--vscode-panel-border); }
+  .label { color: var(--vscode-descriptionForeground); }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  button { color: var(--vscode-button-foreground); background: var(--vscode-button-background); border: 0; padding: 7px 10px; cursor: pointer; }
+  button.secondary { color: var(--vscode-button-secondaryForeground); background: var(--vscode-button-secondaryBackground); }
+  code { word-break: break-all; }
+</style>
+</head>
+<body>
+  <h1>VD Agent Bridge</h1>
+  <div class="grid">
+    <div class="row"><div class="label">Workspace</div><code>${escapeHtml(root)}</code></div>
+    <div class="row"><div class="label">Active file</div><div>${escapeHtml(activeFile)}</div></div>
+    <div class="row"><div class="label">Pending commands</div><div>${pending}</div></div>
+    <div class="row"><div class="label">Index</div><div>${index ? `${index.files} files, ${index.symbols} symbols, ${index.imports || 0} imports, ${index.semanticFiles || 0} semantic files` : 'Not built yet'}</div></div>
+    <div class="row"><div class="label">Preview</div><div>${preview?.file ? escapeHtml(vscode.workspace.asRelativePath(preview.file)) : 'None'}</div></div>
+  </div>
+  <div class="actions">
+    <button data-command="export">Export Context</button>
+    <button data-command="index">Rebuild Index</button>
+    <button data-command="process">Process Commands</button>
+    <button data-command="accept">Accept Preview</button>
+    <button class="secondary" data-command="reject">Reject Preview</button>
+  </div>
+  <script nonce="${nonce}">
+    const vscode = acquireVsCodeApi();
+    document.querySelectorAll('button[data-command]').forEach((button) => {
+      button.addEventListener('click', () => vscode.postMessage({ command: button.dataset.command }));
+    });
+  </script>
+</body>
+</html>`
+}
+
 async function writeCommandResult(root, id, patch) {
   const dir = path.join(root, RESULT_DIR)
   await fs.promises.mkdir(dir, { recursive: true })
@@ -446,6 +552,39 @@ function extractSymbols(text, max = 20) {
   return [...symbols]
 }
 
+async function extractVsCodeSymbols(uri) {
+  try {
+    const symbols = await vscode.commands.executeCommand('vscode.executeDocumentSymbolProvider', uri)
+    const out = []
+    collectDocumentSymbols(symbols || [], out)
+    return unique(out).slice(0, 32)
+  } catch {
+    return []
+  }
+}
+
+function collectDocumentSymbols(symbols, out) {
+  for (const symbol of symbols || []) {
+    if (symbol?.name) out.push(symbol.name)
+    if (Array.isArray(symbol?.children)) collectDocumentSymbols(symbol.children, out)
+  }
+}
+
+function extractImports(text, max = 24) {
+  const imports = new Set()
+  const patterns = [
+    /\bimport\s+(?:[^'"]+\s+from\s+)?['"]([^'"]+)['"]/g,
+    /\brequire\(['"]([^'"]+)['"]\)/g,
+    /^\s*from\s+([A-Za-z0-9_./-]+)\s+import\b/gm,
+    /^\s*import\s+([A-Za-z0-9_./-]+)/gm,
+  ]
+  for (const pattern of patterns) {
+    let match
+    while ((match = pattern.exec(text)) && imports.size < max) imports.add(match[1])
+  }
+  return [...imports]
+}
+
 function tokenize(text) {
   return [...new Set(String(text)
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
@@ -453,6 +592,19 @@ function tokenize(text) {
     .toLowerCase()
     .split(/[^a-z0-9]+/)
     .filter((token) => token.length >= 3 && token.length <= 40))]
+}
+
+function unique(values) {
+  return [...new Set(values.filter(Boolean).map((value) => String(value)))]
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
 }
 
 function isFileInside(root, file) {
