@@ -9,6 +9,7 @@ const RESULT_DIR = path.join(BRIDGE_DIR, 'command-results')
 const LAST_COMMAND_FILE = 'vscode-last-command.json'
 const INDEX_FILE = 'vscode-index.json'
 const LAST_PREVIEW_FILE = 'vscode-last-preview.json'
+const TASKS_FILE = 'vscode-agent-tasks.json'
 const TEXT_EXTS = new Set([
   '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.json', '.md', '.css', '.scss', '.html',
   '.py', '.go', '.rs', '.java', '.kt', '.swift', '.c', '.cpp', '.h', '.hpp', '.cs',
@@ -21,11 +22,15 @@ let indexTimer
 let latestIndex = null
 let statusBar
 let dashboardPanel = null
+let assistantProvider = null
+let activeCompletionController = null
+const completionCache = new Map()
 const processing = new Set()
 
 function activate(context) {
   statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 80)
   statusBar.command = 'vdAgent.showStatus'
+  assistantProvider = new VdAgentAssistantViewProvider(context.extensionUri)
   context.subscriptions.push(statusBar)
 
   context.subscriptions.push(
@@ -53,14 +58,25 @@ function activate(context) {
     vscode.commands.registerCommand('vdAgent.rejectLastPreview', rejectLastPreview),
     vscode.commands.registerCommand('vdAgent.showStatus', showBridgeStatus),
     vscode.commands.registerCommand('vdAgent.openDashboard', openDashboard),
+    vscode.commands.registerCommand('vdAgent.fixWithVD', () => runNativeEditorAction('fix')),
+    vscode.commands.registerCommand('vdAgent.explainWithVD', () => runNativeEditorAction('explain')),
+    vscode.commands.registerCommand('vdAgent.refactorWithVD', () => runNativeEditorAction('refactor')),
+    vscode.commands.registerCommand('vdAgent.generateTestsWithVD', () => runNativeEditorAction('tests')),
+    vscode.commands.registerCommand('vdAgent.openWorkspaceTerminal', openWorkspaceTerminal),
+    vscode.window.registerWebviewViewProvider('vdAgent.assistantView', assistantProvider),
+    vscode.languages.registerCodeActionsProvider({ scheme: 'file' }, {
+      provideCodeActions(document, range, context) {
+        return provideVdCodeActions(document, range, context)
+      },
+    }, { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix, vscode.CodeActionKind.RefactorRewrite] }),
     vscode.languages.registerCodeLensProvider({ scheme: 'file', pattern: `**/${BRIDGE_DIR}/diff-previews/*` }, {
       provideCodeLenses(document) {
         return previewCodeLenses(document)
       },
     }),
     vscode.languages.registerInlineCompletionItemProvider({ pattern: '**/*' }, {
-      provideInlineCompletionItems(document, position) {
-        return provideLocalInlineCompletions(document, position)
+      provideInlineCompletionItems(document, position, context, token) {
+        return provideInlineCompletions(document, position, context, token)
       },
     }),
     vscode.window.onDidChangeActiveTextEditor(scheduleExport),
@@ -201,10 +217,33 @@ async function readIndexSummary(root) {
   }
 }
 
-function provideLocalInlineCompletions(document, position) {
+async function provideInlineCompletions(document, position, _context, token) {
   const config = vscode.workspace.getConfiguration('vdAgentBridge')
   if (!config.get('inlineCompletion', true)) return []
   if (document.uri.scheme !== 'file' || document.lineAt(position.line).text.trimStart().startsWith('//')) return []
+  const local = provideLocalInlineCompletions(document, position)
+  if (!config.get('aiInlineCompletion', true) || config.get('aiProvider', 'ollama') === 'disabled') return local
+  const linePrefix = document.lineAt(position.line).text.slice(0, position.character)
+  if (!/[A-Za-z_$\])}.'"`][\w$.'"`)\]} ]{0,80}$/.test(linePrefix) && linePrefix.trim().length > 0) return local
+  const delayMs = config.get('aiAutocompleteDelayMs', 220)
+  await delay(delayMs, token)
+  if (token?.isCancellationRequested) return []
+  const cacheKey = completionCacheKey(document, position)
+  const cached = completionCache.get(cacheKey)
+  if (cached && Date.now() - cached.at < 30_000) return inlineList(cached.text, position, local)
+  try {
+    const text = await requestAiInlineCompletion(document, position, token)
+    if (!text) return local
+    completionCache.set(cacheKey, { at: Date.now(), text })
+    trimCompletionCache()
+    return inlineList(text, position, local)
+  } catch {
+    return local
+  }
+}
+
+function provideLocalInlineCompletions(document, position) {
+  if (!latestIndex) return []
   const linePrefix = document.lineAt(position.line).text.slice(0, position.character)
   const match = linePrefix.match(/[A-Za-z_$][\w$]{2,}$/)
   if (!match || !latestIndex) return []
@@ -226,6 +265,78 @@ function provideLocalInlineCompletions(document, position) {
   return new vscode.InlineCompletionList(items)
 }
 
+async function requestAiInlineCompletion(document, position, token) {
+  const folder = vscode.workspace.getWorkspaceFolder(document.uri)
+  if (!folder) return ''
+  const offset = document.offsetAt(position)
+  const text = document.getText()
+  const before = text.slice(Math.max(0, offset - 4500), offset)
+  const after = text.slice(offset, Math.min(text.length, offset + 2200))
+  const related = relatedIndexContext(document.uri.fsPath, 6)
+  const prompt = [
+    'You are VD Agent inline autocomplete. Return only the code/text that should be inserted at the cursor.',
+    'Do not use markdown fences. Do not repeat code already before the cursor. Keep the completion short.',
+    `Language: ${document.languageId}`,
+    `File: ${vscode.workspace.asRelativePath(document.uri)}`,
+    related ? `Related workspace context:\n${related}` : '',
+    '<BEFORE_CURSOR>',
+    before,
+    '<AFTER_CURSOR>',
+    after,
+    '<INSERT_COMPLETION>',
+  ].filter(Boolean).join('\n')
+  const raw = await requestAiText(prompt, {
+    timeoutMs: vscode.workspace.getConfiguration('vdAgentBridge').get('aiAutocompleteTimeoutMs', 2500),
+    token,
+    maxTokens: 96,
+    temperature: 0.12,
+    abortPrevious: true,
+  })
+  return cleanInlineCompletion(raw, before)
+}
+
+function inlineList(text, position, fallback) {
+  const cleaned = String(text || '').replace(/\r/g, '')
+  if (!cleaned.trim()) return fallback
+  return new vscode.InlineCompletionList([
+    new vscode.InlineCompletionItem(cleaned, new vscode.Range(position, position)),
+  ])
+}
+
+function completionCacheKey(document, position) {
+  const offset = document.offsetAt(position)
+  const text = document.getText()
+  const before = text.slice(Math.max(0, offset - 600), offset)
+  const after = text.slice(offset, Math.min(text.length, offset + 240))
+  return `${document.uri.fsPath}:${document.version}:${position.line}:${position.character}:${hashText(before)}:${hashText(after)}`
+}
+
+function trimCompletionCache() {
+  while (completionCache.size > 80) {
+    const first = completionCache.keys().next().value
+    completionCache.delete(first)
+  }
+}
+
+function cleanInlineCompletion(raw, before) {
+  let text = String(raw || '')
+    .replace(/```[a-zA-Z0-9_-]*\n?/g, '')
+    .replace(/```/g, '')
+    .replace(/^<INSERT_COMPLETION>/i, '')
+    .trimEnd()
+  const beforeTail = before.slice(-120)
+  for (let i = Math.min(text.length, beforeTail.length); i > 8; i--) {
+    if (beforeTail.endsWith(text.slice(0, i))) {
+      text = text.slice(i)
+      break
+    }
+  }
+  const lines = text.split('\n')
+  if (lines.length > 8) text = lines.slice(0, 8).join('\n')
+  if (text.length > 600) text = text.slice(0, 600)
+  return text
+}
+
 async function processAllCommands() {
   for (const folder of vscode.workspace.workspaceFolders || []) {
     const dir = path.join(folder.uri.fsPath, COMMAND_DIR)
@@ -234,6 +345,97 @@ async function processAllCommands() {
       if (entry.endsWith('.json')) await processCommandFile(path.join(dir, entry), folder.uri.fsPath)
     }
   }
+}
+
+async function requestAiText(prompt, options = {}) {
+  const config = vscode.workspace.getConfiguration('vdAgentBridge')
+  const provider = config.get('aiProvider', 'ollama')
+  if (provider === 'disabled') return ''
+  const baseUrl = String(config.get('aiBaseUrl', 'http://localhost:11434')).replace(/\/+$/, '')
+  const model = String(config.get('aiModel', 'qwen2.5-coder:1.5b')).trim()
+  const apiKey = String(config.get('aiApiKey', '') || '')
+  const timeoutMs = Number(options.timeoutMs || 12_000)
+  if (!model) return ''
+  if (options.abortPrevious && activeCompletionController) activeCompletionController.abort()
+  const controller = new AbortController()
+  if (options.abortPrevious) activeCompletionController = controller
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  const cancel = options.token?.onCancellationRequested?.(() => controller.abort())
+  try {
+    if (provider === 'openai-compatible') {
+      const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: 'You are VD Agent inside VS Code. Be concise and return only the requested output.' },
+            { role: 'user', content: prompt },
+          ],
+          temperature: options.temperature ?? 0.15,
+          max_tokens: options.maxTokens || 512,
+          stream: false,
+        }),
+        signal: controller.signal,
+      })
+      if (!response.ok) throw new Error(`AI provider HTTP ${response.status}`)
+      const data = await response.json()
+      return data?.choices?.[0]?.message?.content || ''
+    }
+    const response = await fetch(`${baseUrl}/api/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        prompt,
+        stream: false,
+        options: {
+          temperature: options.temperature ?? 0.15,
+          num_predict: options.maxTokens || 512,
+        },
+      }),
+      signal: controller.signal,
+    })
+    if (!response.ok) throw new Error(`Ollama HTTP ${response.status}`)
+    const data = await response.json()
+    return data?.response || ''
+  } finally {
+    clearTimeout(timeout)
+    cancel?.dispose?.()
+    if (activeCompletionController === controller) activeCompletionController = null
+  }
+}
+
+function relatedIndexContext(file, limit = 6) {
+  if (!latestIndex?.files?.length) return ''
+  const activeRel = vscode.workspace.asRelativePath(file).replace(/\\/g, '/')
+  const active = latestIndex.files.find((entry) => entry.path === activeRel)
+  const query = new Set([
+    ...tokenize(activeRel),
+    ...(active?.symbols || []).flatMap(tokenize),
+    ...(active?.imports || []).flatMap(tokenize),
+  ])
+  return latestIndex.files
+    .filter((entry) => entry.path !== activeRel)
+    .map((entry) => {
+      const haystack = new Set([...(entry.tokens || []), ...(entry.symbols || []).flatMap(tokenize), ...(entry.imports || []).flatMap(tokenize)])
+      let score = 0
+      for (const token of query) if (haystack.has(token)) score += 1
+      if (sameDirectory(activeRel, entry.path)) score += 2
+      return { entry, score }
+    })
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score || a.entry.path.localeCompare(b.entry.path))
+    .slice(0, limit)
+    .map(({ entry }) => `${entry.path}: symbols=${(entry.symbols || []).slice(0, 8).join(', ')} imports=${(entry.imports || []).slice(0, 6).join(', ')}`)
+    .join('\n')
+}
+
+function sameDirectory(a, b) {
+  return path.dirname(a.replace(/\\/g, '/')) === path.dirname(b.replace(/\\/g, '/'))
 }
 
 async function processCommandFile(commandFile, root) {
@@ -372,6 +574,113 @@ async function rejectLastPreview() {
   vscode.window.showInformationMessage('VD Agent preview rejected.')
 }
 
+function provideVdCodeActions(document, range, context) {
+  const folder = vscode.workspace.getWorkspaceFolder(document.uri)
+  if (document.uri.scheme !== 'file' || !folder || !isFileInside(folder.uri.fsPath, document.uri.fsPath)) return []
+  const actions = []
+  if (context.diagnostics?.length) {
+    const fix = new vscode.CodeAction('Fix with VD Agent', vscode.CodeActionKind.QuickFix)
+    fix.command = { command: 'vdAgent.fixWithVD', title: 'Fix with VD Agent' }
+    fix.diagnostics = context.diagnostics
+    actions.push(fix)
+  }
+  if (!range.isEmpty) {
+    const explain = new vscode.CodeAction('Explain with VD Agent', vscode.CodeActionKind.RefactorRewrite)
+    explain.command = { command: 'vdAgent.explainWithVD', title: 'Explain with VD Agent' }
+    const refactor = new vscode.CodeAction('Refactor with VD Agent', vscode.CodeActionKind.RefactorRewrite)
+    refactor.command = { command: 'vdAgent.refactorWithVD', title: 'Refactor with VD Agent' }
+    actions.push(explain, refactor)
+  }
+  const tests = new vscode.CodeAction('Generate tests with VD Agent', vscode.CodeActionKind.RefactorRewrite)
+  tests.command = { command: 'vdAgent.generateTestsWithVD', title: 'Generate tests with VD Agent' }
+  actions.push(tests)
+  return actions
+}
+
+async function runNativeEditorAction(kind, promptOverride) {
+  const editor = vscode.window.activeTextEditor
+  if (!editor || editor.document.uri.scheme !== 'file') return vscode.window.showWarningMessage('Open a file before using VD Agent editor actions.')
+  const folder = vscode.workspace.getWorkspaceFolder(editor.document.uri)
+  if (!folder) return vscode.window.showWarningMessage('Open a workspace before using VD Agent editor actions.')
+  const document = editor.document
+  const selection = editor.selection
+  const selectedText = selection.isEmpty ? '' : document.getText(selection)
+  const diagnostics = vscode.languages.getDiagnostics(document.uri)
+    .filter((diag) => selection.isEmpty || diag.range.intersection(selection))
+    .slice(0, 12)
+    .map((diag) => `${diag.range.start.line + 1}:${diag.range.start.character + 1} ${diag.message}`)
+    .join('\n')
+  const prompt = promptOverride
+    ? buildNativeActionPrompt('ask', document, selectedText, diagnostics, promptOverride)
+    : buildNativeActionPrompt(kind, document, selectedText, diagnostics)
+  const task = await recordTask(kind, document.uri.fsPath, prompt)
+  assistantProvider?.refresh?.()
+  await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: `VD Agent ${kind}`, cancellable: true }, async (_progress, token) => {
+    const result = await requestAiText(prompt, { timeoutMs: 25_000, token, maxTokens: kind === 'explain' ? 800 : 1200, temperature: 0.18 })
+    if (!result.trim()) throw new Error('No AI response. Check VD Agent Bridge AI settings or local Ollama.')
+    await finishNativeAction(kind, editor, selectedText, result)
+    await updateTask(task.id, { status: 'done', result: result.slice(0, 2000), updatedAt: Date.now() })
+  }).catch(async (err) => {
+    await updateTask(task.id, { status: 'failed', error: String(err?.message || err), updatedAt: Date.now() })
+    vscode.window.showWarningMessage(`VD Agent ${kind} failed: ${err?.message || err}`)
+  })
+  assistantProvider?.refresh?.()
+}
+
+function buildNativeActionPrompt(kind, document, selectedText, diagnostics, customRequest) {
+  const fullText = document.getText()
+  const scope = selectedText || fullText.slice(0, 14000)
+  const related = relatedIndexContext(document.uri.fsPath, 8)
+  const common = [
+    `File: ${vscode.workspace.asRelativePath(document.uri)}`,
+    `Language: ${document.languageId}`,
+    diagnostics ? `Diagnostics:\n${diagnostics}` : '',
+    related ? `Related context:\n${related}` : '',
+    'Code:',
+    scope,
+  ].filter(Boolean).join('\n\n')
+  if (kind === 'ask') return `${customRequest}\n\nUse this active editor context. Be direct and practical.\n\n${common}`
+  if (kind === 'fix') return `Fix the diagnostics or obvious issue in this code. Return only the replacement code for the selected code, or for the full shown code if no selection.\n\n${common}`
+  if (kind === 'refactor') return `Refactor this code for clarity, maintainability, and minimal behavioral change. Return only replacement code.\n\n${common}`
+  if (kind === 'tests') return `Generate practical tests for this code. Return a complete test file or test cases only, no markdown.\n\n${common}`
+  return `Explain this code clearly and professionally. Mention risks or bugs if any.\n\n${common}`
+}
+
+async function finishNativeAction(kind, editor, selectedText, result) {
+  const document = editor.document
+  if (kind === 'explain') {
+    const doc = await vscode.workspace.openTextDocument({ language: 'markdown', content: `# VD Agent Explanation\n\n${result.trim()}\n` })
+    await vscode.window.showTextDocument(doc, { preview: true, viewColumn: vscode.ViewColumn.Beside })
+    return
+  }
+  if (kind === 'tests') {
+    const doc = await vscode.workspace.openTextDocument({ language: document.languageId === 'typescriptreact' ? 'typescript' : document.languageId, content: result.trimEnd() + '\n' })
+    await vscode.window.showTextDocument(doc, { preview: false, viewColumn: vscode.ViewColumn.Beside })
+    return
+  }
+  const current = document.getText()
+  let content
+  if (selectedText) {
+    content = current.slice(0, document.offsetAt(editor.selection.start)) + cleanReplacement(result) + current.slice(document.offsetAt(editor.selection.end))
+  } else {
+    content = cleanReplacement(result)
+  }
+  const root = vscode.workspace.getWorkspaceFolder(document.uri)?.uri.fsPath
+  if (!root) throw new Error('Workspace folder not found.')
+  const preview = await writeDiffPreview(root, document.uri.fsPath, '', '', content)
+  await vscode.commands.executeCommand('vscode.diff', document.uri, vscode.Uri.file(preview), `VD Agent ${kind}: ${path.basename(document.uri.fsPath)}`)
+}
+
+function cleanReplacement(value) {
+  return String(value || '').replace(/```[a-zA-Z0-9_-]*\n?/g, '').replace(/```/g, '').trimEnd()
+}
+
+async function openWorkspaceTerminal() {
+  const folder = activeWorkspaceFolder()
+  const terminal = vscode.window.createTerminal({ name: 'VD Agent', cwd: folder?.uri.fsPath })
+  terminal.show()
+}
+
 async function showBridgeStatus() {
   const folder = activeWorkspaceFolder()
   if (!folder) return vscode.window.showWarningMessage('No workspace is open for VD Agent Bridge.')
@@ -483,6 +792,120 @@ async function writeCommandResult(root, id, patch) {
   const result = { id, updatedAt: Date.now(), ...patch }
   await fs.promises.writeFile(target, `${JSON.stringify(result, null, 2)}\n`, 'utf8')
   await fs.promises.writeFile(path.join(root, BRIDGE_DIR, LAST_COMMAND_FILE), `${JSON.stringify(result, null, 2)}\n`, 'utf8')
+}
+
+async function recordTask(kind, file, prompt) {
+  const folder = activeWorkspaceFolder()
+  const root = folder?.uri.fsPath || path.dirname(file)
+  const task = {
+    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    kind,
+    file,
+    prompt: prompt.slice(0, 4000),
+    status: 'running',
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  }
+  const tasks = await readTasks(root)
+  tasks.unshift(task)
+  await writeTasks(root, tasks.slice(0, 50))
+  return task
+}
+
+async function updateTask(id, patch) {
+  const folder = activeWorkspaceFolder()
+  if (!folder) return
+  const tasks = await readTasks(folder.uri.fsPath)
+  const next = tasks.map((task) => task.id === id ? { ...task, ...patch } : task)
+  await writeTasks(folder.uri.fsPath, next)
+}
+
+async function readTasks(root) {
+  const parsed = await readJson(path.join(root, BRIDGE_DIR, TASKS_FILE))
+  return Array.isArray(parsed?.tasks) ? parsed.tasks : []
+}
+
+async function writeTasks(root, tasks) {
+  const dir = path.join(root, BRIDGE_DIR)
+  await fs.promises.mkdir(dir, { recursive: true })
+  await fs.promises.writeFile(path.join(dir, TASKS_FILE), `${JSON.stringify({ version: 1, updatedAt: Date.now(), tasks }, null, 2)}\n`, 'utf8')
+}
+
+class VdAgentAssistantViewProvider {
+  constructor(extensionUri) {
+    this.extensionUri = extensionUri
+    this.view = null
+  }
+
+  resolveWebviewView(view) {
+    this.view = view
+    view.webview.options = { enableScripts: true }
+    view.webview.onDidReceiveMessage(async (message) => {
+      if (message?.command === 'refresh') await this.refresh()
+      if (message?.command === 'dashboard') await openDashboard()
+      if (message?.command === 'index') await rebuildIndex()
+      if (message?.command === 'terminal') await openWorkspaceTerminal()
+      if (message?.command === 'ask') await runNativeEditorAction('explain', String(message.prompt || 'Review the active file and provide concise guidance.'))
+      await this.refresh()
+    })
+    void this.refresh()
+  }
+
+  async refresh() {
+    if (!this.view) return
+    this.view.webview.html = await assistantHtml()
+  }
+}
+
+async function assistantHtml() {
+  const folder = activeWorkspaceFolder()
+  const root = folder?.uri.fsPath || ''
+  const tasks = root ? await readTasks(root) : []
+  const index = root ? await readIndexSummary(root) : null
+  const nonce = String(Date.now())
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
+<style>
+  body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); padding: 12px; }
+  textarea { width: 100%; min-height: 80px; color: var(--vscode-input-foreground); background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border); }
+  button { margin: 6px 6px 0 0; color: var(--vscode-button-foreground); background: var(--vscode-button-background); border: 0; padding: 6px 8px; cursor: pointer; }
+  .muted { color: var(--vscode-descriptionForeground); }
+  .task { border-top: 1px solid var(--vscode-panel-border); padding: 8px 0; }
+  .status { font-size: 11px; text-transform: uppercase; }
+</style>
+</head>
+<body>
+  <h3>VD Agent</h3>
+  <div class="muted">${root ? escapeHtml(root) : 'Open a workspace to use VD Agent.'}</div>
+  <div class="muted">Index: ${index ? `${index.files} files, ${index.symbols} symbols` : 'not built'}</div>
+  <textarea id="prompt" placeholder="Ask VD about the active file or selection"></textarea>
+  <div>
+    <button data-command="ask">Ask</button>
+    <button data-command="index">Rebuild Index</button>
+    <button data-command="dashboard">Dashboard</button>
+    <button data-command="terminal">Terminal</button>
+    <button data-command="refresh">Refresh</button>
+  </div>
+  <h4>Tasks</h4>
+  ${tasks.slice(0, 8).map((task) => `
+    <div class="task">
+      <div><strong>${escapeHtml(task.kind)}</strong> <span class="status muted">${escapeHtml(task.status)}</span></div>
+      <div class="muted">${escapeHtml(task.file ? vscode.workspace.asRelativePath(task.file) : '')}</div>
+      ${task.error ? `<div>${escapeHtml(task.error)}</div>` : ''}
+      ${task.result ? `<div class="muted">${escapeHtml(task.result.slice(0, 260))}</div>` : ''}
+    </div>
+  `).join('') || '<div class="muted">No tasks yet.</div>'}
+  <script nonce="${nonce}">
+    const vscode = acquireVsCodeApi();
+    document.querySelectorAll('button[data-command]').forEach((button) => {
+      button.addEventListener('click', () => vscode.postMessage({ command: button.dataset.command, prompt: document.getElementById('prompt').value }));
+    });
+  </script>
+</body>
+</html>`
 }
 
 function activeWorkspaceFolder() {
@@ -605,6 +1028,27 @@ function escapeHtml(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;')
+}
+
+function delay(ms, token) {
+  return new Promise((resolve) => {
+    if (token?.isCancellationRequested) return resolve()
+    const timer = setTimeout(resolve, ms)
+    const disposable = token?.onCancellationRequested?.(() => {
+      clearTimeout(timer)
+      resolve()
+    })
+    setTimeout(() => disposable?.dispose?.(), ms + 10)
+  })
+}
+
+function hashText(value) {
+  let hash = 2166136261
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i)
+    hash = Math.imul(hash, 16777619)
+  }
+  return (hash >>> 0).toString(16)
 }
 
 function isFileInside(root, file) {

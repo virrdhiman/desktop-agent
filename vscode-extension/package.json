@@ -1,8 +1,8 @@
 {
   "name": "vd-agent-vscode-bridge",
   "displayName": "VD Agent Bridge",
-  "description": "Exports VS Code workspace/editor context, local index data, inline suggestions, and VD Agent editor commands.",
-  "version": "0.3.0",
+  "description": "Exports VS Code workspace/editor context, local index data, AI inline suggestions, and VD Agent editor commands.",
+  "version": "0.4.0",
   "publisher": "virender-dhiman",
   "license": "SEE LICENSE IN ../LICENSE",
   "engines": {
@@ -19,7 +19,12 @@
     "onCommand:vdAgent.acceptLastPreview",
     "onCommand:vdAgent.rejectLastPreview",
     "onCommand:vdAgent.showStatus",
-    "onCommand:vdAgent.openDashboard"
+    "onCommand:vdAgent.openDashboard",
+    "onCommand:vdAgent.fixWithVD",
+    "onCommand:vdAgent.explainWithVD",
+    "onCommand:vdAgent.refactorWithVD",
+    "onCommand:vdAgent.generateTestsWithVD",
+    "onCommand:vdAgent.openWorkspaceTerminal"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -59,8 +64,45 @@
       {
         "command": "vdAgent.openDashboard",
         "title": "VD Agent: Open Bridge Dashboard"
+      },
+      {
+        "command": "vdAgent.fixWithVD",
+        "title": "VD Agent: Fix with VD"
+      },
+      {
+        "command": "vdAgent.explainWithVD",
+        "title": "VD Agent: Explain Selection"
+      },
+      {
+        "command": "vdAgent.refactorWithVD",
+        "title": "VD Agent: Refactor Selection"
+      },
+      {
+        "command": "vdAgent.generateTestsWithVD",
+        "title": "VD Agent: Generate Tests"
+      },
+      {
+        "command": "vdAgent.openWorkspaceTerminal",
+        "title": "VD Agent: Open Workspace Terminal"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "vdAgent",
+          "title": "VD Agent",
+          "icon": "resources/vd-agent.svg"
+        }
+      ]
+    },
+    "views": {
+      "vdAgent": [
+        {
+          "id": "vdAgent.assistantView",
+          "name": "Assistant"
+        }
+      ]
+    },
     "menus": {
       "commandPalette": [
         { "command": "vdAgent.exportContext" },
@@ -69,7 +111,30 @@
         { "command": "vdAgent.acceptLastPreview" },
         { "command": "vdAgent.rejectLastPreview" },
         { "command": "vdAgent.showStatus" },
-        { "command": "vdAgent.openDashboard" }
+        { "command": "vdAgent.openDashboard" },
+        { "command": "vdAgent.fixWithVD" },
+        { "command": "vdAgent.explainWithVD" },
+        { "command": "vdAgent.refactorWithVD" },
+        { "command": "vdAgent.generateTestsWithVD" },
+        { "command": "vdAgent.openWorkspaceTerminal" }
+      ],
+      "editor/context": [
+        {
+          "command": "vdAgent.fixWithVD",
+          "group": "vdAgent@1"
+        },
+        {
+          "command": "vdAgent.explainWithVD",
+          "group": "vdAgent@2"
+        },
+        {
+          "command": "vdAgent.refactorWithVD",
+          "group": "vdAgent@3"
+        },
+        {
+          "command": "vdAgent.generateTestsWithVD",
+          "group": "vdAgent@4"
+        }
       ],
       "editor/title": [
         {
@@ -97,6 +162,46 @@
           "type": "boolean",
           "default": true,
           "description": "Offer lightweight local inline completions from workspace symbols and open files."
+        },
+        "vdAgentBridge.aiInlineCompletion": {
+          "type": "boolean",
+          "default": true,
+          "description": "Try local/OpenAI-compatible AI inline completions before falling back to symbol completions."
+        },
+        "vdAgentBridge.aiProvider": {
+          "type": "string",
+          "enum": ["ollama", "openai-compatible", "disabled"],
+          "default": "ollama",
+          "description": "Provider used for AI inline completions and native editor commands. Ollama is local and no-budget."
+        },
+        "vdAgentBridge.aiBaseUrl": {
+          "type": "string",
+          "default": "http://localhost:11434",
+          "description": "Base URL for Ollama or an OpenAI-compatible provider."
+        },
+        "vdAgentBridge.aiModel": {
+          "type": "string",
+          "default": "qwen2.5-coder:1.5b",
+          "description": "Fast model used for AI autocomplete and native editor commands."
+        },
+        "vdAgentBridge.aiApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Optional API key for OpenAI-compatible providers. Leave blank for local Ollama."
+        },
+        "vdAgentBridge.aiAutocompleteDelayMs": {
+          "type": "number",
+          "default": 220,
+          "minimum": 50,
+          "maximum": 1200,
+          "description": "Debounce delay before requesting AI inline autocomplete."
+        },
+        "vdAgentBridge.aiAutocompleteTimeoutMs": {
+          "type": "number",
+          "default": 2500,
+          "minimum": 500,
+          "maximum": 10000,
+          "description": "Maximum time to wait for an AI inline completion before using local fallback."
         },
         "vdAgentBridge.autoIndex": {
           "type": "boolean",

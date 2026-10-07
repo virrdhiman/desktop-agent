@@ -35,7 +35,7 @@ const RESULT_DIR = path.join('.vd-agent', 'command-results')
 const LAST_COMMAND_FILE = path.join('.vd-agent', 'vscode-last-command.json')
 const DEFAULT_COMMAND_TIMEOUT_MS = 8_000
 const VSCODE_DOWNLOAD_URL = 'https://code.visualstudio.com/Download'
-const VSIX_NAME = 'vd-agent-vscode-bridge-0.3.0.vsix'
+const VSIX_NAME = 'vd-agent-vscode-bridge-0.4.0.vsix'
 const execFileAsync = promisify(execFile)
 
 type VsCodeBridgeCommand = {

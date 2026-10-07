@@ -9,6 +9,10 @@ It also maintains a local workspace index, offers lightweight symbol/word inline
 completions, and provides commands to accept or reject the last VD Agent diff
 preview directly inside VS Code.
 
+When configured, it can call a local Ollama or OpenAI-compatible endpoint for
+AI inline autocomplete and native editor actions. Local symbol completions remain
+available as the no-cost fallback.
+
 ## Install From VSIX
 
 In VD Agent, open the `VS Code Bridge` panel and click `Install Bridge`. The app
@@ -23,7 +27,7 @@ npm run vscode:package
 Install it in VS Code:
 
 ```powershell
-code --install-extension "release/vd-agent-vscode-bridge-0.3.0.vsix"
+code --install-extension "release/vd-agent-vscode-bridge-0.4.0.vsix"
 ```
 
 Or use VS Code: Extensions panel -> `...` -> Install from VSIX -> choose the
