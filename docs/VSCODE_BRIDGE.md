@@ -49,8 +49,8 @@ npm run vscode:package
 This writes:
 
 ```text
-release/vd-agent-vscode-bridge-0.4.0.vsix
-vscode-extension/vd-agent-vscode-bridge-0.4.0.vsix
+release/vd-agent-vscode-bridge-0.4.1.vsix
+vscode-extension/vd-agent-vscode-bridge-0.4.1.vsix
 ```
 
 Install from VD Agent: open the `VS Code Bridge` panel, click `Install Bridge`,
@@ -60,7 +60,7 @@ install the free VS Code app first.
 Or install from the command line:
 
 ```powershell
-code --install-extension "release/vd-agent-vscode-bridge-0.4.0.vsix"
+code --install-extension "release/vd-agent-vscode-bridge-0.4.1.vsix"
 ```
 
 Or install from VS Code: Extensions panel -> `...` -> Install from VSIX -> pick
@@ -81,12 +81,15 @@ The extension also adds no-cost VS Code-side polish:
   paid AI autocomplete service.
 - Optional AI inline completions use local Ollama by default, with debounce,
   cancellation, small fill-in-middle context, cache, and local-symbol fallback.
+- `VD Agent: Check AI Status` and `VD Agent: Select AI Model` expose local
+  provider health and model switching from inside VS Code.
 - The VD Agent activity-bar sidebar provides ask, task status, index, dashboard,
   and terminal controls inside VS Code.
 - Editor context actions add `Fix with VD`, `Explain Selection`,
   `Refactor Selection`, and `Generate Tests`.
-- `VD Agent: Accept Last Previewed Edit` and `VD Agent: Reject Last Previewed
-  Edit` let users review a bridge diff in VS Code before applying it.
+- `VD Agent: Review Last Previewed Edit`, `Accept Last Previewed Edit`, and
+  `Reject Last Previewed Edit` let users inspect preview hunks in VS Code
+  before applying the remaining edit.
 - Preview files show CodeLens actions for accepting or rejecting the latest VD
   Agent preview directly above the diff content.
 - `VD Agent: Open Bridge Dashboard` opens a local dashboard with context,

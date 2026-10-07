@@ -2,7 +2,7 @@
   "name": "vd-agent-vscode-bridge",
   "displayName": "VD Agent Bridge",
   "description": "Exports VS Code workspace/editor context, local index data, AI inline suggestions, and VD Agent editor commands.",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "publisher": "virender-dhiman",
   "license": "SEE LICENSE IN ../LICENSE",
   "engines": {
@@ -18,6 +18,9 @@
     "onCommand:vdAgent.openIndexFile",
     "onCommand:vdAgent.acceptLastPreview",
     "onCommand:vdAgent.rejectLastPreview",
+    "onCommand:vdAgent.reviewLastPreview",
+    "onCommand:vdAgent.checkAiStatus",
+    "onCommand:vdAgent.selectAiModel",
     "onCommand:vdAgent.showStatus",
     "onCommand:vdAgent.openDashboard",
     "onCommand:vdAgent.fixWithVD",
@@ -56,6 +59,18 @@
       {
         "command": "vdAgent.rejectLastPreview",
         "title": "VD Agent: Reject Last Previewed Edit"
+      },
+      {
+        "command": "vdAgent.reviewLastPreview",
+        "title": "VD Agent: Review Last Previewed Edit"
+      },
+      {
+        "command": "vdAgent.checkAiStatus",
+        "title": "VD Agent: Check AI Status"
+      },
+      {
+        "command": "vdAgent.selectAiModel",
+        "title": "VD Agent: Select AI Model"
       },
       {
         "command": "vdAgent.showStatus",
@@ -110,6 +125,9 @@
         { "command": "vdAgent.rebuildIndex" },
         { "command": "vdAgent.acceptLastPreview" },
         { "command": "vdAgent.rejectLastPreview" },
+        { "command": "vdAgent.reviewLastPreview" },
+        { "command": "vdAgent.checkAiStatus" },
+        { "command": "vdAgent.selectAiModel" },
         { "command": "vdAgent.showStatus" },
         { "command": "vdAgent.openDashboard" },
         { "command": "vdAgent.fixWithVD" },

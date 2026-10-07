@@ -27,6 +27,26 @@ export type VsCodeBridgeState = {
     semanticFiles?: number
     bytes?: number
   }
+  ai?: {
+    provider: string
+    baseUrl: string
+    model: string
+    ok: boolean
+    checkedAt: number
+    latencyMs: number
+    models: string[]
+    message: string
+    inline?: { ai: number; local: number; failed: number; lastLatencyMs: number; lastAt: number }
+  }
+  preview?: {
+    file: string
+    preview: string
+    createdAt: number
+    updatedAt: number
+    hunks: number
+    additions: number
+    deletions: number
+  }
 }
 
 const BRIDGE_FILE = path.join('.vd-agent', 'vscode-bridge.json')
@@ -35,7 +55,7 @@ const RESULT_DIR = path.join('.vd-agent', 'command-results')
 const LAST_COMMAND_FILE = path.join('.vd-agent', 'vscode-last-command.json')
 const DEFAULT_COMMAND_TIMEOUT_MS = 8_000
 const VSCODE_DOWNLOAD_URL = 'https://code.visualstudio.com/Download'
-const VSIX_NAME = 'vd-agent-vscode-bridge-0.4.0.vsix'
+const VSIX_NAME = 'vd-agent-vscode-bridge-0.4.1.vsix'
 const execFileAsync = promisify(execFile)
 
 type VsCodeBridgeCommand = {
@@ -104,6 +124,8 @@ export async function loadVsCodeBridgeState(workspace: string): Promise<VsCodeBr
     visibleFiles: Array.isArray(parsed.visibleFiles) ? parsed.visibleFiles.flatMap((item) => relativeOrNull(root, item) || []) : [],
     openFiles: Array.isArray(parsed.openFiles) ? parsed.openFiles.flatMap((item) => relativeOrNull(root, item) || []) : [],
     index: sanitizeIndex(parsed.index),
+    ai: sanitizeAi(parsed.ai),
+    preview: sanitizePreview(root, parsed.preview),
   }
 }
 
@@ -124,6 +146,8 @@ export async function formatVsCodeContext(workspace: string): Promise<string> {
     `Visible files: ${state.visibleFiles.length ? state.visibleFiles.join(', ') : 'none'}`,
     `Open files: ${state.openFiles.length ? state.openFiles.slice(0, 40).join(', ') : 'none'}`,
     `VS Code local index: ${state.index ? `${state.index.files} files, ${state.index.symbols} symbols, ${state.index.imports || 0} imports, ${state.index.semanticFiles || 0} semantic files, updated ${new Date(state.index.updatedAt).toISOString()}` : 'not available'}`,
+    `VS Code AI: ${state.ai ? `${state.ai.ok ? 'ready' : 'not ready'}, ${state.ai.provider}, ${state.ai.model}, ${state.ai.message}` : 'not exported yet'}`,
+    `VS Code preview: ${state.preview ? `${state.preview.file}, ${state.preview.hunks} hunks, +${state.preview.additions}/-${state.preview.deletions}` : 'none'}`,
   ]
   if (state.selection?.text) {
     lines.push([
@@ -393,5 +417,45 @@ function sanitizeIndex(index: unknown): VsCodeBridgeState['index'] | undefined {
     imports: Number(value.imports || 0),
     semanticFiles: Number(value.semanticFiles || 0),
     bytes: Number(value.bytes || 0),
+  }
+}
+
+function sanitizeAi(ai: unknown): VsCodeBridgeState['ai'] | undefined {
+  if (!ai || typeof ai !== 'object') return undefined
+  const value = ai as Record<string, unknown>
+  const inline = value.inline && typeof value.inline === 'object' ? value.inline as Record<string, unknown> : undefined
+  return {
+    provider: typeof value.provider === 'string' ? value.provider : '',
+    baseUrl: typeof value.baseUrl === 'string' ? value.baseUrl : '',
+    model: typeof value.model === 'string' ? value.model : '',
+    ok: Boolean(value.ok),
+    checkedAt: Number(value.checkedAt || 0),
+    latencyMs: Number(value.latencyMs || 0),
+    models: Array.isArray(value.models) ? value.models.filter((item): item is string => typeof item === 'string').slice(0, 80) : [],
+    message: typeof value.message === 'string' ? value.message.slice(0, 500) : '',
+    inline: inline ? {
+      ai: Number(inline.ai || 0),
+      local: Number(inline.local || 0),
+      failed: Number(inline.failed || 0),
+      lastLatencyMs: Number(inline.lastLatencyMs || 0),
+      lastAt: Number(inline.lastAt || 0),
+    } : undefined,
+  }
+}
+
+function sanitizePreview(root: string, preview: unknown): VsCodeBridgeState['preview'] | undefined {
+  if (!preview || typeof preview !== 'object') return undefined
+  const value = preview as Record<string, unknown>
+  const file = typeof value.file === 'string' ? (relativeOrNull(root, value.file) || value.file) : ''
+  const previewFile = typeof value.preview === 'string' ? (relativeOrNull(root, value.preview) || value.preview) : ''
+  if (!file && !previewFile) return undefined
+  return {
+    file,
+    preview: previewFile,
+    createdAt: Number(value.createdAt || 0),
+    updatedAt: Number(value.updatedAt || 0),
+    hunks: Number(value.hunks || 0),
+    additions: Number(value.additions || 0),
+    deletions: Number(value.deletions || 0),
   }
 }

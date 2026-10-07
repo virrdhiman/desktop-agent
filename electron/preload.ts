@@ -177,6 +177,26 @@ export type VsCodeBridgeStatus = {
     visibleFiles: string[]
     openFiles: string[]
     index?: { updatedAt: number; files: number; symbols: number; imports?: number; semanticFiles?: number; bytes?: number }
+    ai?: {
+      provider: string
+      baseUrl: string
+      model: string
+      ok: boolean
+      checkedAt: number
+      latencyMs: number
+      models: string[]
+      message: string
+      inline?: { ai: number; local: number; failed: number; lastLatencyMs: number; lastAt: number }
+    }
+    preview?: {
+      file: string
+      preview: string
+      createdAt: number
+      updatedAt: number
+      hunks: number
+      additions: number
+      deletions: number
+    }
   }
   lastResult?: { id: string; updatedAt: number; ok: boolean; message: string; action?: string }
 }

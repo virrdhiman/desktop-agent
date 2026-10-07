@@ -20,10 +20,13 @@ const MAX_FILE_BYTES = 300000
 let exportTimer
 let indexTimer
 let latestIndex = null
+let lastAiStatus = null
+let previewReviewPanel = null
 let statusBar
 let dashboardPanel = null
 let assistantProvider = null
 let activeCompletionController = null
+const inlineStats = { ai: 0, local: 0, failed: 0, lastLatencyMs: 0, lastAt: 0 }
 const completionCache = new Map()
 const processing = new Set()
 
@@ -56,6 +59,9 @@ function activate(context) {
     }),
     vscode.commands.registerCommand('vdAgent.acceptLastPreview', acceptLastPreview),
     vscode.commands.registerCommand('vdAgent.rejectLastPreview', rejectLastPreview),
+    vscode.commands.registerCommand('vdAgent.reviewLastPreview', openPreviewReview),
+    vscode.commands.registerCommand('vdAgent.checkAiStatus', showAiStatus),
+    vscode.commands.registerCommand('vdAgent.selectAiModel', selectAiModel),
     vscode.commands.registerCommand('vdAgent.showStatus', showBridgeStatus),
     vscode.commands.registerCommand('vdAgent.openDashboard', openDashboard),
     vscode.commands.registerCommand('vdAgent.fixWithVD', () => runNativeEditorAction('fix')),
@@ -98,6 +104,7 @@ function activate(context) {
   }
   scheduleExport()
   scheduleIndex()
+  void checkAiStatus()
   void processAllCommands()
   updateStatusBar()
 }
@@ -127,6 +134,8 @@ async function exportContext() {
   const active = vscode.window.activeTextEditor
   const maxSelectionChars = vscode.workspace.getConfiguration('vdAgentBridge').get('maxSelectionChars', 20000)
   const index = await readIndexSummary(folder.uri.fsPath)
+  const ai = await checkAiStatus({ quiet: true, maxAgeMs: 60_000 })
+  const preview = await readPreviewSummary(folder.uri.fsPath)
   const state = {
     version: 1,
     workspacePath: folder.uri.fsPath,
@@ -142,6 +151,8 @@ async function exportContext() {
       .map((document) => document.uri.fsPath)
       .filter((file) => isFileInside(folder.uri.fsPath, file)),
     index,
+    ai,
+    preview,
   }
   await fs.promises.mkdir(targetDir, { recursive: true })
   await fs.promises.writeFile(target, `${JSON.stringify(state, null, 2)}\n`, 'utf8')
@@ -222,23 +233,50 @@ async function provideInlineCompletions(document, position, _context, token) {
   if (!config.get('inlineCompletion', true)) return []
   if (document.uri.scheme !== 'file' || document.lineAt(position.line).text.trimStart().startsWith('//')) return []
   const local = provideLocalInlineCompletions(document, position)
-  if (!config.get('aiInlineCompletion', true) || config.get('aiProvider', 'ollama') === 'disabled') return local
+  if (!config.get('aiInlineCompletion', true) || config.get('aiProvider', 'ollama') === 'disabled') {
+    noteInlineFallback(local)
+    return local
+  }
   const linePrefix = document.lineAt(position.line).text.slice(0, position.character)
-  if (!/[A-Za-z_$\])}.'"`][\w$.'"`)\]} ]{0,80}$/.test(linePrefix) && linePrefix.trim().length > 0) return local
+  if (!/[A-Za-z_$\])}.'"`][\w$.'"`)\]} ]{0,80}$/.test(linePrefix) && linePrefix.trim().length > 0) {
+    noteInlineFallback(local)
+    return local
+  }
   const delayMs = config.get('aiAutocompleteDelayMs', 220)
   await delay(delayMs, token)
   if (token?.isCancellationRequested) return []
   const cacheKey = completionCacheKey(document, position)
   const cached = completionCache.get(cacheKey)
-  if (cached && Date.now() - cached.at < 30_000) return inlineList(cached.text, position, local)
+  if (cached && Date.now() - cached.at < 30_000) {
+    inlineStats.ai += 1
+    inlineStats.lastAt = Date.now()
+    return inlineList(cached.text, position, local)
+  }
   try {
+    const started = Date.now()
     const text = await requestAiInlineCompletion(document, position, token)
-    if (!text) return local
+    inlineStats.lastLatencyMs = Date.now() - started
+    if (!text) {
+      noteInlineFallback(local)
+      return local
+    }
     completionCache.set(cacheKey, { at: Date.now(), text })
     trimCompletionCache()
+    inlineStats.ai += 1
+    inlineStats.lastAt = Date.now()
     return inlineList(text, position, local)
   } catch {
+    inlineStats.failed += 1
+    noteInlineFallback(local)
     return local
+  }
+}
+
+function noteInlineFallback(local) {
+  const count = Array.isArray(local?.items) ? local.items.length : 0
+  if (count > 0) {
+    inlineStats.local += 1
+    inlineStats.lastAt = Date.now()
   }
 }
 
@@ -409,6 +447,99 @@ async function requestAiText(prompt, options = {}) {
   }
 }
 
+async function checkAiStatus(options = {}) {
+  const maxAgeMs = Number(options.maxAgeMs || 0)
+  if (lastAiStatus && maxAgeMs > 0 && Date.now() - lastAiStatus.checkedAt < maxAgeMs) return lastAiStatus
+  const config = vscode.workspace.getConfiguration('vdAgentBridge')
+  const provider = config.get('aiProvider', 'ollama')
+  const baseUrl = String(config.get('aiBaseUrl', 'http://localhost:11434')).replace(/\/+$/, '')
+  const model = String(config.get('aiModel', 'qwen2.5-coder:1.5b')).trim()
+  const started = Date.now()
+  const status = {
+    provider,
+    baseUrl,
+    model,
+    ok: false,
+    checkedAt: Date.now(),
+    latencyMs: 0,
+    models: [],
+    message: '',
+    inline: { ...inlineStats },
+  }
+  if (provider === 'disabled') {
+    status.message = 'AI is disabled; local symbol completion is still available.'
+    lastAiStatus = status
+    return status
+  }
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 2500)
+  try {
+    if (provider === 'ollama') {
+      const response = await fetch(`${baseUrl}/api/tags`, { signal: controller.signal })
+      if (!response.ok) throw new Error(`Ollama HTTP ${response.status}`)
+      const data = await response.json()
+      status.models = Array.isArray(data?.models) ? data.models.map((item) => item.name || item.model).filter(Boolean) : []
+      status.ok = !model || status.models.includes(model)
+      status.message = status.ok
+        ? `Ollama ready with ${model || 'configured model'}.`
+        : status.models.length
+          ? `Ollama is running, but ${model} is not installed.`
+          : 'Ollama is running, but no local models are installed.'
+    } else {
+      const response = await fetch(`${baseUrl}/v1/models`, {
+        headers: config.get('aiApiKey', '') ? { Authorization: `Bearer ${config.get('aiApiKey')}` } : {},
+        signal: controller.signal,
+      })
+      if (!response.ok) throw new Error(`Provider HTTP ${response.status}`)
+      const data = await response.json()
+      status.models = Array.isArray(data?.data) ? data.data.map((item) => item.id).filter(Boolean) : []
+      status.ok = !model || status.models.length === 0 || status.models.includes(model)
+      status.message = status.ok ? `Provider reachable with ${model || 'configured model'}.` : `${model} was not returned by the provider.`
+    }
+  } catch (err) {
+    status.message = `${provider} is not reachable: ${err?.message || err}`
+  } finally {
+    clearTimeout(timeout)
+    status.latencyMs = Date.now() - started
+    status.inline = { ...inlineStats }
+    lastAiStatus = status
+    updateStatusBar()
+  }
+  return status
+}
+
+async function showAiStatus() {
+  const status = await checkAiStatus({ maxAgeMs: 0 })
+  const detail = [
+    `Provider: ${status.provider}`,
+    `Model: ${status.model || 'not set'}`,
+    `Base URL: ${status.baseUrl}`,
+    `Reachable: ${status.ok ? 'yes' : 'no'}`,
+    `Latency: ${status.latencyMs}ms`,
+    `Inline completions: ${status.inline.ai} AI, ${status.inline.local} local fallback, ${status.inline.failed} failed`,
+    status.models.length ? `Installed/available models: ${status.models.slice(0, 20).join(', ')}` : 'Installed/available models: none detected',
+  ].join('\n')
+  vscode.window.showInformationMessage(status.message || 'VD Agent AI status checked.', { modal: true, detail })
+  assistantProvider?.refresh?.()
+}
+
+async function selectAiModel() {
+  const status = await checkAiStatus({ maxAgeMs: 0 })
+  if (!status.models.length) {
+    return vscode.window.showWarningMessage('No local/provider models were found. For Ollama, run: ollama pull qwen2.5-coder:1.5b')
+  }
+  const selected = await vscode.window.showQuickPick(status.models, {
+    title: 'VD Agent AI model',
+    placeHolder: 'Choose the model used for inline autocomplete and editor actions',
+  })
+  if (!selected) return
+  await vscode.workspace.getConfiguration('vdAgentBridge').update('aiModel', selected, vscode.ConfigurationTarget.Workspace)
+  lastAiStatus = null
+  await checkAiStatus({ maxAgeMs: 0 })
+  vscode.window.showInformationMessage(`VD Agent model set to ${selected}`)
+  assistantProvider?.refresh?.()
+}
+
 function relatedIndexContext(file, limit = 6) {
   if (!latestIndex?.files?.length) return ''
   const activeRel = vscode.workspace.asRelativePath(file).replace(/\\/g, '/')
@@ -534,6 +665,7 @@ async function writeDiffPreview(root, file, oldString, newString, content) {
     file,
     preview,
     title: vscode.workspace.asRelativePath(file),
+    stats: diffStats(before, after),
   }, null, 2)}\n`, 'utf8')
   updateStatusBar()
   return preview
@@ -572,6 +704,140 @@ async function rejectLastPreview() {
   await fs.promises.unlink(preview).catch(() => {})
   updateStatusBar()
   vscode.window.showInformationMessage('VD Agent preview rejected.')
+}
+
+async function openPreviewReview() {
+  const folder = activeWorkspaceFolder()
+  if (!folder) return vscode.window.showWarningMessage('Open a workspace before reviewing a VD Agent preview.')
+  if (previewReviewPanel) {
+    previewReviewPanel.reveal(vscode.ViewColumn.Beside)
+    previewReviewPanel.webview.html = await previewReviewHtml(folder.uri.fsPath)
+    return
+  }
+  previewReviewPanel = vscode.window.createWebviewPanel(
+    'vdAgentPreviewReview',
+    'VD Agent Patch Review',
+    vscode.ViewColumn.Beside,
+    { enableScripts: true },
+  )
+  previewReviewPanel.onDidDispose(() => { previewReviewPanel = null })
+  previewReviewPanel.webview.onDidReceiveMessage(async (message) => {
+    if (message?.command === 'accept') await acceptLastPreview()
+    if (message?.command === 'reject') await rejectLastPreview()
+    if (message?.command === 'openDiff') await openLastPreviewDiff()
+    if (message?.command === 'discardHunk') await discardPreviewHunk(Number(message.index))
+    if (previewReviewPanel) previewReviewPanel.webview.html = await previewReviewHtml(folder.uri.fsPath)
+  })
+  previewReviewPanel.webview.html = await previewReviewHtml(folder.uri.fsPath)
+}
+
+async function openLastPreviewDiff() {
+  const folder = activeWorkspaceFolder()
+  if (!folder) return
+  const meta = await readJson(path.join(folder.uri.fsPath, BRIDGE_DIR, LAST_PREVIEW_FILE))
+  if (!meta?.file || !meta?.preview) return vscode.window.showWarningMessage('No VD Agent preview is waiting to review.')
+  const file = resolveInside(folder.uri.fsPath, meta.file)
+  const preview = resolveInside(folder.uri.fsPath, meta.preview)
+  await vscode.commands.executeCommand('vscode.diff', vscode.Uri.file(file), vscode.Uri.file(preview), `VD Agent Preview: ${path.basename(file)}`)
+}
+
+async function discardPreviewHunk(index) {
+  const folder = activeWorkspaceFolder()
+  if (!folder) return
+  const meta = await readJson(path.join(folder.uri.fsPath, BRIDGE_DIR, LAST_PREVIEW_FILE))
+  if (!meta?.file || !meta?.preview) return vscode.window.showWarningMessage('No VD Agent preview is waiting to review.')
+  const file = resolveInside(folder.uri.fsPath, meta.file)
+  const preview = resolveInside(folder.uri.fsPath, meta.preview)
+  const before = await fs.promises.readFile(file, 'utf8')
+  const after = await fs.promises.readFile(preview, 'utf8')
+  const hunks = lineDiffHunks(before, after)
+  const hunk = hunks[index]
+  if (!hunk) return vscode.window.showWarningMessage('That VD Agent preview hunk no longer exists.')
+  const beforeLines = splitLines(before)
+  const afterLines = splitLines(after)
+  afterLines.splice(hunk.newStart, Math.max(0, hunk.newEnd - hunk.newStart), ...beforeLines.slice(hunk.oldStart, hunk.oldEnd))
+  await fs.promises.writeFile(preview, joinLines(afterLines), 'utf8')
+  const nextAfter = await fs.promises.readFile(preview, 'utf8')
+  await fs.promises.writeFile(path.join(folder.uri.fsPath, BRIDGE_DIR, LAST_PREVIEW_FILE), `${JSON.stringify({
+    ...meta,
+    updatedAt: Date.now(),
+    stats: diffStats(before, nextAfter),
+  }, null, 2)}\n`, 'utf8')
+  vscode.window.showInformationMessage(`Discarded VD Agent preview hunk ${index + 1}.`)
+}
+
+async function readPreviewSummary(root) {
+  const meta = await readJson(path.join(root, BRIDGE_DIR, LAST_PREVIEW_FILE))
+  if (!meta?.file || !meta?.preview) return undefined
+  const file = resolveInside(root, meta.file)
+  const preview = resolveInside(root, meta.preview)
+  const before = await fs.promises.readFile(file, 'utf8').catch(() => '')
+  const after = await fs.promises.readFile(preview, 'utf8').catch(() => '')
+  const stats = diffStats(before, after)
+  return {
+    file: vscode.workspace.asRelativePath(file),
+    preview: vscode.workspace.asRelativePath(preview),
+    createdAt: Number(meta.createdAt || 0),
+    updatedAt: Number(meta.updatedAt || meta.createdAt || 0),
+    hunks: stats.hunks,
+    additions: stats.additions,
+    deletions: stats.deletions,
+  }
+}
+
+async function previewReviewHtml(root) {
+  const meta = await readJson(path.join(root, BRIDGE_DIR, LAST_PREVIEW_FILE))
+  const nonce = String(Date.now())
+  if (!meta?.file || !meta?.preview) {
+    return htmlPage(nonce, `
+      <main class="empty">
+        <h1>VD Agent Patch Review</h1>
+        <p>No preview is waiting. Ask VD to show a diff preview first.</p>
+      </main>
+    `)
+  }
+  const file = resolveInside(root, meta.file)
+  const preview = resolveInside(root, meta.preview)
+  const before = await fs.promises.readFile(file, 'utf8').catch(() => '')
+  const after = await fs.promises.readFile(preview, 'utf8').catch(() => '')
+  const hunks = lineDiffHunks(before, after)
+  const stats = diffStats(before, after)
+  return htmlPage(nonce, `
+    <header class="hero">
+      <div>
+        <h1>Patch Review</h1>
+        <p>${escapeHtml(vscode.workspace.asRelativePath(file))}</p>
+      </div>
+      <div class="pills">
+        <span class="pill">${stats.hunks} hunks</span>
+        <span class="pill add">+${stats.additions}</span>
+        <span class="pill del">-${stats.deletions}</span>
+      </div>
+    </header>
+    <section class="actions">
+      <button data-command="openDiff">Open Diff</button>
+      <button data-command="accept">Accept Remaining</button>
+      <button class="secondary" data-command="reject">Reject All</button>
+    </section>
+    <section class="hunks">
+      ${hunks.map((hunk, index) => `
+        <article class="hunk">
+          <div class="hunk-head">
+            <strong>Hunk ${index + 1}</strong>
+            <span class="muted">old ${hunk.oldStart + 1}-${hunk.oldEnd}, new ${hunk.newStart + 1}-${hunk.newEnd}</span>
+            <button class="secondary" data-command="discardHunk" data-index="${index}">Discard Hunk</button>
+          </div>
+          <pre>${escapeHtml(renderHunk(hunk))}</pre>
+        </article>
+      `).join('') || '<p class="muted">No remaining changes. Accepting will leave the file unchanged.</p>'}
+    </section>
+    <script nonce="${nonce}">
+      const vscode = acquireVsCodeApi();
+      document.querySelectorAll('button[data-command]').forEach((button) => {
+        button.addEventListener('click', () => vscode.postMessage({ command: button.dataset.command, index: button.dataset.index }));
+      });
+    </script>
+  `)
 }
 
 function provideVdCodeActions(document, range, context) {
@@ -702,6 +968,7 @@ function previewCodeLenses(document) {
   if (!document.uri.fsPath.includes(`${path.sep}${BRIDGE_DIR}${path.sep}diff-previews${path.sep}`)) return []
   const top = new vscode.Range(0, 0, 0, 0)
   return [
+    new vscode.CodeLens(top, { title: '$(diff) Review VD Agent Hunks', command: 'vdAgent.reviewLastPreview' }),
     new vscode.CodeLens(top, { title: '$(check) Accept VD Agent Preview', command: 'vdAgent.acceptLastPreview' }),
     new vscode.CodeLens(top, { title: '$(close) Reject VD Agent Preview', command: 'vdAgent.rejectLastPreview' }),
     new vscode.CodeLens(top, { title: '$(info) Bridge Status', command: 'vdAgent.showStatus' }),
@@ -729,6 +996,9 @@ async function openDashboard() {
     if (message?.command === 'process') await processAllCommands()
     if (message?.command === 'accept') await acceptLastPreview()
     if (message?.command === 'reject') await rejectLastPreview()
+    if (message?.command === 'review') await openPreviewReview()
+    if (message?.command === 'ai') await showAiStatus()
+    if (message?.command === 'model') await selectAiModel()
     if (dashboardPanel) dashboardPanel.webview.html = await dashboardHtml(folder.uri.fsPath)
   })
   dashboardPanel.webview.html = await dashboardHtml(folder.uri.fsPath)
@@ -740,6 +1010,7 @@ async function dashboardHtml(root) {
     .filter((entry) => entry.endsWith('.json')).length
   const preview = await readJson(path.join(root, BRIDGE_DIR, LAST_PREVIEW_FILE))
   const bridge = await readJson(path.join(root, BRIDGE_DIR, BRIDGE_FILE))
+  const ai = await checkAiStatus({ quiet: true, maxAgeMs: 60_000 })
   const nonce = String(Date.now())
   const activeFile = bridge?.activeFile ? vscode.workspace.asRelativePath(bridge.activeFile) : 'None'
   return `<!DOCTYPE html>
@@ -749,29 +1020,44 @@ async function dashboardHtml(root) {
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
 <style>
   body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); padding: 18px; }
-  h1 { font-size: 18px; margin: 0 0 14px; }
+  h1 { font-size: 20px; margin: 0; }
+  .hero { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; margin-bottom: 16px; }
+  .hero p { color: var(--vscode-descriptionForeground); margin: 4px 0 0; }
   .grid { display: grid; gap: 10px; }
-  .row { display: grid; grid-template-columns: 140px 1fr; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--vscode-panel-border); }
+  .row { display: grid; grid-template-columns: 150px 1fr; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--vscode-panel-border); }
   .label { color: var(--vscode-descriptionForeground); }
   .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
   button { color: var(--vscode-button-foreground); background: var(--vscode-button-background); border: 0; padding: 7px 10px; cursor: pointer; }
   button.secondary { color: var(--vscode-button-secondaryForeground); background: var(--vscode-button-secondaryBackground); }
+  .pill { display: inline-flex; align-items: center; border: 1px solid var(--vscode-panel-border); border-radius: 999px; padding: 4px 9px; color: var(--vscode-descriptionForeground); }
+  .ok { color: var(--vscode-testing-iconPassed); }
+  .bad { color: var(--vscode-testing-iconFailed); }
   code { word-break: break-all; }
 </style>
 </head>
 <body>
-  <h1>VD Agent Bridge</h1>
+  <div class="hero">
+    <div>
+      <h1>VD Agent Bridge</h1>
+      <p>Native VS Code context, edits, autocomplete, and review controls.</p>
+    </div>
+    <span class="pill ${ai.ok ? 'ok' : 'bad'}">${ai.ok ? 'AI ready' : 'AI needs attention'}</span>
+  </div>
   <div class="grid">
     <div class="row"><div class="label">Workspace</div><code>${escapeHtml(root)}</code></div>
     <div class="row"><div class="label">Active file</div><div>${escapeHtml(activeFile)}</div></div>
     <div class="row"><div class="label">Pending commands</div><div>${pending}</div></div>
     <div class="row"><div class="label">Index</div><div>${index ? `${index.files} files, ${index.symbols} symbols, ${index.imports || 0} imports, ${index.semanticFiles || 0} semantic files` : 'Not built yet'}</div></div>
-    <div class="row"><div class="label">Preview</div><div>${preview?.file ? escapeHtml(vscode.workspace.asRelativePath(preview.file)) : 'None'}</div></div>
+    <div class="row"><div class="label">AI model</div><div>${escapeHtml(ai.model || 'not set')} · ${escapeHtml(ai.message || '')}</div></div>
+    <div class="row"><div class="label">Preview</div><div>${preview?.file ? `${escapeHtml(vscode.workspace.asRelativePath(preview.file))}${preview.stats ? ` · ${preview.stats.hunks} hunks, +${preview.stats.additions}/-${preview.stats.deletions}` : ''}` : 'None'}</div></div>
   </div>
   <div class="actions">
     <button data-command="export">Export Context</button>
     <button data-command="index">Rebuild Index</button>
     <button data-command="process">Process Commands</button>
+    <button data-command="ai">AI Status</button>
+    <button data-command="model">Select Model</button>
+    <button data-command="review">Review Preview</button>
     <button data-command="accept">Accept Preview</button>
     <button class="secondary" data-command="reject">Reject Preview</button>
   </div>
@@ -845,6 +1131,9 @@ class VdAgentAssistantViewProvider {
       if (message?.command === 'dashboard') await openDashboard()
       if (message?.command === 'index') await rebuildIndex()
       if (message?.command === 'terminal') await openWorkspaceTerminal()
+      if (message?.command === 'ai') await showAiStatus()
+      if (message?.command === 'model') await selectAiModel()
+      if (message?.command === 'review') await openPreviewReview()
       if (message?.command === 'ask') await runNativeEditorAction('explain', String(message.prompt || 'Review the active file and provide concise guidance.'))
       await this.refresh()
     })
@@ -862,6 +1151,8 @@ async function assistantHtml() {
   const root = folder?.uri.fsPath || ''
   const tasks = root ? await readTasks(root) : []
   const index = root ? await readIndexSummary(root) : null
+  const ai = await checkAiStatus({ quiet: true, maxAgeMs: 60_000 })
+  const preview = root ? await readPreviewSummary(root) : null
   const nonce = String(Date.now())
   return `<!DOCTYPE html>
 <html lang="en">
@@ -870,24 +1161,40 @@ async function assistantHtml() {
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
 <style>
   body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); padding: 12px; }
-  textarea { width: 100%; min-height: 80px; color: var(--vscode-input-foreground); background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border); }
-  button { margin: 6px 6px 0 0; color: var(--vscode-button-foreground); background: var(--vscode-button-background); border: 0; padding: 6px 8px; cursor: pointer; }
+  h3 { margin: 0 0 6px; font-size: 16px; }
+  textarea { width: 100%; min-height: 86px; color: var(--vscode-input-foreground); background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border); border-radius: 6px; padding: 8px; resize: vertical; }
+  button { margin: 6px 6px 0 0; color: var(--vscode-button-foreground); background: var(--vscode-button-background); border: 0; border-radius: 4px; padding: 6px 8px; cursor: pointer; }
+  button.secondary { color: var(--vscode-button-secondaryForeground); background: var(--vscode-button-secondaryBackground); }
   .muted { color: var(--vscode-descriptionForeground); }
+  .panel { border: 1px solid var(--vscode-panel-border); border-radius: 8px; padding: 10px; margin: 10px 0; }
+  .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }
+  .metric { border: 1px solid var(--vscode-panel-border); border-radius: 6px; padding: 8px; }
+  .metric strong { display: block; font-size: 15px; }
   .task { border-top: 1px solid var(--vscode-panel-border); padding: 8px 0; }
   .status { font-size: 11px; text-transform: uppercase; }
+  .ok { color: var(--vscode-testing-iconPassed); }
+  .bad { color: var(--vscode-testing-iconFailed); }
 </style>
 </head>
 <body>
   <h3>VD Agent</h3>
   <div class="muted">${root ? escapeHtml(root) : 'Open a workspace to use VD Agent.'}</div>
-  <div class="muted">Index: ${index ? `${index.files} files, ${index.symbols} symbols` : 'not built'}</div>
+  <div class="metrics">
+    <div class="metric"><span class="muted">AI</span><strong class="${ai.ok ? 'ok' : 'bad'}">${ai.ok ? 'Ready' : 'Check'}</strong><div class="muted">${escapeHtml(ai.model || 'no model')}</div></div>
+    <div class="metric"><span class="muted">Index</span><strong>${index ? index.files : 0}</strong><div class="muted">${index ? `${index.symbols} symbols` : 'not built'}</div></div>
+    <div class="metric"><span class="muted">Preview</span><strong>${preview ? preview.hunks : 0}</strong><div class="muted">${preview ? `+${preview.additions}/-${preview.deletions}` : 'none'}</div></div>
+    <div class="metric"><span class="muted">Inline</span><strong>${ai.inline?.ai || 0}</strong><div class="muted">${ai.inline?.local || 0} local fallbacks</div></div>
+  </div>
   <textarea id="prompt" placeholder="Ask VD about the active file or selection"></textarea>
   <div>
     <button data-command="ask">Ask</button>
     <button data-command="index">Rebuild Index</button>
+    <button data-command="ai">AI Status</button>
+    <button data-command="model">Model</button>
+    <button data-command="review">Review Patch</button>
     <button data-command="dashboard">Dashboard</button>
-    <button data-command="terminal">Terminal</button>
-    <button data-command="refresh">Refresh</button>
+    <button class="secondary" data-command="terminal">Terminal</button>
+    <button class="secondary" data-command="refresh">Refresh</button>
   </div>
   <h4>Tasks</h4>
   ${tasks.slice(0, 8).map((task) => `
@@ -937,9 +1244,113 @@ function updateStatusBar(text) {
     return
   }
   const indexText = latestIndex ? `${latestIndex.fileCount} files` : 'ready'
-  statusBar.text = text || `$(sparkle) VD Agent ${indexText}`
-  statusBar.tooltip = 'VD Agent Bridge: export context, process commands, accept previews, and maintain local index.'
+  const aiText = lastAiStatus ? (lastAiStatus.ok ? lastAiStatus.model : 'AI check') : 'AI'
+  statusBar.text = text || `$(sparkle) VD Agent ${indexText} · ${aiText}`
+  statusBar.tooltip = lastAiStatus
+    ? `VD Agent Bridge\n${lastAiStatus.message}\nAI completions: ${inlineStats.ai}; local fallbacks: ${inlineStats.local}; failed: ${inlineStats.failed}`
+    : 'VD Agent Bridge: export context, process commands, accept previews, and maintain local index.'
   statusBar.show()
+}
+
+function splitLines(text) {
+  return String(text).split(/\r?\n/)
+}
+
+function joinLines(lines) {
+  return lines.join('\n')
+}
+
+function lineDiffHunks(before, after) {
+  const oldLines = splitLines(before)
+  const newLines = splitLines(after)
+  const max = Math.max(oldLines.length, newLines.length)
+  const hunks = []
+  let current = null
+  for (let i = 0; i < max; i++) {
+    if (oldLines[i] === newLines[i]) {
+      current = null
+      continue
+    }
+    if (!current) {
+      current = {
+        oldStart: Math.max(0, i - 2),
+        newStart: Math.max(0, i - 2),
+        oldEnd: i,
+        newEnd: i,
+        oldLines,
+        newLines,
+      }
+      hunks.push(current)
+    }
+    current.oldEnd = Math.min(oldLines.length, i + 3)
+    current.newEnd = Math.min(newLines.length, i + 3)
+  }
+  return hunks
+}
+
+function diffStats(before, after) {
+  const hunks = lineDiffHunks(before, after)
+  let additions = 0
+  let deletions = 0
+  for (const hunk of hunks) {
+    const oldSlice = hunk.oldLines.slice(hunk.oldStart, hunk.oldEnd)
+    const newSlice = hunk.newLines.slice(hunk.newStart, hunk.newEnd)
+    const len = Math.max(oldSlice.length, newSlice.length)
+    for (let i = 0; i < len; i++) {
+      if (oldSlice[i] === newSlice[i]) continue
+      if (newSlice[i] !== undefined) additions += 1
+      if (oldSlice[i] !== undefined) deletions += 1
+    }
+  }
+  return { hunks: hunks.length, additions, deletions }
+}
+
+function renderHunk(hunk) {
+  const oldSlice = hunk.oldLines.slice(hunk.oldStart, hunk.oldEnd)
+  const newSlice = hunk.newLines.slice(hunk.newStart, hunk.newEnd)
+  const lines = []
+  const len = Math.max(oldSlice.length, newSlice.length)
+  for (let i = 0; i < len; i++) {
+    const oldLine = oldSlice[i]
+    const newLine = newSlice[i]
+    if (oldLine === newLine) {
+      lines.push(`  ${oldLine ?? ''}`)
+    } else {
+      if (oldLine !== undefined) lines.push(`- ${oldLine}`)
+      if (newLine !== undefined) lines.push(`+ ${newLine}`)
+    }
+  }
+  return lines.join('\n')
+}
+
+function htmlPage(nonce, body) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
+<style>
+  body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); padding: 18px; }
+  h1 { font-size: 20px; margin: 0; }
+  p { color: var(--vscode-descriptionForeground); }
+  .hero { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; margin-bottom: 14px; }
+  .pills { display: flex; gap: 6px; flex-wrap: wrap; }
+  .pill { border: 1px solid var(--vscode-panel-border); border-radius: 999px; padding: 4px 9px; color: var(--vscode-descriptionForeground); }
+  .add { color: var(--vscode-gitDecoration-addedResourceForeground); }
+  .del { color: var(--vscode-gitDecoration-deletedResourceForeground); }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0; }
+  button { color: var(--vscode-button-foreground); background: var(--vscode-button-background); border: 0; border-radius: 4px; padding: 7px 10px; cursor: pointer; }
+  button.secondary { color: var(--vscode-button-secondaryForeground); background: var(--vscode-button-secondaryBackground); }
+  .hunks { display: grid; gap: 12px; }
+  .hunk { border: 1px solid var(--vscode-panel-border); border-radius: 8px; overflow: hidden; }
+  .hunk-head { display: flex; align-items: center; gap: 10px; justify-content: space-between; padding: 8px 10px; background: var(--vscode-editorWidget-background); }
+  .muted { color: var(--vscode-descriptionForeground); }
+  pre { margin: 0; padding: 10px; overflow: auto; background: var(--vscode-textCodeBlock-background); font-family: var(--vscode-editor-font-family); font-size: var(--vscode-editor-font-size); }
+  .empty { max-width: 620px; }
+</style>
+</head>
+<body>${body}</body>
+</html>`
 }
 
 async function readJson(file) {

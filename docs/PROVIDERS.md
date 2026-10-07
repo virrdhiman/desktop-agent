@@ -15,10 +15,10 @@ Free tiers, credits, and rate limits are set by each provider and change often. 
 
 | Category in Settings | What it means | Used for automatic fallback? |
 |----------------------|---------------|------------------------------|
-| **Free Official** | Official APIs with a free tier or signup credits, for example Groq, Cerebras, SambaNova, Google Gemini, GitHub Models, OpenRouter, Mistral, and Hugging Face. Some, such as DeepSeek, Together, and Fireworks, are credit-based rather than permanently free. | Yes, when they have a key |
+| **Free Official** | Official APIs with a free tier or signup credits, for example Groq, Cerebras, SambaNova, Google Gemini, GitHub Models, OpenRouter, Mistral, NVIDIA NIM, and Hugging Face. Some, such as DeepSeek, Together, and Fireworks, are credit-based rather than permanently free. | Yes, when they have a key |
 | **Local** | Ollama, LM Studio, llama.cpp, and other OpenAI-compatible servers on your machine | No |
 | **Image/Video** | Official image and video APIs. Not chat providers. | No |
-| **Paid** | OpenAI, Anthropic, Cohere, and Perplexity, billed by the provider | No |
+| **Paid** | OpenAI, Anthropic, Cohere, LLM7, and Perplexity, billed by the provider | No |
 
 ## Recommended starting points
 
@@ -27,9 +27,15 @@ Free tiers, credits, and rate limits are set by each provider and change often. 
 | Groq | [console.groq.com/keys](https://console.groq.com/keys) | Fast. Keys start with `gsk_`. |
 | Google Gemini | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) | Keys start with `AIza`. Also used by the `image_analysis` tool. |
 | OpenRouter | [openrouter.ai/keys](https://openrouter.ai/keys) | With a free key, VD Agent only picks models whose ID ends in `:free`. |
+| Mistral AI | [console.mistral.ai/api-keys](https://console.mistral.ai/api-keys/) | OpenAI-compatible chat endpoint. `mistral-large-latest` is the default fallback model, and live model refresh can replace it with the strongest model your key can call. |
+| NVIDIA NIM | [build.nvidia.com](https://build.nvidia.com/) | OpenAI-compatible endpoint at `https://integrate.api.nvidia.com/v1`. |
 | Cerebras | [cloud.cerebras.ai](https://cloud.cerebras.ai/) | Fast inference with rate limits. |
 | GitHub Models | [github.com/settings/tokens](https://github.com/settings/tokens) | Uses a GitHub personal access token. See GitHub's Models docs for the required permission. |
 | Hugging Face | [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) | Router with monthly free credits. Tokens start with `hf_`. |
+
+LLM7 can also be configured from Settings with `https://api.llm7.io/v1`, but
+VD Agent treats it as a paid/credit provider and does not use it in automatic
+free fallback.
 
 To add a key: **Settings →** select the provider **→ Get API Key →** paste the key **→ Save**. Selecting a provider in the list also makes it the active provider, marked with ●.
 

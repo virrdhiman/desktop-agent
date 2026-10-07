@@ -34,6 +34,7 @@ describe('model filtering', () => {
     'dall-e-3',
     'gpt-image-1',
     'imagen-3.0-generate-002',
+    'google/gemini-nano-banana-2.1',
     'black-forest-labs/FLUX.1-schnell',
     'stabilityai/stable-diffusion-xl-base-1.0',
     'omni-moderation-latest',

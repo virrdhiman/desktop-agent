@@ -31,6 +31,16 @@ function FileList({ files }: { files: string[] }) {
   )
 }
 
+function Metric({ label, value, tone }: { label: string; value: ReactNode; tone?: 'green' | 'yellow' | 'red' | 'blue' }) {
+  const color = tone === 'green' ? 'var(--success)' : tone === 'yellow' ? 'var(--warning)' : tone === 'red' ? 'var(--error)' : 'var(--accent)'
+  return (
+    <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, background: 'var(--bg-primary)', minWidth: 120 }}>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 16, fontWeight: 700, color }}>{value}</div>
+    </div>
+  )
+}
+
 export default function VsCodeBridgePanel() {
   const { workspacePath, addTerminalEntry } = useStore()
   const [status, setStatus] = useState<VsCodeBridgeStatus | null>(null)
@@ -90,6 +100,8 @@ export default function VsCodeBridgePanel() {
   const connected = !!status?.connected
   const activeFile = status?.state?.activeFile
   const setup = status?.setup
+  const ai = status?.state?.ai
+  const preview = status?.state?.preview
 
   if (!workspacePath) {
     return (
@@ -115,6 +127,13 @@ export default function VsCodeBridgePanel() {
       </div>
 
       <div className="panel-body" style={{ display: 'grid', gap: 12, alignContent: 'start' }}>
+        <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+          <Metric label="Bridge" value={connected ? 'Connected' : 'Offline'} tone={connected ? 'green' : 'red'} />
+          <Metric label="AI Model" value={ai?.model || 'Unknown'} tone={ai?.ok ? 'green' : 'yellow'} />
+          <Metric label="Index" value={status?.state?.index ? `${status.state.index.files} files` : 'Not built'} tone={status?.state?.index ? 'blue' : 'yellow'} />
+          <Metric label="Patch Preview" value={preview ? `${preview.hunks} hunks` : 'None'} tone={preview ? 'yellow' : 'blue'} />
+        </section>
+
         <section className="card" style={{ display: 'grid', gap: 10 }}>
           <Row label="Status" value={status?.message || 'Checking...'} />
           <Row label="Workspace" value={workspacePath} />
@@ -126,6 +145,21 @@ export default function VsCodeBridgePanel() {
             value={status?.state?.index
               ? `${status.state.index.files} files, ${status.state.index.symbols} symbols, ${status.state.index.imports || 0} imports, ${status.state.index.semanticFiles || 0} semantic files, ${fmtTime(status.state.index.updatedAt)}`
               : <span style={{ color: 'var(--text-muted)' }}>Not exported yet</span>}
+          />
+          <Row
+            label="AI status"
+            value={ai
+              ? `${ai.ok ? 'Ready' : 'Needs attention'} · ${ai.provider} · ${ai.model} · ${ai.message || 'No message'}`
+              : <span style={{ color: 'var(--text-muted)' }}>Not exported yet</span>}
+          />
+          {ai?.inline && (
+            <Row label="Inline completions" value={`${ai.inline.ai} AI, ${ai.inline.local} local fallback, ${ai.inline.failed} failed${ai.inline.lastLatencyMs ? `, ${ai.inline.lastLatencyMs}ms last AI` : ''}`} />
+          )}
+          <Row
+            label="Patch preview"
+            value={preview
+              ? `${preview.file} · ${preview.hunks} hunks · +${preview.additions}/-${preview.deletions}`
+              : <span style={{ color: 'var(--text-muted)' }}>None</span>}
           />
         </section>
 
@@ -140,6 +174,15 @@ export default function VsCodeBridgePanel() {
             </button>
             <button className="btn btn-sm" disabled={!connected || loading} onClick={() => void runVsCodeCommand('vdAgent.processCommands')}>
               Process Commands
+            </button>
+            <button className="btn btn-sm" disabled={!connected || loading} onClick={() => void runVsCodeCommand('vdAgent.checkAiStatus')}>
+              AI Status
+            </button>
+            <button className="btn btn-sm" disabled={!connected || loading} onClick={() => void runVsCodeCommand('vdAgent.selectAiModel')}>
+              Select Model
+            </button>
+            <button className="btn btn-sm" disabled={!connected || loading || !preview} onClick={() => void runVsCodeCommand('vdAgent.reviewLastPreview')}>
+              Review Hunks
             </button>
             <button className="btn btn-sm" disabled={!connected || loading} onClick={() => void runVsCodeCommand('vdAgent.acceptLastPreview')}>
               Accept Preview

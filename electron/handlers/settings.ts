@@ -23,6 +23,9 @@ const ENV_PROVIDER_KEYS: Record<string, string[]> = {
   groq: ['GROQ_API_KEY'],
   openrouter: ['OPENROUTER_API_KEY'],
   gemini: ['GEMINI_API_KEY', 'GOOGLE_API_KEY'],
+  mistral: ['MISTRAL_API_KEY'],
+  nvidia: ['NVIDIA_API_KEY', 'NVIDIA_NIM_API_KEY'],
+  llm7: ['LLM7_API_KEY'],
   ollama: ['OLLAMA_API_KEY_OR_URL'],
 }
 
@@ -37,7 +40,8 @@ const DEFAULT_PROVIDERS = [
   { id: 'gemini', name: 'Google Gemini ✨', apiKey: '', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-2.0-flash', freeTier: true, signupUrl: 'https://aistudio.google.com/apikey', notes: 'Free tier with per-model rate limits. Multimodal.' },
   { id: 'github', name: 'GitHub Models 🐙', apiKey: '', baseUrl: 'https://models.inference.ai.azure.com', model: 'gpt-4o-mini', freeTier: true, signupUrl: 'https://github.com/settings/tokens', notes: 'Free, rate-limited access with a GitHub token.' },
   { id: 'openrouter', name: 'OpenRouter 🌐', apiKey: '', baseUrl: 'https://openrouter.ai/api/v1', model: 'meta-llama/llama-3.3-70b-instruct:free', freeTier: true, signupUrl: 'https://openrouter.ai/keys', notes: 'Aggregator. With a free key VD only picks ":free" models.' },
-  { id: 'mistral', name: 'Mistral AI 🌊', apiKey: '', baseUrl: 'https://api.mistral.ai/v1', model: 'mistral-small-latest', freeTier: true, signupUrl: 'https://console.mistral.ai/api-keys/', notes: 'Free experiment tier with rate limits.' },
+  { id: 'mistral', name: 'Mistral AI 🌊', apiKey: '', baseUrl: 'https://api.mistral.ai/v1', model: 'mistral-large-latest', freeTier: true, signupUrl: 'https://console.mistral.ai/api-keys/', notes: 'Official OpenAI-compatible chat API. Free experiment tier or credits may be rate-limited.' },
+  { id: 'nvidia', name: 'NVIDIA NIM ⚡', apiKey: '', baseUrl: 'https://integrate.api.nvidia.com/v1', model: 'qwen/qwen2.5-coder-32b-instruct', freeTier: true, signupUrl: 'https://build.nvidia.com/', notes: 'OpenAI-compatible NVIDIA-hosted NIM API. Free/hosted access and available models can change.' },
   { id: 'together', name: 'Together AI 🤝', apiKey: '', baseUrl: 'https://api.together.xyz/v1', model: 'meta-llama/Llama-3.3-70B-Instruct-Turbo', freeTier: true, signupUrl: 'https://api.together.xyz/settings/api-keys', notes: 'Signup credits may be available.' },
   { id: 'fireworks', name: 'Fireworks AI 🔥', apiKey: '', baseUrl: 'https://api.fireworks.ai/inference/v1', model: 'accounts/fireworks/models/llama-v3p3-70b-instruct', freeTier: true, signupUrl: 'https://fireworks.ai/account/api-keys', notes: 'Signup credits may be available.' },
   { id: 'deepinfra', name: 'DeepInfra 🌌', apiKey: '', baseUrl: 'https://api.deepinfra.com/v1/openai', model: 'meta-llama/Meta-Llama-3.3-70B-Instruct-Turbo', freeTier: true, signupUrl: 'https://deepinfra.com/dash/api_keys', notes: 'Signup credits may be available.' },
@@ -61,6 +65,7 @@ const DEFAULT_PROVIDERS = [
   { id: 'openai', name: 'OpenAI 💰', apiKey: '', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o', notes: 'Paid API.' },
   { id: 'anthropic', name: 'Anthropic 💰', apiKey: '', baseUrl: 'https://api.anthropic.com', model: 'claude-sonnet-4-20250514', notes: 'Paid API. Uses the Messages API; no automatic model discovery.' },
   { id: 'cohere', name: 'Cohere 💰', apiKey: '', baseUrl: 'https://api.cohere.ai/compatibility/v1', model: 'command-a-03-2025', notes: 'Paid API with a trial key tier.' },
+  { id: 'llm7', name: 'LLM7 💰', apiKey: '', baseUrl: 'https://api.llm7.io/v1', model: 'DeepSeek-V4-Flash-0731', signupUrl: 'https://llm7.io/', notes: 'OpenAI-compatible provider with published per-token pricing. Not used as automatic free fallback.' },
   { id: 'perplexity', name: 'Perplexity 💰', apiKey: '', baseUrl: 'https://api.perplexity.ai', model: 'sonar-pro', notes: 'Paid, search-augmented API.' },
 ]
 

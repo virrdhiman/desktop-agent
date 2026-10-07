@@ -28,6 +28,7 @@ const NON_CHAT_PATTERNS: RegExp[] = [
   /dall-e/,
   /gpt-image/,
   /imagen/,
+  /banana/,
   /image-generation/,
   /stable-diffusion/,
   /sdxl/,
