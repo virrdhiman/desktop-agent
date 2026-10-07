@@ -49,8 +49,8 @@ npm run vscode:package
 This writes:
 
 ```text
-release/vd-agent-vscode-bridge-0.4.1.vsix
-vscode-extension/vd-agent-vscode-bridge-0.4.1.vsix
+release/vd-agent-vscode-bridge-0.4.2.vsix
+vscode-extension/vd-agent-vscode-bridge-0.4.2.vsix
 ```
 
 Install from VD Agent: open the `VS Code Bridge` panel, click `Install Bridge`,
@@ -60,7 +60,7 @@ install the free VS Code app first.
 Or install from the command line:
 
 ```powershell
-code --install-extension "release/vd-agent-vscode-bridge-0.4.1.vsix"
+code --install-extension "release/vd-agent-vscode-bridge-0.4.2.vsix"
 ```
 
 Or install from VS Code: Extensions panel -> `...` -> Install from VSIX -> pick
@@ -70,6 +70,10 @@ After install, open the same repository in VS Code and VD Agent, then run
 `VD Agent: Export Workspace Context`. The VD Agent `VS Code` panel shows
 connected/not connected, active file, pending commands, and the last command
 result.
+
+If VS Code shows **Restricted Mode**, trust the workspace before using the
+bridge. The extension intentionally does not run in untrusted workspaces because
+it can read editor context and apply explicit edits.
 
 ## VS Code-Native Features
 

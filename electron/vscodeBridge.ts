@@ -55,7 +55,7 @@ const RESULT_DIR = path.join('.vd-agent', 'command-results')
 const LAST_COMMAND_FILE = path.join('.vd-agent', 'vscode-last-command.json')
 const DEFAULT_COMMAND_TIMEOUT_MS = 8_000
 const VSCODE_DOWNLOAD_URL = 'https://code.visualstudio.com/Download'
-const VSIX_NAME = 'vd-agent-vscode-bridge-0.4.1.vsix'
+const VSIX_NAME = 'vd-agent-vscode-bridge-0.4.2.vsix'
 const execFileAsync = promisify(execFile)
 
 type VsCodeBridgeCommand = {
@@ -178,7 +178,7 @@ export async function readVsCodeBridgeStatus(workspace: string): Promise<VsCodeB
     message: state
       ? `Connected${ageSeconds == null ? '' : `, exported ${ageSeconds}s ago`}.`
       : setup.vscodeAvailable
-        ? 'Not connected. Install the VD Agent Bridge, open this workspace in VS Code, then run "VD Agent: Export Workspace Context".'
+        ? 'Not connected. Install the VD Agent Bridge, open this workspace in VS Code, trust the workspace if VS Code shows Restricted Mode, then run "VD Agent: Export Workspace Context".'
         : 'Not connected. Install VS Code first, then install the free local VD Agent Bridge.',
   }
 }
@@ -196,7 +196,7 @@ export async function installVsCodeBridge(): Promise<string> {
   return [
     'VD Agent Bridge install command finished.',
     output || 'VS Code did not print extra output.',
-    'Open this repository in VS Code and run "VD Agent: Export Workspace Context" from the Command Palette.',
+    'Open this repository in VS Code, trust the workspace if VS Code shows Restricted Mode, then run "VD Agent: Export Workspace Context" from the Command Palette.',
   ].join('\n')
 }
 
@@ -279,7 +279,7 @@ async function detectVsCodeBridgeSetup(): Promise<VsCodeBridgeSetup> {
     installCommand: `code --install-extension "${vsixPath}" --force`,
     downloadUrl: VSCODE_DOWNLOAD_URL,
     message: installReady
-      ? 'VS Code is available. Install the local bridge package, then open this workspace in VS Code.'
+      ? 'VS Code is available. Install the local bridge package, then open this workspace in VS Code. If VS Code opens in Restricted Mode, trust the workspace before using bridge commands.'
       : 'VS Code is available, but the bridge package is missing. Run npm run vscode:package.',
   }
 }

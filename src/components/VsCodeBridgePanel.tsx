@@ -230,6 +230,10 @@ export default function VsCodeBridgePanel() {
           <Row label="CLI" value={setup?.vscodeCommand || <span style={{ color: 'var(--text-muted)' }}>Install VS Code, then refresh</span>} />
           <Row label="Bridge package" value={setup?.installReady ? setup.vsixPath : `${setup?.vsixPath || ''} (missing)`} />
           <Row label="Setup" value={setup?.message || 'Checking VS Code setup...'} />
+          <Row
+            label="Workspace trust"
+            value="If VS Code shows Restricted Mode, trust this workspace before running VD Agent bridge commands or inline autocomplete."
+          />
           {setup?.installCommand && <Row label="Manual command" value={<code>{setup.installCommand}</code>} />}
         </section>
 

@@ -27,8 +27,12 @@ npm run vscode:package
 Install it in VS Code:
 
 ```powershell
-code --install-extension "release/vd-agent-vscode-bridge-0.4.1.vsix"
+code --install-extension "release/vd-agent-vscode-bridge-0.4.2.vsix"
 ```
+
+If VS Code opens the repository in Restricted Mode, trust the workspace before
+running bridge commands. The bridge reads editor context and can apply explicit
+edits, so it is disabled for untrusted workspaces.
 
 Or use VS Code: Extensions panel -> `...` -> Install from VSIX -> choose the
 file in `release/`.
