@@ -35,7 +35,7 @@ console.log('================================')
 
 const installer = path.join(releaseDir, 'VD Agent Setup 1.1.0.exe')
 const portable = path.join(releaseDir, 'VD Agent 1.1.0.exe')
-const vsix = path.join(releaseDir, 'vd-agent-vscode-bridge-0.4.2.vsix')
+const vsix = path.join(releaseDir, 'vd-agent-vscode-bridge-0.4.3.vsix')
 
 line(await exists(installer), 'Windows installer artifact', installer)
 line(await exists(portable), 'Windows portable artifact', portable)
@@ -59,8 +59,8 @@ if (!hasVmConfig) {
   console.log('1. Create or start a clean Windows VM with VS Code installed.')
   console.log('2. Copy release artifacts into the VM.')
   console.log('3. Install VD Agent Setup 1.1.0.exe.')
-  console.log('4. Install the VSIX with: code --install-extension vd-agent-vscode-bridge-0.4.2.vsix')
-  console.log('5. Open a repo in both apps, trust the workspace if VS Code shows Restricted Mode, export VS Code context, run smoke prompts for file open, diff preview, and exact edit.')
+  console.log('4. Install the VSIX with: code --install-extension vd-agent-vscode-bridge-0.4.3.vsix')
+  console.log('5. Open a repo in both apps, export VS Code context, run smoke prompts for file open, diff preview, and exact edit. Restricted Mode supports active-editor export/autocomplete; trust the workspace for indexing and edit/apply commands.')
   if (requireVm) process.exit(1)
   process.exit(0)
 }

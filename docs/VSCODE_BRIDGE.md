@@ -49,8 +49,8 @@ npm run vscode:package
 This writes:
 
 ```text
-release/vd-agent-vscode-bridge-0.4.2.vsix
-vscode-extension/vd-agent-vscode-bridge-0.4.2.vsix
+release/vd-agent-vscode-bridge-0.4.3.vsix
+vscode-extension/vd-agent-vscode-bridge-0.4.3.vsix
 ```
 
 Install from VD Agent: open the `VS Code Bridge` panel, click `Install Bridge`,
@@ -60,7 +60,7 @@ install the free VS Code app first.
 Or install from the command line:
 
 ```powershell
-code --install-extension "release/vd-agent-vscode-bridge-0.4.2.vsix"
+code --install-extension "release/vd-agent-vscode-bridge-0.4.3.vsix"
 ```
 
 Or install from VS Code: Extensions panel -> `...` -> Install from VSIX -> pick
@@ -71,9 +71,10 @@ After install, open the same repository in VS Code and VD Agent, then run
 connected/not connected, active file, pending commands, and the last command
 result.
 
-If VS Code shows **Restricted Mode**, trust the workspace before using the
-bridge. The extension intentionally does not run in untrusted workspaces because
-it can read editor context and apply explicit edits.
+If VS Code shows **Restricted Mode**, the bridge runs in limited mode. Active
+editor export, status, and local inline autocomplete are available. Trust the
+workspace to enable full indexing, terminals, command execution, and edit/apply
+workflows.
 
 ## VS Code-Native Features
 
@@ -87,6 +88,9 @@ The extension also adds no-cost VS Code-side polish:
   cancellation, small fill-in-middle context, cache, and local-symbol fallback.
 - `VD Agent: Check AI Status` and `VD Agent: Select AI Model` expose local
   provider health and model switching from inside VS Code.
+- `VD Agent: Run Inline Autocomplete Smoke Test` verifies that the active
+  cursor can produce a local inline completion candidate, which is useful when
+  checking Restricted Mode behavior without applying edits.
 - The VD Agent activity-bar sidebar provides ask, task status, index, dashboard,
   and terminal controls inside VS Code.
 - Editor context actions add `Fix with VD`, `Explain Selection`,

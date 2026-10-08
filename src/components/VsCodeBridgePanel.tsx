@@ -232,7 +232,7 @@ export default function VsCodeBridgePanel() {
           <Row label="Setup" value={setup?.message || 'Checking VS Code setup...'} />
           <Row
             label="Workspace trust"
-            value="If VS Code shows Restricted Mode, trust this workspace before running VD Agent bridge commands or inline autocomplete."
+            value="Restricted Mode supports active-editor export and local inline autocomplete. Trust the workspace for indexing, terminals, command execution, and edit/apply workflows."
           />
           {setup?.installCommand && <Row label="Manual command" value={<code>{setup.installCommand}</code>} />}
         </section>

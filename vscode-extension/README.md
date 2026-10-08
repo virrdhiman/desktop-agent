@@ -9,6 +9,9 @@ It also maintains a local workspace index, offers lightweight symbol/word inline
 completions, and provides commands to accept or reject the last VD Agent diff
 preview directly inside VS Code.
 
+Use `VD Agent: Run Inline Autocomplete Smoke Test` with the cursor after a
+prefix in a code file to verify that the local fallback can produce a candidate.
+
 When configured, it can call a local Ollama or OpenAI-compatible endpoint for
 AI inline autocomplete and native editor actions. Local symbol completions remain
 available as the no-cost fallback.
@@ -27,12 +30,13 @@ npm run vscode:package
 Install it in VS Code:
 
 ```powershell
-code --install-extension "release/vd-agent-vscode-bridge-0.4.2.vsix"
+code --install-extension "release/vd-agent-vscode-bridge-0.4.3.vsix"
 ```
 
-If VS Code opens the repository in Restricted Mode, trust the workspace before
-running bridge commands. The bridge reads editor context and can apply explicit
-edits, so it is disabled for untrusted workspaces.
+If VS Code opens the repository in Restricted Mode, the bridge runs in limited
+mode. Active-editor export, status, and local inline autocomplete are available.
+Trust the workspace to enable full indexing, terminals, command execution, and
+edit/apply workflows.
 
 Or use VS Code: Extensions panel -> `...` -> Install from VSIX -> choose the
 file in `release/`.

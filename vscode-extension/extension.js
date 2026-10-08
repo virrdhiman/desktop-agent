@@ -62,6 +62,7 @@ function activate(context) {
     vscode.commands.registerCommand('vdAgent.reviewLastPreview', openPreviewReview),
     vscode.commands.registerCommand('vdAgent.checkAiStatus', showAiStatus),
     vscode.commands.registerCommand('vdAgent.selectAiModel', selectAiModel),
+    vscode.commands.registerCommand('vdAgent.runAutocompleteSmoke', runAutocompleteSmoke),
     vscode.commands.registerCommand('vdAgent.showStatus', showBridgeStatus),
     vscode.commands.registerCommand('vdAgent.openDashboard', openDashboard),
     vscode.commands.registerCommand('vdAgent.fixWithVD', () => runNativeEditorAction('fix')),
@@ -94,6 +95,15 @@ function activate(context) {
     vscode.workspace.onDidDeleteFiles(scheduleIndex),
     vscode.workspace.onDidCreateFiles(scheduleIndex),
   )
+  if (typeof vscode.workspace.onDidGrantWorkspaceTrust === 'function') {
+    context.subscriptions.push(vscode.workspace.onDidGrantWorkspaceTrust(() => {
+      scheduleIndex()
+      void processAllCommands()
+      void exportContext()
+      updateStatusBar()
+      assistantProvider?.refresh?.()
+    }))
+  }
   for (const folder of vscode.workspace.workspaceFolders || []) {
     const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(folder, `${BRIDGE_DIR}/commands/*.json`))
     context.subscriptions.push(
@@ -121,6 +131,10 @@ function scheduleExport() {
 function scheduleIndex() {
   const config = vscode.workspace.getConfiguration('vdAgentBridge')
   if (!config.get('autoIndex', true)) return
+  if (!isWorkspaceTrusted()) {
+    updateStatusBar('$(shield) VD Agent limited mode')
+    return
+  }
   clearTimeout(indexTimer)
   indexTimer = setTimeout(() => { void rebuildIndex().catch(() => updateStatusBar()) }, 900)
   updateStatusBar('$(sync~spin) VD Agent indexing')
@@ -133,11 +147,14 @@ async function exportContext() {
   const target = path.join(targetDir, BRIDGE_FILE)
   const active = vscode.window.activeTextEditor
   const maxSelectionChars = vscode.workspace.getConfiguration('vdAgentBridge').get('maxSelectionChars', 20000)
-  const index = await readIndexSummary(folder.uri.fsPath)
+  const trusted = isWorkspaceTrusted()
+  const index = trusted ? await readIndexSummary(folder.uri.fsPath) : undefined
   const ai = await checkAiStatus({ quiet: true, maxAgeMs: 60_000 })
-  const preview = await readPreviewSummary(folder.uri.fsPath)
+  const preview = trusted ? await readPreviewSummary(folder.uri.fsPath) : undefined
   const state = {
     version: 1,
+    mode: trusted ? 'trusted' : 'limited',
+    workspaceTrusted: trusted,
     workspacePath: folder.uri.fsPath,
     updatedAt: Date.now(),
     activeFile: active && isFileInside(folder.uri.fsPath, active.document.uri.fsPath) ? active.document.uri.fsPath : undefined,
@@ -160,6 +177,7 @@ async function exportContext() {
 }
 
 async function rebuildIndex() {
+  if (!requireWorkspaceTrust('rebuild the VD Agent workspace index')) return null
   const folder = activeWorkspaceFolder()
   if (!folder) return null
   const root = folder.uri.fsPath
@@ -233,6 +251,10 @@ async function provideInlineCompletions(document, position, _context, token) {
   if (!config.get('inlineCompletion', true)) return []
   if (document.uri.scheme !== 'file' || document.lineAt(position.line).text.trimStart().startsWith('//')) return []
   const local = provideLocalInlineCompletions(document, position)
+  if (!isWorkspaceTrusted()) {
+    noteInlineFallback(local)
+    return local
+  }
   if (!config.get('aiInlineCompletion', true) || config.get('aiProvider', 'ollama') === 'disabled') {
     noteInlineFallback(local)
     return local
@@ -277,20 +299,22 @@ function noteInlineFallback(local) {
   if (count > 0) {
     inlineStats.local += 1
     inlineStats.lastAt = Date.now()
+    updateStatusBar()
   }
 }
 
 function provideLocalInlineCompletions(document, position) {
-  if (!latestIndex) return []
   const linePrefix = document.lineAt(position.line).text.slice(0, position.character)
   const match = linePrefix.match(/[A-Za-z_$][\w$]{2,}$/)
-  if (!match || !latestIndex) return []
+  if (!match) return []
   const prefix = match[0]
   const prefixLower = prefix.toLowerCase()
-  const localWords = tokenize(document.getText().slice(Math.max(0, document.offsetAt(position) - 10000), document.offsetAt(position) + 10000))
+  const localText = document.getText().slice(Math.max(0, document.offsetAt(position) - 10000), document.offsetAt(position) + 10000)
+  const localWords = completionWords(localText)
   const candidates = new Set()
   for (const token of localWords) candidates.add(token)
-  for (const file of latestIndex.files || []) {
+  for (const token of tokenize(localText)) candidates.add(token)
+  for (const file of latestIndex?.files || []) {
     for (const symbol of file.symbols || []) candidates.add(symbol)
     for (const token of file.tokens || []) candidates.add(token)
   }
@@ -301,6 +325,42 @@ function provideLocalInlineCompletions(document, position) {
     .slice(0, 5)
     .map((item) => new vscode.InlineCompletionItem(item.slice(prefix.length), new vscode.Range(position, position)))
   return new vscode.InlineCompletionList(items)
+}
+
+function completionWords(text) {
+  const words = []
+  const seen = new Set()
+  const pattern = /[A-Za-z_$][\w$]{2,}/g
+  let match
+  while ((match = pattern.exec(String(text || ''))) && words.length < 500) {
+    const word = match[0]
+    const key = word.toLowerCase()
+    if (!seen.has(key)) {
+      seen.add(key)
+      words.push(word)
+    }
+  }
+  return words
+}
+
+async function runAutocompleteSmoke() {
+  const editor = vscode.window.activeTextEditor
+  if (!editor || editor.document.uri.scheme !== 'file') {
+    return vscode.window.showWarningMessage('Open a code file and place the cursor after a prefix before running the VD autocomplete smoke test.')
+  }
+  const list = provideLocalInlineCompletions(editor.document, editor.selection.active)
+  const items = Array.isArray(list?.items) ? list.items : []
+  const suggestions = items
+    .map((item) => typeof item.insertText === 'string' ? item.insertText : item.insertText?.value)
+    .filter(Boolean)
+    .slice(0, 5)
+  if (!suggestions.length) {
+    return vscode.window.showWarningMessage('VD autocomplete smoke found no local suggestion at this cursor. Type a prefix such as "customer" after related words in the file, then retry.')
+  }
+  inlineStats.local += 1
+  inlineStats.lastAt = Date.now()
+  updateStatusBar()
+  vscode.window.showInformationMessage(`VD autocomplete smoke passed: ${suggestions.join(', ')}`)
 }
 
 async function requestAiInlineCompletion(document, position, token) {
@@ -376,6 +436,10 @@ function cleanInlineCompletion(raw, before) {
 }
 
 async function processAllCommands() {
+  if (!isWorkspaceTrusted()) {
+    updateStatusBar('$(shield) VD Agent limited mode')
+    return
+  }
   for (const folder of vscode.workspace.workspaceFolders || []) {
     const dir = path.join(folder.uri.fsPath, COMMAND_DIR)
     const entries = await fs.promises.readdir(dir).catch(() => [])
@@ -570,6 +634,15 @@ function sameDirectory(a, b) {
 }
 
 async function processCommandFile(commandFile, root) {
+  if (!isWorkspaceTrusted()) {
+    const id = path.basename(commandFile, '.json')
+    await writeCommandResult(root, id, {
+      ok: false,
+      message: 'VS Code is in Restricted Mode. Trust this workspace before VD Agent processes bridge commands.',
+      action: 'restricted',
+    })
+    return
+  }
   const resolved = path.resolve(commandFile)
   if (processing.has(resolved)) return
   processing.add(resolved)
@@ -672,6 +745,7 @@ async function writeDiffPreview(root, file, oldString, newString, content) {
 }
 
 async function acceptLastPreview() {
+  if (!requireWorkspaceTrust('accept VD Agent preview edits')) return
   const folder = activeWorkspaceFolder()
   if (!folder) return vscode.window.showWarningMessage('Open a workspace before accepting a VD Agent preview.')
   const metaPath = path.join(folder.uri.fsPath, BRIDGE_DIR, LAST_PREVIEW_FILE)
@@ -694,6 +768,7 @@ async function acceptLastPreview() {
 }
 
 async function rejectLastPreview() {
+  if (!requireWorkspaceTrust('reject VD Agent preview edits')) return
   const folder = activeWorkspaceFolder()
   if (!folder) return vscode.window.showWarningMessage('Open a workspace before rejecting a VD Agent preview.')
   const metaPath = path.join(folder.uri.fsPath, BRIDGE_DIR, LAST_PREVIEW_FILE)
@@ -707,6 +782,7 @@ async function rejectLastPreview() {
 }
 
 async function openPreviewReview() {
+  if (!requireWorkspaceTrust('review VD Agent patch previews')) return
   const folder = activeWorkspaceFolder()
   if (!folder) return vscode.window.showWarningMessage('Open a workspace before reviewing a VD Agent preview.')
   if (previewReviewPanel) {
@@ -841,6 +917,7 @@ async function previewReviewHtml(root) {
 }
 
 function provideVdCodeActions(document, range, context) {
+  if (!isWorkspaceTrusted()) return []
   const folder = vscode.workspace.getWorkspaceFolder(document.uri)
   if (document.uri.scheme !== 'file' || !folder || !isFileInside(folder.uri.fsPath, document.uri.fsPath)) return []
   const actions = []
@@ -864,6 +941,7 @@ function provideVdCodeActions(document, range, context) {
 }
 
 async function runNativeEditorAction(kind, promptOverride) {
+  if (!requireWorkspaceTrust('use VD Agent native editor actions')) return
   const editor = vscode.window.activeTextEditor
   if (!editor || editor.document.uri.scheme !== 'file') return vscode.window.showWarningMessage('Open a file before using VD Agent editor actions.')
   const folder = vscode.workspace.getWorkspaceFolder(editor.document.uri)
@@ -942,6 +1020,7 @@ function cleanReplacement(value) {
 }
 
 async function openWorkspaceTerminal() {
+  if (!requireWorkspaceTrust('open a VD Agent workspace terminal')) return
   const folder = activeWorkspaceFolder()
   const terminal = vscode.window.createTerminal({ name: 'VD Agent', cwd: folder?.uri.fsPath })
   terminal.show()
@@ -957,6 +1036,7 @@ async function showBridgeStatus() {
   const preview = await readJson(path.join(root, BRIDGE_DIR, LAST_PREVIEW_FILE))
   const detail = [
     `Workspace: ${root}`,
+    `Mode: ${isWorkspaceTrusted() ? 'trusted' : 'limited restricted-workspace mode'}`,
     `Pending commands: ${pending}`,
     `Index: ${index ? `${index.files} files, ${index.symbols} symbols` : 'not built yet'}`,
     `Preview: ${preview?.file ? vscode.workspace.asRelativePath(preview.file) : 'none'}`,
@@ -1005,10 +1085,11 @@ async function openDashboard() {
 }
 
 async function dashboardHtml(root) {
-  const index = await readIndexSummary(root)
+  const trusted = isWorkspaceTrusted()
+  const index = trusted ? await readIndexSummary(root) : null
   const pending = (await fs.promises.readdir(path.join(root, COMMAND_DIR)).catch(() => []))
     .filter((entry) => entry.endsWith('.json')).length
-  const preview = await readJson(path.join(root, BRIDGE_DIR, LAST_PREVIEW_FILE))
+  const preview = trusted ? await readJson(path.join(root, BRIDGE_DIR, LAST_PREVIEW_FILE)) : null
   const bridge = await readJson(path.join(root, BRIDGE_DIR, BRIDGE_FILE))
   const ai = await checkAiStatus({ quiet: true, maxAgeMs: 60_000 })
   const nonce = String(Date.now())
@@ -1039,12 +1120,13 @@ async function dashboardHtml(root) {
   <div class="hero">
     <div>
       <h1>VD Agent Bridge</h1>
-      <p>Native VS Code context, edits, autocomplete, and review controls.</p>
+      <p>${trusted ? 'Native VS Code context, edits, autocomplete, and review controls.' : 'Restricted Mode: active-editor export and autocomplete are available. Trust the workspace for indexing, terminals, commands, and edit workflows.'}</p>
     </div>
     <span class="pill ${ai.ok ? 'ok' : 'bad'}">${ai.ok ? 'AI ready' : 'AI needs attention'}</span>
   </div>
   <div class="grid">
     <div class="row"><div class="label">Workspace</div><code>${escapeHtml(root)}</code></div>
+    <div class="row"><div class="label">Mode</div><div>${trusted ? 'Trusted workspace' : 'Limited Restricted Mode'}</div></div>
     <div class="row"><div class="label">Active file</div><div>${escapeHtml(activeFile)}</div></div>
     <div class="row"><div class="label">Pending commands</div><div>${pending}</div></div>
     <div class="row"><div class="label">Index</div><div>${index ? `${index.files} files, ${index.symbols} symbols, ${index.imports || 0} imports, ${index.semanticFiles || 0} semantic files` : 'Not built yet'}</div></div>
@@ -1150,9 +1232,10 @@ async function assistantHtml() {
   const folder = activeWorkspaceFolder()
   const root = folder?.uri.fsPath || ''
   const tasks = root ? await readTasks(root) : []
-  const index = root ? await readIndexSummary(root) : null
+  const trusted = isWorkspaceTrusted()
+  const index = root && trusted ? await readIndexSummary(root) : null
   const ai = await checkAiStatus({ quiet: true, maxAgeMs: 60_000 })
-  const preview = root ? await readPreviewSummary(root) : null
+  const preview = root && trusted ? await readPreviewSummary(root) : null
   const nonce = String(Date.now())
   return `<!DOCTYPE html>
 <html lang="en">
@@ -1179,6 +1262,7 @@ async function assistantHtml() {
 <body>
   <h3>VD Agent</h3>
   <div class="muted">${root ? escapeHtml(root) : 'Open a workspace to use VD Agent.'}</div>
+  ${trusted ? '' : '<div class="panel"><strong>Limited mode</strong><div class="muted">Active-editor export and inline autocomplete are available. Trust this workspace to enable indexing, terminals, command execution, and edit/apply workflows.</div></div>'}
   <div class="metrics">
     <div class="metric"><span class="muted">AI</span><strong class="${ai.ok ? 'ok' : 'bad'}">${ai.ok ? 'Ready' : 'Check'}</strong><div class="muted">${escapeHtml(ai.model || 'no model')}</div></div>
     <div class="metric"><span class="muted">Index</span><strong>${index ? index.files : 0}</strong><div class="muted">${index ? `${index.symbols} symbols` : 'not built'}</div></div>
@@ -1245,11 +1329,23 @@ function updateStatusBar(text) {
   }
   const indexText = latestIndex ? `${latestIndex.fileCount} files` : 'ready'
   const aiText = lastAiStatus ? (lastAiStatus.ok ? lastAiStatus.model : 'AI check') : 'AI'
-  statusBar.text = text || `$(sparkle) VD Agent ${indexText} · ${aiText}`
+  const modeText = isWorkspaceTrusted() ? indexText : 'limited'
+  statusBar.text = text || `$(sparkle) VD Agent ${modeText} · ${aiText}`
   statusBar.tooltip = lastAiStatus
-    ? `VD Agent Bridge\n${lastAiStatus.message}\nAI completions: ${inlineStats.ai}; local fallbacks: ${inlineStats.local}; failed: ${inlineStats.failed}`
+    ? `VD Agent Bridge\nMode: ${isWorkspaceTrusted() ? 'trusted' : 'limited restricted workspace'}\n${lastAiStatus.message}\nAI completions: ${inlineStats.ai}; local fallbacks: ${inlineStats.local}; failed: ${inlineStats.failed}`
     : 'VD Agent Bridge: export context, process commands, accept previews, and maintain local index.'
   statusBar.show()
+}
+
+function isWorkspaceTrusted() {
+  return vscode.workspace.isTrusted !== false
+}
+
+function requireWorkspaceTrust(action) {
+  if (isWorkspaceTrusted()) return true
+  vscode.window.showWarningMessage(`VD Agent limited mode: trust this workspace before VD Agent can ${action}.`)
+  updateStatusBar('$(shield) VD Agent limited mode')
+  return false
 }
 
 function splitLines(text) {

@@ -2,7 +2,7 @@
   "name": "vd-agent-vscode-bridge",
   "displayName": "VD Agent Bridge",
   "description": "Exports VS Code workspace/editor context, local index data, AI inline suggestions, and VD Agent editor commands.",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "publisher": "virender-dhiman",
   "license": "SEE LICENSE IN ../LICENSE",
   "engines": {
@@ -10,8 +10,8 @@
   },
   "capabilities": {
     "untrustedWorkspaces": {
-      "supported": false,
-      "description": "VD Agent Bridge reads workspace/editor context and can apply edits through explicit commands, so open a trusted workspace to enable it."
+      "supported": "limited",
+      "description": "VD Agent Bridge offers read-only status, active-editor export, and inline autocomplete in Restricted Mode. Trust the workspace to enable indexing, terminals, command execution, and edit/apply workflows."
     }
   },
   "categories": ["Other"],
@@ -27,6 +27,7 @@
     "onCommand:vdAgent.reviewLastPreview",
     "onCommand:vdAgent.checkAiStatus",
     "onCommand:vdAgent.selectAiModel",
+    "onCommand:vdAgent.runAutocompleteSmoke",
     "onCommand:vdAgent.showStatus",
     "onCommand:vdAgent.openDashboard",
     "onCommand:vdAgent.fixWithVD",
@@ -77,6 +78,10 @@
       {
         "command": "vdAgent.selectAiModel",
         "title": "VD Agent: Select AI Model"
+      },
+      {
+        "command": "vdAgent.runAutocompleteSmoke",
+        "title": "VD Agent: Run Inline Autocomplete Smoke Test"
       },
       {
         "command": "vdAgent.showStatus",
@@ -134,6 +139,7 @@
         { "command": "vdAgent.reviewLastPreview" },
         { "command": "vdAgent.checkAiStatus" },
         { "command": "vdAgent.selectAiModel" },
+        { "command": "vdAgent.runAutocompleteSmoke" },
         { "command": "vdAgent.showStatus" },
         { "command": "vdAgent.openDashboard" },
         { "command": "vdAgent.fixWithVD" },
@@ -166,6 +172,10 @@
           "group": "navigation"
         }
       ]
+    },
+    "configurationDefaults": {
+      "editor.inlineSuggest.enabled": true,
+      "editor.suggest.preview": true
     },
     "configuration": {
       "title": "VD Agent Bridge",
