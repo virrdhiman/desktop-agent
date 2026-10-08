@@ -59,6 +59,36 @@ If the hashes don't match, delete the file and download it again from the Releas
 - **Linux AppImage**: `chmod +x "VD Agent-<version>.AppImage"`, then run it. On Ubuntu 22.04 and later you may need `sudo apt install libfuse2`.
 - **Linux .deb**: `sudo apt install ./vd-agent_<version>_amd64.deb`
 
+## What The Installer Includes
+
+The Windows installer installs **VD Agent** only. It includes the local
+`vd-agent-vscode-bridge` VSIX package inside the app resources so VD Agent can
+install it later from the **VS Code Bridge** panel.
+
+The installer does **not** silently install these on the user's machine:
+
+- Visual Studio Code
+- the VD Agent VS Code extension inside VS Code
+- Ollama
+- local Ollama models such as `qwen2.5-coder`
+- API keys or private provider settings
+
+This is intentional. VS Code, extensions, local model runtimes, and API keys are
+user-level tools/settings and should be installed or connected explicitly. After
+VD Agent is installed, open **VS Code Bridge** and use:
+
+1. **Install VS Code** if VS Code is missing.
+2. **Load Bridge into VS Code** to install the bundled VSIX into VS Code.
+3. **Open Workspace** and run `VD Agent: Export Workspace Context` in VS Code.
+4. **Test Autocomplete** to verify the bridge can produce local inline
+   completion candidates in the active VS Code file.
+
+For local no-cost AI autocomplete, install Ollama separately and pull a model:
+
+```powershell
+ollama pull qwen2.5-coder:1.5b
+```
+
 ## First launch warnings
 
 Official releases should be code-signed. If you run an unsigned build, the OS warns you the first time:

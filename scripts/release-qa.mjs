@@ -68,6 +68,11 @@ function hasTarget(platform, target) {
   return Array.isArray(values) && values.includes(target)
 }
 
+function vscodeBridgeResource() {
+  const resources = Array.isArray(pkg.build?.extraResources) ? pkg.build.extraResources : []
+  return resources.find((item) => typeof item?.to === 'string' && /^vd-agent-vscode-bridge-.*\.vsix$/i.test(item.to))
+}
+
 function envSet(name) {
   return Boolean(process.env[name])
 }
@@ -110,6 +115,13 @@ function checkPackageConfig() {
   for (const [platform, target] of [['win', 'nsis'], ['win', 'portable'], ['mac', 'dmg'], ['mac', 'zip'], ['linux', 'AppImage'], ['linux', 'deb']]) {
     if (hasTarget(platform, target)) pass(`${platform} target: ${target}`)
     else fail(`${platform} target: ${target}`, 'Missing from package.json build targets')
+  }
+
+  const bridge = vscodeBridgeResource()
+  if (bridge?.from && bridge?.to && nonEmpty(bridge.from)) {
+    pass('VS Code bridge packaged resource', `${bridge.from} -> ${bridge.to}`)
+  } else {
+    fail('VS Code bridge packaged resource', 'extraResources must include a non-empty vd-agent-vscode-bridge VSIX')
   }
 }
 
@@ -203,6 +215,16 @@ function checkReleaseArtifacts() {
   const invalid = lines.map((line) => [line, validateChecksumLine(line)]).filter(([, result]) => !result.ok)
   if (invalid.length === 0) pass('release checksums', `${lines.length} file${lines.length === 1 ? '' : 's'} listed`)
   else fail('release checksums', invalid.map(([line, result]) => `${result.reason}: ${line}`).join('; '))
+
+  const bridge = vscodeBridgeResource()
+  if (bridge?.to) {
+    const packagedBridge = path.join(releaseDir, 'win-unpacked', 'resources', bridge.to)
+    if (fs.existsSync(packagedBridge) && fs.statSync(packagedBridge).size > 0) {
+      pass('packaged VS Code bridge resource', rel(packagedBridge))
+    } else {
+      fail('packaged VS Code bridge resource', `${rel(packagedBridge)} is missing or empty`)
+    }
+  }
 }
 
 checkPackageConfig()

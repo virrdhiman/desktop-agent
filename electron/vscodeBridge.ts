@@ -272,7 +272,7 @@ async function detectVsCodeBridgeSetup(): Promise<VsCodeBridgeSetup> {
       vsixPath,
       installReady,
       downloadUrl: VSCODE_DOWNLOAD_URL,
-      message: 'VS Code CLI was not found. Install VS Code for free, then reopen VD Agent or refresh this panel.',
+      message: 'VD Agent is installed, but VS Code CLI was not found. The VD installer does not install VS Code automatically; install VS Code for free, then reopen VD Agent or refresh this panel.',
     }
   }
   return {
@@ -284,7 +284,7 @@ async function detectVsCodeBridgeSetup(): Promise<VsCodeBridgeSetup> {
     installCommand: `code --install-extension "${vsixPath}" --force`,
     downloadUrl: VSCODE_DOWNLOAD_URL,
     message: installReady
-      ? 'VS Code is available. Install the local bridge package, then open this workspace in VS Code. Restricted Mode supports active-editor export/autocomplete; trust the workspace for indexing and edit/apply commands.'
+      ? 'VS Code is available. The VD installer bundled the bridge package, but does not install it into VS Code automatically. Click Install Bridge, then open this workspace in VS Code. Restricted Mode supports active-editor export/autocomplete; trust the workspace for indexing and edit/apply commands.'
       : 'VS Code is available, but the bridge package is missing. Run npm run vscode:package.',
   }
 }

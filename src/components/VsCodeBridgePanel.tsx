@@ -181,6 +181,9 @@ export default function VsCodeBridgePanel() {
             <button className="btn btn-sm" disabled={!connected || loading} onClick={() => void runVsCodeCommand('vdAgent.selectAiModel')}>
               Select Model
             </button>
+            <button className="btn btn-sm" disabled={!connected || loading} onClick={() => void runVsCodeCommand('vdAgent.runAutocompleteSmoke')}>
+              Test Autocomplete
+            </button>
             <button className="btn btn-sm" disabled={!connected || loading || !preview} onClick={() => void runVsCodeCommand('vdAgent.reviewLastPreview')}>
               Review Hunks
             </button>
@@ -221,7 +224,7 @@ export default function VsCodeBridgePanel() {
                   onClick={() => void runSetupAction('Install VD Agent Bridge', () => window.api.vscodeInstallBridge())}
                   disabled={loading}
                 >
-                  Install Bridge
+                  Load Bridge into VS Code
                 </button>
               )}
             </div>
@@ -229,6 +232,10 @@ export default function VsCodeBridgePanel() {
           <Row label="VS Code" value={setup?.vscodeAvailable ? `Found${setup.vscodeVersion ? ` (${setup.vscodeVersion})` : ''}` : 'Not found'} />
           <Row label="CLI" value={setup?.vscodeCommand || <span style={{ color: 'var(--text-muted)' }}>Install VS Code, then refresh</span>} />
           <Row label="Bridge package" value={setup?.installReady ? setup.vsixPath : `${setup?.vsixPath || ''} (missing)`} />
+          <Row
+            label="Installer behavior"
+            value="The VD Agent installer bundles this VSIX, but does not silently install VS Code, Ollama, local models, API keys, or the VS Code extension. Use Load Bridge into VS Code after VS Code is installed."
+          />
           <Row label="Setup" value={setup?.message || 'Checking VS Code setup...'} />
           <Row
             label="Workspace trust"
