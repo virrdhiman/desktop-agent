@@ -20,6 +20,7 @@ import {
   type ModelErrorKind,
 } from '../../src/lib/modelSelect'
 import type { TeamTokenBudget } from '../../src/types'
+import { toAnthropicContent } from '../../src/lib/vision'
 
 type ChatConfig = {
   provider: string
@@ -154,7 +155,7 @@ async function completeAnthropic(
       ...(system ? { system } : {}),
       messages: config.messages
         .filter((m: any) => m.role !== 'system')
-        .map((m: any) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content })),
+        .map((m: any) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: toAnthropicContent(m.content) })),
     }),
   })
 

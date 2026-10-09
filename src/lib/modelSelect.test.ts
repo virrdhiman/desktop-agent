@@ -206,6 +206,10 @@ describe('error classification', () => {
     expect(classifyModelError(groq)).toBe('retry-model')
   })
 
+  it('tries the next model when image input is unsupported', () => {
+    expect(classifyModelError('API error (400): this model does not support image input')).toBe('retry-model')
+  })
+
   it('does not retry models for request-level errors', () => {
     expect(classifyModelError('API error (400): context length exceeded')).toBe('other')
     expect(classifyModelError('fetch failed')).toBe('other')

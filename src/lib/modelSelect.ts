@@ -228,6 +228,7 @@ const RETRY_TEXT =
  * to 4096") or a model that needs its terms accepted in the provider console first.
  */
 const MODEL_LIMIT_TEXT = /max_tokens.{0,60}(must be|less than or equal|exceeds?|too large)|maximum value for .?max_tokens|requires terms acceptance|accept the terms/
+const IMAGE_LIMIT_TEXT = /(?:does not support|unsupported|not available for|cannot process).{0,50}(?:image|vision)|(?:image|vision).{0,50}(?:does not support|unsupported|not available|cannot process)/
 
 export function extractStatus(message: string): number | undefined {
   const m = message.match(/\((\d{3})\)/) || message.match(/\b(401|402|403|404|408|429|500|502|503|504|529)\b/)
@@ -246,7 +247,7 @@ export function classifyModelError(message: string, status?: number): ModelError
   if (code === 401 || AUTH_TEXT.test(t)) return 'auth'
   if (code === 403) return /model/.test(t) ? 'retry-model' : 'auth'
   if (code !== undefined && [402, 404, 408, 429, 502, 503, 504, 529].includes(code)) return 'retry-model'
-  if (RETRY_TEXT.test(t) || MODEL_LIMIT_TEXT.test(t)) return 'retry-model'
+  if (RETRY_TEXT.test(t) || MODEL_LIMIT_TEXT.test(t) || IMAGE_LIMIT_TEXT.test(t)) return 'retry-model'
   return 'other'
 }
 

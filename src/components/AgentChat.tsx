@@ -29,6 +29,7 @@ import {
   applyDiscoveredModel, buildProviderChain, classifyAgentTask, providerIsConfigured, providerPrefersFreeModels, recordProviderOutcome, refreshProviderModelCatalog,
 } from '../lib/providers'
 import { highlightSyntax } from '../lib/highlight'
+import { imageAttachmentError, withImageContent } from '../lib/vision'
 import { AUTHOR_NAME, AUTHOR_URL, REPO_URL } from '../lib/brand'
 import {
   MAX_TOOL_ROUNDS, assessResponse, buildContext, buildHistory, buildSystemPrompt, cleanResponse,
@@ -729,7 +730,6 @@ export default function AgentChat() {
     setCancelRequested(false)
     const taskKind = classifyAgentTask(text)
 
-    // Image contents are not sent yet; the model is told which files were attached.
     const userContent = job.userContent
     const historyMessages = (() => {
       const current = useStore.getState().messages
@@ -774,10 +774,10 @@ export default function AgentChat() {
     })
 
     // System notices shown in the UI are not part of the model's history.
-    let apiMessages = [
+    let apiMessages: any[] = withImageContent([
       { role: 'system', content: systemPrompt },
       ...buildHistory(historyMessages),
-    ]
+    ], job.images)
 
     const finish = (status: 'done' | 'error', notice?: string) => {
       if (notice) addMessage({ id: `${Date.now()}-notice`, role: 'system', content: notice, timestamp: Date.now() })
@@ -1055,6 +1055,11 @@ export default function AgentChat() {
     }
 
     const images = pendingImages.slice()
+    const imageError = imageAttachmentError(images)
+    if (imageError) {
+      addMessage({ id: `${Date.now()}-image-error`, role: 'system', content: imageError, timestamp: Date.now() })
+      return
+    }
     const userContent = contentForQueuedQuery(text, images)
     const userMessage: ChatMessage = {
       id: `${Date.now()}-user`,

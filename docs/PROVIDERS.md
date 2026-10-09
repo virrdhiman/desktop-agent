@@ -74,6 +74,12 @@ When **Auto** is selected, VD Agent does not cling to an expired or deprecated s
 
 **Anthropic** uses its own Messages API and has no model discovery, so VD Agent uses the model set in Settings.
 
+Screenshots pasted or dropped into the current chat request are sent as image content
+to compatible chat models. VD converts the same request for Anthropic's Messages API.
+It accepts up to four PNG, JPEG, WebP, or GIF images totaling 10 MB. Saved chat
+history keeps attachment names; the image bytes are used only for the current
+request and are not stored in the text history.
+
 ## Provider fallback
 
 If the active provider fails for a reason other than an invalid key, VD Agent tries compatible fallbacks with keys. Free providers fall back only to other **Free Official** providers so Auto does not spend money unexpectedly. Paid providers are used only when you intentionally select one; then VD can fall back across your configured paid and free providers. The active provider remains first and fallbacks are ordered by locally observed reliability and latency; repeated failures create a short cooldown. When another provider answers, the chat says which one, and the rest of that request stays on it. If every provider fails, the chat lists each provider's error with next steps. Local servers and image/video services are only used when you make them the active provider.
