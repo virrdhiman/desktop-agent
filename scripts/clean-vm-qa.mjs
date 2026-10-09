@@ -21,6 +21,14 @@ async function commandAvailable(command, args = ['--version']) {
   }
 }
 
+async function firstWorkingCommand(candidates, args = ['--version']) {
+  for (const candidate of candidates.filter(Boolean)) {
+    const result = await commandAvailable(candidate, args)
+    if (result.ok) return { ...result, command: candidate }
+  }
+  return { ok: false, output: 'not found' }
+}
+
 async function powershell(script) {
   return commandAvailable('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script])
 }
@@ -41,8 +49,13 @@ line(await exists(installer), 'Windows installer artifact', installer)
 line(await exists(portable), 'Windows portable artifact', portable)
 line(await exists(vsix), 'VS Code bridge VSIX artifact', vsix)
 
-const vbox = await commandAvailable('VBoxManage', ['--version'])
-line(vbox.ok, 'VirtualBox CLI', vbox.ok ? vbox.output : 'not found')
+const vboxCandidates = [
+  'VBoxManage',
+  path.join(process.env.ProgramFiles || '', 'Oracle', 'VirtualBox', 'VBoxManage.exe'),
+  path.join(process.env['ProgramFiles(x86)'] || '', 'Oracle', 'VirtualBox', 'VBoxManage.exe'),
+]
+const vbox = await firstWorkingCommand(vboxCandidates, ['--version'])
+line(vbox.ok, 'VirtualBox CLI', vbox.ok ? `${vbox.output} (${vbox.command})` : 'not found')
 
 const hyperv = await powershell('(Get-Command New-VM -ErrorAction SilentlyContinue) -ne $null')
 line(hyperv.ok && /true/i.test(hyperv.output), 'Hyper-V PowerShell module', (hyperv.output || '').trim() || 'not found')

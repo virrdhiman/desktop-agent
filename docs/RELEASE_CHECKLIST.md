@@ -50,6 +50,7 @@ Never commit certificates, passwords, or `.env` files.
 - [ ] `npm run smoke` passes. It launches the dev build three times with a throwaway profile and checks UI/IPC isolation, native PTY startup, rich restart state, checkpoint restore/deletion, key redaction, safe ZIP listing/extraction, the editor, model/provider trajectories, and link handling.
 - [ ] Build with the official script on each platform
 - [ ] If this Windows host needs a clean VM for installer QA, open Administrator PowerShell in the repo and run `.\Win\setup-vm-host.bat`. If you prefer npm, use `npm.cmd run vm:setup -- -Prefer VirtualBox` so PowerShell execution policy does not block `npm.ps1`. Windows Home should use VirtualBox; full Hyper-V Manager is unavailable on Home editions.
+- [ ] Create a clean VirtualBox VM with `.\Win\create-clean-vm.bat "C:\path\to\windows.iso"`, then finish the Windows install in the VM before running installer QA.
 - [ ] Smoke-test the packaged app:
   - Windows: `npm run smoke -- --exe "release/win-unpacked/VD Agent.exe"`
   - macOS: `npm run smoke -- --exe "release/mac/VD Agent.app/Contents/MacOS/VD Agent"` (`mac-arm64` on Apple Silicon)

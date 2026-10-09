@@ -61,6 +61,7 @@
     "release:qa": "node scripts/release-qa.mjs",
     "release:vm-qa": "node scripts/clean-vm-qa.mjs",
     "vm:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-vm-host.ps1",
+    "vm:create": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/create-clean-vm.ps1",
     "vscode:package": "node scripts/package-vscode-extension.mjs",
     "electron:dev": "vite --config vite.config.ts",
     "electron:build": "vite build && electron-builder"
