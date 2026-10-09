@@ -59,6 +59,7 @@
     "checksums": "node scripts/checksums.mjs",
     "release:notes": "node scripts/release-notes.mjs",
     "release:qa": "node scripts/release-qa.mjs",
+    "release:signing": "node scripts/signing-preflight.mjs",
     "release:vm-qa": "node scripts/clean-vm-qa.mjs",
     "vm:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-vm-host.ps1",
     "vm:create": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/create-clean-vm.ps1",

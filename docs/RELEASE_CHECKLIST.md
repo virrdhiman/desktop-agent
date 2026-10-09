@@ -21,7 +21,7 @@ Each platform has to be built on that OS. Every script cleans `release/`, `dist/
 
 **Only upload files built by these scripts.** `release/` can also contain test builds made with manual `electron-builder` commands. Those are not release builds; delete them or rebuild with the official script. `npmRebuild` is intentionally disabled because `node-pty` supplies Windows/macOS prebuilds and its install step builds the Linux Node-API binary; CI and packaged smoke tests verify that the terminal starts on each release platform.
 
-## Code signing
+## Code Signing and Notarization
 
 Public builds should be signed so users don't get SmartScreen or Gatekeeper warnings. Unsigned builds work, and the scripts print an **UNSIGNED** warning when they make one, but don't publish them as official releases if you can avoid it.
 
@@ -31,13 +31,15 @@ Public builds should be signed so users don't get SmartScreen or Gatekeeper warn
 
 Never commit certificates, passwords, or `.env` files.
 
+Run `npm run release:signing` before packaging to see exactly which signing or notarization inputs are ready. Run `npm run release:signing -- --require-official` for a hard failure before publishing a no-warning Windows/macOS release. Full setup details are in [Code Signing and Notarization](SIGNING.md).
+
 ## Before building
 
 - [ ] `main` is clean and up to date: `git status`, `git pull`
 - [ ] Version bumped in `package.json`: `npm version <x.y.z> --no-git-tag-version`
 - [ ] `CHANGELOG.md` has a section for the version, with the release date
 - [ ] Release notes render cleanly: `npm run release:notes -- --version <x.y.z> --out release-notes.md`
-- [ ] Release preflight passes: `npm run icons && npm run release:qa`
+- [ ] Release preflight passes: `npm run icons && npm run release:qa && npm run release:signing`
 - [ ] Docs match the release: README, USAGE, `docs/`
 - [ ] App icons exist: `build/icon.ico` (Windows), `build/icon.icns` (macOS), `build/icon.png` 512×512 (Linux). Without them, electron-builder uses the default Electron icon.
 - [ ] Signing certificates are available on each build machine (see above)

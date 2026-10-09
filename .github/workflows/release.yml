@@ -4,6 +4,12 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      require_signing:
+        description: Fail Windows/macOS jobs if signing or notarization credentials are missing
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -28,6 +34,7 @@ jobs:
       APPLE_ID: ${{ secrets.APPLE_ID }}
       APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      REQUIRE_SIGNING: ${{ inputs.require_signing || vars.REQUIRE_SIGNING || 'false' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -43,7 +50,11 @@ jobs:
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - name: Choose signing
         shell: bash
-        run: node scripts/release-signing.mjs >> "$GITHUB_ENV"
+        run: |
+          SIGNING_ARGS=(--platform "$RUNNER_OS")
+          if [ "$REQUIRE_SIGNING" = "true" ]; then SIGNING_ARGS+=(--require-official); fi
+          node scripts/signing-preflight.mjs "${SIGNING_ARGS[@]}"
+          node scripts/release-signing.mjs >> "$GITHUB_ENV"
       - name: Run agent evaluations
         if: runner.os != 'Linux'
         run: npm run agent:evals

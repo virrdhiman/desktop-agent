@@ -135,6 +135,7 @@ function checkScriptsAndDocs() {
     'checksums',
     'release:notes',
     'release:qa',
+    'release:signing',
     'electron:build',
   ]) {
     requiredScript(script)
@@ -144,7 +145,7 @@ function checkScriptsAndDocs() {
     requiredFile(file, `platform build script: ${file}`)
   }
 
-  for (const file of ['README.md', 'docs/INSTALL.md', 'docs/RELEASE_CHECKLIST.md', 'CHANGELOG.md', 'LICENSE']) {
+  for (const file of ['README.md', 'docs/INSTALL.md', 'docs/RELEASE_CHECKLIST.md', 'docs/SIGNING.md', 'CHANGELOG.md', 'LICENSE']) {
     requiredFile(file, `release doc: ${file}`)
   }
 

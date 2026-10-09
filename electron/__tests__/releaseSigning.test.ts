@@ -10,8 +10,20 @@ const { releaseSigningPlan } = createRequire(import.meta.url)('../../scripts/rel
     env: Record<string, string>
   }
 }
+const { signingPreflight } = createRequire(import.meta.url)('../../scripts/signing-preflight.mjs') as {
+  signingPreflight: (input: {
+    platform: string
+    env?: Record<string, string>
+    requireSigning?: boolean
+    requireNotarization?: boolean
+  }) => {
+    platform: string
+    checks: Array<{ level: string; label: string; detail: string }>
+  }
+}
 
 const cert = { CSC_LINK: 'base64-cert', CSC_KEY_PASSWORD: 'secret' }
+const base64Cert = { CSC_LINK: 'MII/secret/base64==', CSC_KEY_PASSWORD: 'secret' }
 const apple = {
   APPLE_ID: 'dev@example.com',
   APPLE_APP_SPECIFIC_PASSWORD: 'app-password',
@@ -51,5 +63,34 @@ describe('release signing plan', () => {
       builderArgs: '--linux',
       env: {},
     })
+  })
+
+  it('preflights official signing requirements before release', () => {
+    expect(signingPreflight({ platform: 'Windows', env: cert, requireSigning: true }).checks).toEqual([
+      expect.objectContaining({ level: 'PASS', label: 'Windows code-signing certificate' }),
+    ])
+    expect(signingPreflight({ platform: 'Windows', env: base64Cert, requireSigning: true }).checks).toEqual([
+      expect.objectContaining({ level: 'PASS', label: 'Windows code-signing certificate' }),
+    ])
+
+    expect(signingPreflight({ platform: 'Windows', env: {}, requireSigning: true }).checks).toEqual([
+      expect.objectContaining({ level: 'FAIL', label: 'Windows code-signing certificate' }),
+    ])
+
+    const macMissingNotary = signingPreflight({
+      platform: 'macOS',
+      env: cert,
+      requireSigning: true,
+      requireNotarization: true,
+    })
+    expect(macMissingNotary.checks).toEqual([
+      expect.objectContaining({ level: 'PASS', label: 'macOS code-signing certificate' }),
+      expect.objectContaining({ level: 'FAIL', label: 'macOS notarization credentials' }),
+    ])
+
+    expect(signingPreflight({ platform: 'macOS', env: { ...cert, ...apple }, requireSigning: true, requireNotarization: true }).checks).toEqual([
+      expect.objectContaining({ level: 'PASS', label: 'macOS code-signing certificate' }),
+      expect.objectContaining({ level: 'PASS', label: 'macOS notarization credentials' }),
+    ])
   })
 })
