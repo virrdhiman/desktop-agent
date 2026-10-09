@@ -55,7 +55,10 @@ function Install-VirtualBox {
   )
   $installed = $possible | Where-Object { Test-Path $_ } | Select-Object -First 1
   if (-not $installed) {
-    $installed = (Get-Command VBoxManage -ErrorAction SilentlyContinue)?.Source
+    $vboxCommand = Get-Command VBoxManage -ErrorAction SilentlyContinue
+    if ($vboxCommand) {
+      $installed = $vboxCommand.Source
+    }
   }
   if (-not $installed) {
     throw "VirtualBox install command finished, but VBoxManage was not found. Reboot, then run this script again."
