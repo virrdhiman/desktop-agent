@@ -26,6 +26,7 @@ const ENV_PROVIDER_KEYS: Record<string, string[]> = {
   mistral: ['MISTRAL_API_KEY'],
   nvidia: ['NVIDIA_API_KEY', 'NVIDIA_NIM_API_KEY'],
   llm7: ['LLM7_API_KEY'],
+  custom_openai: ['VD_AGENT_CUSTOM_API_KEY', 'CUSTOM_OPENAI_API_KEY'],
   ollama: ['OLLAMA_API_KEY_OR_URL'],
 }
 
@@ -67,6 +68,7 @@ const DEFAULT_PROVIDERS = [
   { id: 'cohere', name: 'Cohere 💰', apiKey: '', baseUrl: 'https://api.cohere.ai/compatibility/v1', model: 'command-a-03-2025', notes: 'Paid API with a trial key tier.' },
   { id: 'llm7', name: 'LLM7 💰', apiKey: '', baseUrl: 'https://api.llm7.io/v1', model: 'DeepSeek-V4-Flash-0731', signupUrl: 'https://llm7.io/', notes: 'OpenAI-compatible provider with published per-token pricing. Not used as automatic free fallback.' },
   { id: 'perplexity', name: 'Perplexity 💰', apiKey: '', baseUrl: 'https://api.perplexity.ai', model: 'sonar-pro', notes: 'Paid, search-augmented API.' },
+  { id: 'custom_openai', name: 'Custom OpenAI-Compatible 🔌', apiKey: '', baseUrl: '', model: 'auto', notes: 'Connect any future OpenAI-compatible API. Set the base URL, key, and model, then use Refresh Live Models when the provider supports /models.' },
 ]
 
 /** Encrypt an API key using Electron's safeStorage (OS keychain) */

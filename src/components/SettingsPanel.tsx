@@ -22,7 +22,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useStore } from '../store'
 import type { ProviderConfig, TeamPreset, TeamRoleProfile, TeamTokenBudget } from '../types'
-import { getProviderCategory, mergeImportedSettings, providerIsConfigured, refreshProviderModelCatalog, withoutApiKeys } from '../lib/providers'
+import { getProviderCategory, mergeImportedSettings, providerIsConfigured, providerPrefersFreeModels, refreshProviderModelCatalog, withoutApiKeys } from '../lib/providers'
 import { maskProviderForRenderer } from '../lib/providerKeys'
 import { APP_NAME, APP_VERSION, AUTHOR_NAME, AUTHOR_URL, COPYRIGHT, LICENSE_URL, REPO_URL } from '../lib/brand'
 import { TEAM_PRESET_LABELS } from '../lib/multiAgent'
@@ -124,6 +124,8 @@ export default function SettingsPanel() {
         provider: editing.id,
         apiKey: local ? editing.apiKey : typed,
         baseUrl: editing.baseUrl,
+        modelBudget: settings.teamTokenBudget || 'balanced',
+        preferFreeModels: providerPrefersFreeModels(editing),
       })
       if (!Array.isArray(ids) || ids.length === 0) {
         setRefreshMessage('No usable chat models were returned. The saved fallback model was kept.')
@@ -213,7 +215,7 @@ export default function SettingsPanel() {
           <div className="divider" />
 
           <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: 10 }}>
-            Paste a free API key. VD lists the models that key can call, uses the strongest chat model, and saves it as the provider's model. Pick a specific model in the Agent header to pin it instead.
+            Paste an API key. VD lists the models that key can call, drops expired IDs, and saves the best working chat model for the selected budget. Pick a specific model in the Agent header to pin it instead.
           </div>
 
           {/* Search */}
@@ -356,7 +358,7 @@ export default function SettingsPanel() {
                   onChange={(e) => setEditing({ ...editing, model: e.target.value })}
                 />
                 <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                  Fallback model. Refreshing live models makes VD drop stale IDs and use the strongest chat model this key can call.
+                  Fallback model. Refreshing live models makes VD drop stale IDs and use the best accessible chat model for your budget.
                 </div>
               </div>
 
@@ -371,7 +373,7 @@ export default function SettingsPanel() {
                     {editing.models.map((id) => <option key={id} value={id}>{id}</option>)}
                   </select>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                    Last refreshed {editing.modelsUpdatedAt ? new Date(editing.modelsUpdatedAt).toLocaleString() : 'during this session'}.
+                    Auto mode tries these in ranked order and switches when a model expires, rate-limits, or is unavailable. Last refreshed {editing.modelsUpdatedAt ? new Date(editing.modelsUpdatedAt).toLocaleString() : 'during this session'}.
                   </div>
                 </div>
               ) : null}

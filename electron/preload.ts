@@ -94,10 +94,10 @@ contextBridge.exposeInMainWorld('api', {
 
   // ═══ AI ════════════════════════════════════════════════════════════════════════
   // Streaming chat completions, per-key model discovery, cancellation
-  aiChat: (config: { provider: string; apiKey: string; baseUrl: string; model: string; messages: any[]; stream?: boolean; autoSelect?: boolean; modelPerformance?: Record<string, unknown>; taskKind?: string }) =>
+  aiChat: (config: { provider: string; apiKey: string; baseUrl: string; model: string; messages: any[]; stream?: boolean; autoSelect?: boolean; knownModels?: string[]; modelPerformance?: Record<string, unknown>; taskKind?: string; modelBudget?: 'cheap' | 'balanced' | 'strong'; preferFreeModels?: boolean }) =>
     invokeWithTimeout('ai:chat', config),
   aiCancel: () => invokeWithTimeout('ai:cancel'),
-  aiListModels: (config: { provider: string; apiKey: string; baseUrl: string }) => invokeWithTimeout('ai:listModels', config),
+  aiListModels: (config: { provider: string; apiKey: string; baseUrl: string; modelBudget?: 'cheap' | 'balanced' | 'strong'; preferFreeModels?: boolean }) => invokeWithTimeout('ai:listModels', config),
   onAIStream: (cb: (token: string) => void) => {
     const listener = (_e: unknown, token: string) => cb(token)
     ipcRenderer.on('ai:stream', listener)
@@ -247,10 +247,10 @@ export type ElectronAPI = {
   onCheckpointCreated: (cb: (checkpoint: CheckpointSummary) => void) => () => void
   loadSettings: () => Promise<Settings>
   saveSettings: (settings: Settings) => Promise<{ success: boolean } | { error: string }>
-  aiChat: (config: { provider: string; apiKey: string; baseUrl: string; model: string; messages: any[]; stream?: boolean; autoSelect?: boolean; modelPerformance?: Record<string, unknown>; taskKind?: string }) =>
+  aiChat: (config: { provider: string; apiKey: string; baseUrl: string; model: string; messages: any[]; stream?: boolean; autoSelect?: boolean; knownModels?: string[]; modelPerformance?: Record<string, unknown>; taskKind?: string; modelBudget?: 'cheap' | 'balanced' | 'strong'; preferFreeModels?: boolean }) =>
     Promise<AiChatResult>
   aiCancel: () => Promise<{ success: boolean }>
-  aiListModels: (config: { provider: string; apiKey: string; baseUrl: string }) => Promise<string[]>
+  aiListModels: (config: { provider: string; apiKey: string; baseUrl: string; modelBudget?: 'cheap' | 'balanced' | 'strong'; preferFreeModels?: boolean }) => Promise<string[]>
   onAIStream: (cb: (token: string) => void) => () => void
   openPath: (targetPath: string) => Promise<void>
   showItemInFolder: (targetPath: string) => Promise<void>

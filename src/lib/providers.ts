@@ -4,7 +4,7 @@
  * @project VD Agent
  * @license Proprietary. See LICENSE.
  */
-import type { AgentTaskKind, ProviderConfig, Settings } from '../types'
+import type { AgentTaskKind, ProviderConfig, Settings, TeamTokenBudget } from '../types'
 import { rankModels } from './modelSelect'
 import { isLocalPlaceholderKey } from './providerKeys'
 
@@ -56,10 +56,18 @@ export function buildProviderChain(
   now = Date.now()
 ): ProviderConfig[] {
   const active = providers.find((p) => p.id === activeId)
+  const activeCategory = active ? getProviderCategory(active) : 'free'
   const fallbacks = providers.filter(
-    (p) => p.id !== activeId && providerIsConfigured(p) && getProviderCategory(p) === 'free'
+    (p) => p.id !== activeId && providerIsConfigured(p) && providerCanFallbackFrom(activeCategory, getProviderCategory(p))
   ).sort((a, b) => providerScore(b, taskKind, now) - providerScore(a, taskKind, now))
   return [...(active ? [active] : []), ...fallbacks].slice(0, max)
+}
+
+function providerCanFallbackFrom(active: ProviderCategory, candidate: ProviderCategory): boolean {
+  if (active === 'paid') return candidate === 'paid' || candidate === 'free'
+  if (active === 'free') return candidate === 'free'
+  if (active === 'local') return candidate === 'local'
+  return false
 }
 
 function providerScore(provider: ProviderConfig, taskKind: AgentTaskKind, now: number): number {
@@ -176,6 +184,18 @@ function sameList(a: string[] = [], b: string[] = []): boolean {
   return a.length === b.length && a.every((value, index) => value === b[index])
 }
 
+export function providerPrefersFreeModels(provider: Pick<ProviderConfig, 'id' | 'freeTier'>): boolean {
+  return getProviderCategory(provider) === 'free'
+}
+
+export function rankProviderModels(
+  provider: Pick<ProviderConfig, 'id' | 'freeTier'>,
+  discovered: string[],
+  budget?: TeamTokenBudget
+): string[] {
+  return rankModels(discovered, { budget, preferFree: providerPrefersFreeModels(provider) })
+}
+
 /**
  * Persist the live chat models a key can currently call. The strongest ranked model becomes
  * the provider's default, and stale/deprecated model IDs disappear from the stored catalog.
@@ -186,10 +206,10 @@ export function refreshProviderModelCatalog(
   discovered: string[],
   at = Date.now()
 ): Settings | null {
-  const ranked = rankModels(discovered).slice(0, 40)
-  if (ranked.length === 0) return null
   const provider = settings.providers.find((p) => p.id === providerId)
   if (!provider) return null
+  const ranked = rankProviderModels(provider, discovered, settings.teamTokenBudget).slice(0, 40)
+  if (ranked.length === 0) return null
 
   const nextModel = ranked[0]
   if (provider.model === nextModel && sameList(provider.models, ranked)) return null

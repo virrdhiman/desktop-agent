@@ -135,13 +135,16 @@ function checkScriptsAndDocs() {
     'checksums',
     'release:notes',
     'release:qa',
+    'release:local-cert',
+    'release:secrets',
     'release:signing',
+    'release:vm-prepare',
     'electron:build',
   ]) {
     requiredScript(script)
   }
 
-  for (const file of ['Win/build.bat', 'Mac/build.sh', 'Linux/build.sh']) {
+  for (const file of ['Win/build.bat', 'Win/setup-release-secrets.bat', 'Win/create-local-test-certificate.bat', 'Win/prepare-clean-vm-qa.bat', 'Mac/build.sh', 'Linux/build.sh']) {
     requiredFile(file, `platform build script: ${file}`)
   }
 

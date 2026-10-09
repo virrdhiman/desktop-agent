@@ -90,6 +90,20 @@ describe('model ranking', () => {
     expect(ranked).toEqual(['meta-llama/llama-3.3-70b-instruct:free', 'mistralai/mistral-7b-instruct:free'])
   })
 
+  it('can use paid-capable models when strong budget disables free-only ranking', () => {
+    const ids = [
+      'meta-llama/llama-3.1-405b-instruct',
+      'meta-llama/llama-3.3-70b-instruct:free',
+      'mistralai/mistral-7b-instruct:free',
+    ]
+    expect(rankModels(ids, { budget: 'balanced', preferFree: true })).toEqual([
+      'meta-llama/llama-3.3-70b-instruct:free',
+      'mistralai/mistral-7b-instruct:free',
+    ])
+    expect(rankModels(ids, { budget: 'strong', preferFree: true })[0]).toBe('meta-llama/llama-3.1-405b-instruct')
+    expect(rankModels(ids, { budget: 'balanced', preferFree: false })[0]).toBe('meta-llama/llama-3.1-405b-instruct')
+  })
+
   it('drops tiny fallback models when the same provider exposes strong models', () => {
     expect(rankModels(['qwen/qwen3.8-27b', 'openai/gpt-oss-120b', 'allam-2-7b']))
       .toEqual(['openai/gpt-oss-120b', 'qwen/qwen3.8-27b'])
@@ -122,6 +136,16 @@ describe('buildModelAttemptList', () => {
 
     const stale = buildModelAttemptList('deprecated-model', ['llama-3.3-70b-versatile'])
     expect(stale).toEqual(['llama-3.3-70b-versatile'])
+  })
+
+  it('keeps auto moving through known live models when the saved default expired', () => {
+    const list = buildModelAttemptList('expired-model', [
+      'expired-model',
+      'llama-3.3-70b-versatile',
+      'gemini-2.0-flash',
+    ])
+    expect(list[0]).toBe('llama-3.3-70b-versatile')
+    expect(list).not.toContain('expired-model')
   })
 
   it('falls back to the configured model when discovery returns nothing', () => {

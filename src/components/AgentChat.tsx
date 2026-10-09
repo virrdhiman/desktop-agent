@@ -26,7 +26,7 @@ import DiffViewer from './DiffViewer'
 import { buildConversationSummary, useStore } from '../store'
 import type { AgentTaskKind, ChatMessage, AgentStep, ProviderConfig } from '../types'
 import {
-  applyDiscoveredModel, buildProviderChain, classifyAgentTask, providerIsConfigured, recordProviderOutcome, refreshProviderModelCatalog,
+  applyDiscoveredModel, buildProviderChain, classifyAgentTask, providerIsConfigured, providerPrefersFreeModels, recordProviderOutcome, refreshProviderModelCatalog,
 } from '../lib/providers'
 import { highlightSyntax } from '../lib/highlight'
 import { AUTHOR_NAME, AUTHOR_URL, REPO_URL } from '../lib/brand'
@@ -483,6 +483,8 @@ export default function AgentChat() {
     let stale = false
     Promise.resolve(window.api.aiListModels({
       provider: activeProvider.id, apiKey: activeProvider.apiKey, baseUrl: activeProvider.baseUrl,
+      modelBudget: appSettings.teamTokenBudget || 'balanced',
+      preferFreeModels: providerPrefersFreeModels(activeProvider),
     }))
       .then((ids) => {
         if (stale || !Array.isArray(ids)) return
@@ -496,7 +498,7 @@ export default function AgentChat() {
       })
       .catch(() => {})
     return () => { stale = true }
-  }, [activeProvider?.id, activeProvider?.apiKey, activeProvider?.hasKey, activeProvider?.baseUrl, setAppSettings])
+  }, [activeProvider?.id, activeProvider?.apiKey, activeProvider?.hasKey, activeProvider?.baseUrl, appSettings.teamTokenBudget, setAppSettings])
 
   // Paste image handler
   useEffect(() => {
@@ -651,8 +653,11 @@ export default function AgentChat() {
           messages: apiMessages,
           stream,
           autoSelect: !override,
+          knownModels: p.models,
           modelPerformance: p.performance?.models,
           taskKind,
+          modelBudget: current.teamTokenBudget || 'balanced',
+          preferFreeModels: providerPrefersFreeModels(p),
         })
       } catch (err: any) {
         result = { error: err?.message || String(err), kind: 'other' }
@@ -1216,7 +1221,7 @@ export default function AgentChat() {
               background: 'var(--bg-tertiary)', color: 'var(--text-secondary)',
               border: '1px solid var(--border)', cursor: 'pointer', outline: 'none',
             }}
-            title="Model for the active provider. Auto picks the strongest model this key can call; choosing one pins it for this session and disables auto-switching."
+            title="Model for the active provider. Auto refreshes live models, skips expired IDs, and picks by budget. Choosing one pins it for this session."
             aria-label="Model"
           >
             <option value="">Auto: {activeProvider?.model || 'best available'}</option>
@@ -1277,7 +1282,7 @@ export default function AgentChat() {
               background: 'var(--bg-tertiary)', color: 'var(--text-secondary)',
               border: '1px solid var(--border)', cursor: 'pointer', outline: 'none',
             }}
-            title="Agentic token budget: Cheap saves calls, Balanced is the default, Strong allows more context and specialists."
+            title="Agentic budget: Cheap saves calls and prefers free models, Balanced is default, Strong allows richer context and best accessible models."
             aria-label="Agentic token budget"
           >
             <option value="cheap">Budget: Cheap</option>

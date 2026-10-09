@@ -18,6 +18,7 @@ import {
   tryModels,
   type ModelErrorKind,
 } from '../../src/lib/modelSelect'
+import type { TeamTokenBudget } from '../../src/types'
 
 type ChatConfig = {
   provider: string
@@ -27,8 +28,11 @@ type ChatConfig = {
   messages: any[]
   stream: boolean
   autoSelect?: boolean
+  knownModels?: string[]
   modelPerformance?: Record<string, { successes?: number; failures?: number; avgLatencyMs?: number; taskSuccesses?: Record<string, number> }>
   taskKind?: string
+  modelBudget?: TeamTokenBudget
+  preferFreeModels?: boolean
 }
 
 type ChatError = { error: string; kind: ModelErrorKind | 'cancelled'; status?: number; models?: string[] }
@@ -208,9 +212,17 @@ export function registerAiHandlers(getMainWindow: () => BrowserWindow | null) {
       if (config.autoSelect !== false) {
         try {
           discovered = await listProviderModels(config.baseUrl, config.apiKey)
-          models = buildModelAttemptList(config.model, discovered, undefined, config.modelPerformance, config.taskKind)
+          if (discovered.length === 0 && Array.isArray(config.knownModels)) discovered = config.knownModels
+          models = buildModelAttemptList(config.model, discovered, undefined, config.modelPerformance, config.taskKind, {
+            budget: config.modelBudget,
+            preferFree: config.preferFreeModels,
+          })
         } catch {
-          models = [config.model]
+          discovered = Array.isArray(config.knownModels) ? config.knownModels : []
+          models = buildModelAttemptList(config.model, discovered, undefined, config.modelPerformance, config.taskKind, {
+            budget: config.modelBudget,
+            preferFree: config.preferFreeModels,
+          })
         }
       }
 
@@ -219,7 +231,7 @@ export function registerAiHandlers(getMainWindow: () => BrowserWindow | null) {
         (model) => completeOpenAI(getMainWindow, config, model, controller.signal),
         () => controller.signal.aborted
       )
-      const catalog = rankModels(discovered).slice(0, 40)
+      const catalog = rankModels(discovered, { budget: config.modelBudget, preferFree: config.preferFreeModels }).slice(0, 40)
       return catalog.length > 0 ? { ...result, models: catalog } : result
     } catch (err: any) {
       if (isAbort(err, controller)) return { error: 'Cancelled', kind: 'cancelled' }
@@ -236,11 +248,11 @@ export function registerAiHandlers(getMainWindow: () => BrowserWindow | null) {
     return { success: true }
   })
 
-  ipcMain.handle('ai:listModels', async (_event, config: { provider: string; apiKey: string; baseUrl: string }) => {
+  ipcMain.handle('ai:listModels', async (_event, config: { provider: string; apiKey: string; baseUrl: string; modelBudget?: TeamTokenBudget; preferFreeModels?: boolean }) => {
     const apiKey = await resolveProviderApiKey(config.provider, config.apiKey)
     if (config.provider === 'anthropic' || !apiKey || !config.baseUrl) return []
     try {
-      return rankModels(await listProviderModels(config.baseUrl, apiKey))
+      return rankModels(await listProviderModels(config.baseUrl, apiKey), { budget: config.modelBudget, preferFree: config.preferFreeModels })
     } catch {
       return []
     }

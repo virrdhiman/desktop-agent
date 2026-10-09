@@ -51,6 +51,17 @@ describe('buildProviderChain', () => {
     expect(chain.map((x) => x.id)).toEqual(['groq', 'gemini'])
   })
 
+  it('uses paid fallbacks only after the user intentionally selects a paid provider', () => {
+    const providers = [
+      p('groq', 'free-key'),
+      p('openai', 'paid-key', false),
+      p('anthropic', 'paid-key', false),
+      p('gemini', 'free-key'),
+    ]
+    expect(buildProviderChain(providers, 'groq').map((provider) => provider.id)).toEqual(['groq', 'gemini'])
+    expect(buildProviderChain(providers, 'openai').map((provider) => provider.id)).toEqual(['openai', 'groq', 'anthropic', 'gemini'])
+  })
+
   it('still honours an explicitly selected local provider and drops unofficial proxies', () => {
     expect(buildProviderChain([p('ollama', 'ollama'), p('groq', 'k')], 'ollama')[0].id).toBe('ollama')
     expect(getProviderCategory({ id: 'helixmind', freeTier: true })).toBe('community')
@@ -136,6 +147,16 @@ describe('refreshProviderModelCatalog', () => {
     ])
     expect(provider?.modelsUpdatedAt).toBe(123)
     expect(provider?.models).not.toContain('old-free-model:free')
+  })
+
+  it('lets strong budget use the best paid-capable model from a free aggregator', () => {
+    const strong = { ...base, teamTokenBudget: 'strong' as const }
+    const next = refreshProviderModelCatalog(strong, 'openrouter', [
+      'meta-llama/llama-3.1-405b-instruct',
+      'meta-llama/llama-3.3-70b-instruct:free',
+      'mistralai/mistral-7b-instruct:free',
+    ], 123)
+    expect(next?.providers.find((x) => x.id === 'openrouter')?.model).toBe('meta-llama/llama-3.1-405b-instruct')
   })
 
   it('keeps settings unchanged when discovery returns no usable chat models', () => {

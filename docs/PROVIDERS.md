@@ -18,7 +18,7 @@ Free tiers, credits, and rate limits are set by each provider and change often. 
 | **Free Official** | Official APIs with a free tier or signup credits, for example Groq, Cerebras, SambaNova, Google Gemini, GitHub Models, OpenRouter, Mistral, NVIDIA NIM, and Hugging Face. Some, such as DeepSeek, Together, and Fireworks, are credit-based rather than permanently free. | Yes, when they have a key |
 | **Local** | Ollama, LM Studio, llama.cpp, and other OpenAI-compatible servers on your machine | No |
 | **Image/Video** | Official image and video APIs. Not chat providers. | No |
-| **Paid** | OpenAI, Anthropic, Cohere, LLM7, and Perplexity, billed by the provider | No |
+| **Paid** | OpenAI, Anthropic, Cohere, LLM7, Perplexity, and a custom OpenAI-compatible slot, billed by the provider | No |
 
 ## Recommended starting points
 
@@ -36,6 +36,12 @@ Free tiers, credits, and rate limits are set by each provider and change often. 
 LLM7 can also be configured from Settings with `https://api.llm7.io/v1`, but
 VD Agent treats it as a paid/credit provider and does not use it in automatic
 free fallback.
+
+For providers that are not in the catalog yet, use **Custom OpenAI-Compatible**.
+Set the provider's `/v1` base URL, paste its key, set a starting model, then
+click **Refresh Live Models**. If the provider supports `/models`, Auto will
+rank the returned models and drop stale IDs the same way it does for built-in
+providers.
 
 To add a key: **Settings →** select the provider **→ Get API Key →** paste the key **→ Save**. Selecting a provider in the list also makes it the active provider, marked with ●.
 
@@ -55,11 +61,13 @@ For OpenAI-compatible providers, on each request:
 
 1. VD Agent lists the models your key can call (`/models`, 8-second timeout, cached for 10 minutes).
 2. It drops non-chat models: embeddings, rerank, moderation, audio, speech, transcription, image, and video.
-3. It ranks the rest by coding quality, then efficiency. Previews and very small models rank lower.
+3. It ranks the rest by coding quality, budget, then efficiency. Cheap/Balanced keep free providers free-first; Strong can use the best model your selected key can actually call.
 4. It tries the best model first, then the next few. If `/models` returns a usable list, stale saved model IDs are dropped instead of retried.
 5. It moves to the next model on 404, 429, 503, overload, capacity, quota, model-not-found, and unsupported-model errors.
 6. On an invalid key (401 or an auth error) it **stops** and tells you, without trying other models or providers.
 7. The refreshed live model list and the model that worked are saved, unless you pinned one.
+
+When **Auto** is selected, VD Agent does not cling to an expired or deprecated saved model. If live discovery returns a usable list, that list becomes the source of truth. If discovery is temporarily unavailable but a previous live list is saved, Auto still tries the saved live models in ranked order before failing over to another provider.
 
 **Pin a model**: pick it from the model menu in the Agent header, which lists the models discovered for the active provider. Choose **Auto** to go back to automatic selection.
 
@@ -67,7 +75,7 @@ For OpenAI-compatible providers, on each request:
 
 ## Provider fallback
 
-If the active provider fails for a reason other than an invalid key, VD Agent tries up to three other **Free Official** providers that have keys. The active provider remains first and fallbacks are ordered by locally observed reliability and latency; repeated failures create a short cooldown. When another provider answers, the chat says which one, and the rest of that request stays on it. If every provider fails, the chat lists each provider's error with next steps. Local servers, image/video services, and paid providers are only used when you make them the active provider.
+If the active provider fails for a reason other than an invalid key, VD Agent tries compatible fallbacks with keys. Free providers fall back only to other **Free Official** providers so Auto does not spend money unexpectedly. Paid providers are used only when you intentionally select one; then VD can fall back across your configured paid and free providers. The active provider remains first and fallbacks are ordered by locally observed reliability and latency; repeated failures create a short cooldown. When another provider answers, the chat says which one, and the rest of that request stays on it. If every provider fails, the chat lists each provider's error with next steps. Local servers and image/video services are only used when you make them the active provider.
 
 The catalog does not include unofficial or reverse-engineered proxies. Older settings files drop those entries on the next load. If one of them was the active provider, VD Agent switches back to Groq.
 

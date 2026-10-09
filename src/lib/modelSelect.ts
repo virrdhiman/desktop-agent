@@ -11,6 +11,7 @@
  * - Rank the remaining chat/instruct models by coding quality first, then efficiency.
  * - Classify provider errors so callers know whether to try the next model, stop, or move on.
  */
+import type { TeamTokenBudget } from '../types'
 
 const NON_CHAT_PATTERNS: RegExp[] = [
   /embed/,
@@ -52,9 +53,19 @@ export function isUsableChatModel(id: string): boolean {
   return !NON_CHAT_PATTERNS.some((re) => re.test(m))
 }
 
+export function isFreeModel(id: string): boolean {
+  const m = id.toLowerCase()
+  return m.endsWith(':free') || m.endsWith('/free') || /(^|[/\-_.])free([\-_.]|$)/.test(m)
+}
+
+export type ModelRankOptions = {
+  budget?: TeamTokenBudget
+  preferFree?: boolean
+}
+
 /** Known model families, strongest first. The first matching tier wins. */
 const QUALITY_TIERS: [RegExp, number][] = [
-  [/gpt-5|claude-(opus|sonnet)-4|gemini-(2\.5-pro|3)|grok-4|kimi-k2|glm-4\.[5-9]|qwen3-coder|qwen3-235b|deepseek-(v3|r1)|gpt-oss-120b|llama-4-maverick/, 130],
+  [/gpt-[5-9]|claude-(opus|sonnet)-[4-9]|gemini-(2\.5-pro|[3-9])|grok-[4-9]|kimi-k2|glm-4\.[5-9]|qwen[3-9]-coder|qwen3-235b|deepseek-(v[3-9]|r[1-9])|gpt-oss-120b|llama-4-maverick/, 130],
   [/llama-?3\.3.*70b|llama-?3\.1.*405b|qwen2\.5-72b|qwen2\.5-coder-32b|qwen3|gemini-2\.5-flash(?!-lite)|gpt-4\.1(?!-mini|-nano)|gpt-4o(?!-mini)|claude-3[.-][57]-sonnet|mistral-large|grok-3|llama-4-scout|deepseek-chat|deepseek-coder/, 120],
   [/gemini-2\.0-flash(?!-lite)|gpt-4\.1-mini|mistral-medium|codestral|devstral|command-a|gpt-oss-20b|gemma-3-27b/, 105],
   [/gpt-4o-mini|gemini.*flash-lite|claude.*haiku|mistral-small|ministral|gemma/, 80],
@@ -76,23 +87,31 @@ function sizeScore(billions: number): number {
   return 15
 }
 
-export function scoreModel(id: string): number {
+export function scoreModel(id: string, options: ModelRankOptions = {}): number {
   if (!isUsableChatModel(id)) return -1000
   const m = id.toLowerCase()
+  const budget = options.budget || 'balanced'
+  const preferFree = options.preferFree !== false
 
   const b = parameterBillions(m)
   let score = QUALITY_TIERS.find(([re]) => re.test(m))?.[1] ?? 0
   if (score === 0) score = b === null ? 30 : sizeScore(b)
   else if (b !== null && b < 20) score = Math.min(score, sizeScore(b) + 10)
+  else if (b !== null && b >= 300) score += 14
+  else if (b !== null && b >= 100) score += 8
+  else if (b !== null && b >= 60) score += 4
 
-  if (m.endsWith(':free') || m.endsWith('/free')) score += 15
+  if (isFreeModel(m)) score += preferFree && budget !== 'strong' ? 15 : 2
   if (/coder|code/.test(m)) score += 8
   if (/instruct|chat|versatile|turbo|flash/.test(m)) score += 5
-  if (/latest/.test(m)) score += 2
+  if (/latest|stable/.test(m)) score += 3
+  if (/pro|max|ultra|large|frontier/.test(m)) score += budget === 'cheap' ? 1 : 5
+  if (/medium/.test(m)) score += budget === 'cheap' ? 3 : 2
   // Slow chain-of-thought output and unstable previews are worse for a tool loop.
   if (/thinking|reasoning|(^|[/\-_])r1([\-_:]|$)|qwq/.test(m)) score -= 10
   if (/preview|experimental|(^|[\-_])exp([\-_]|$)|beta|alpha/.test(m)) score -= 8
-  if (/nano|tiny/.test(m)) score -= 20
+  if (/mini|small|lite/.test(m)) score += budget === 'cheap' ? 8 : -4
+  if (/nano|tiny/.test(m)) score -= budget === 'cheap' ? 5 : 20
 
   return score
 }
@@ -105,15 +124,17 @@ export function normalizeModelId(id: string): string {
  * Rank usable chat models. When the list contains OpenRouter-style `:free` variants,
  * only those are kept — a free key usually cannot call the paid ones.
  */
-export function rankModels(ids: string[]): string[] {
+export function rankModels(ids: string[], options: ModelRankOptions = {}): string[] {
   const usable = [...new Set(ids.map(normalizeModelId).filter(isUsableChatModel))]
-  const free = usable.filter((id) => id.endsWith(':free'))
-  const pool = free.length > 0 ? free : usable
-  const ranked = pool.sort((a, b) => scoreModel(b) - scoreModel(a) || a.localeCompare(b))
-  const best = ranked.length > 0 ? scoreModel(ranked[0]) : -1000
+  const budget = options.budget || 'balanced'
+  const preferFree = options.preferFree !== false
+  const free = usable.filter(isFreeModel)
+  const pool = preferFree && free.length > 0 && budget !== 'strong' ? free : usable
+  const ranked = pool.sort((a, b) => scoreModel(b, options) - scoreModel(a, options) || a.localeCompare(b))
+  const best = ranked.length > 0 ? scoreModel(ranked[0], options) : -1000
   // Once a provider exposes strong models, moving to tiny fallback models usually produces
   // generic or malformed replies. Let provider fallback find another strong free model instead.
-  return best >= 100 ? ranked.filter((id) => scoreModel(id) >= 60) : ranked
+  return best >= 100 ? ranked.filter((id) => scoreModel(id, options) >= 60) : ranked
 }
 
 type LearnedModelStats = Record<string, {
@@ -123,19 +144,25 @@ type LearnedModelStats = Record<string, {
   taskSuccesses?: Record<string, number>
 }>
 
-export function rankModelsWithPerformance(ids: string[], stats: LearnedModelStats = {}, taskKind = 'analysis'): string[] {
-  const ranked = rankModels(ids)
+export function rankModelsWithPerformance(
+  ids: string[],
+  stats: LearnedModelStats = {},
+  taskKind = 'analysis',
+  options: ModelRankOptions = {}
+): string[] {
+  const ranked = rankModels(ids, options)
   const baseOrder = new Map(ranked.map((model, index) => [model, ranked.length - index]))
-  return ranked.sort((a, b) => learnedScore(b, stats[b], taskKind, baseOrder) - learnedScore(a, stats[a], taskKind, baseOrder))
+  return ranked.sort((a, b) => learnedScore(b, stats[b], taskKind, baseOrder, options) - learnedScore(a, stats[a], taskKind, baseOrder, options))
 }
 
 function learnedScore(
   model: string,
   stats: LearnedModelStats[string] | undefined,
   taskKind: string,
-  baseOrder: Map<string, number>
+  baseOrder: Map<string, number>,
+  options: ModelRankOptions
 ) {
-  const base = scoreModel(model) * 10 + (baseOrder.get(model) || 0)
+  const base = scoreModel(model, options) * 10 + (baseOrder.get(model) || 0)
   if (!stats) return base
   const successes = stats.successes || 0
   const failures = stats.failures || 0
@@ -159,7 +186,8 @@ export function buildModelAttemptList(
   discovered: string[],
   max = MAX_MODEL_ATTEMPTS,
   stats: LearnedModelStats = {},
-  taskKind = 'analysis'
+  taskKind = 'analysis',
+  options: ModelRankOptions = {}
 ): string[] {
   const out: string[] = []
   const seen = new Set<string>()
@@ -169,7 +197,7 @@ export function buildModelAttemptList(
     seen.add(name)
     out.push(name)
   }
-  const ranked = rankModelsWithPerformance(discovered, stats, taskKind)
+  const ranked = rankModelsWithPerformance(discovered, stats, taskKind, options)
   if (ranked.length > 0) {
     for (const id of ranked.slice(0, max)) add(id)
   } else {

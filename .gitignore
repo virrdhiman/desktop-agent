@@ -4,6 +4,7 @@ dist-electron/
 release/
 evals/hosted/
 .vd-agent/
+local-certs/
 *.log
 .DS_Store
 Thumbs.db
