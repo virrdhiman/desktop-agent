@@ -37,6 +37,18 @@ export default function MultiTerminal() {
   const instancesRef = useRef<Map<string, TermInstance>>(new Map())
   const termCounterRef = useRef(1)
 
+  const fitTerminal = useCallback((instance: TermInstance, container?: HTMLElement | null) => {
+    const target = container || instance.terminal.element?.parentElement
+    if (!target || target.clientWidth <= 0 || target.clientHeight <= 0) return false
+    try {
+      instance.fitAddon.fit()
+      return true
+    } catch (err) {
+      console.warn('VD terminal fit skipped:', err)
+      return false
+    }
+  }, [])
+
   // Create a terminal instance with proper listener cleanup
   const createTerm = useCallback((tabId: string, container: HTMLDivElement) => {
     const term = new Terminal({
@@ -65,7 +77,6 @@ export default function MultiTerminal() {
     term.loadAddon(fitAddon)
     term.loadAddon(webLinksAddon)
     term.open(container)
-    fitAddon.fit()
 
     const termId = `term-${tabId}`
     const cwd = workspacePath || process.env.HOME || '.'
@@ -100,8 +111,12 @@ export default function MultiTerminal() {
 
     const instance: TermInstance = { terminal: term, fitAddon, termId, cleanup }
     instancesRef.current.set(tabId, instance)
+    requestAnimationFrame(() => {
+      fitTerminal(instance, container)
+      window.api.terminalResize(instance.termId, instance.terminal.cols, instance.terminal.rows)
+    })
     return instance
-  }, [workspacePath])
+  }, [workspacePath, fitTerminal])
 
   // Mount active terminal
   useEffect(() => {
@@ -115,7 +130,12 @@ export default function MultiTerminal() {
     let instance = instancesRef.current.get(activeTerminalTab)
     if (instance) {
       container.appendChild(instance.terminal.element!)
-      instance.fitAddon.fit()
+      requestAnimationFrame(() => {
+        if (instance) {
+          fitTerminal(instance, container)
+          window.api.terminalResize(instance.termId, instance.terminal.cols, instance.terminal.rows)
+        }
+      })
       return
     }
 
@@ -124,8 +144,7 @@ export default function MultiTerminal() {
 
     // Resize observer
     const ro = new ResizeObserver(() => {
-      instance?.fitAddon.fit()
-      if (instance) {
+      if (instance && fitTerminal(instance, container)) {
         window.api.terminalResize(instance.termId, instance.terminal.cols, instance.terminal.rows)
       }
     })
@@ -134,7 +153,7 @@ export default function MultiTerminal() {
     return () => {
       ro.disconnect()
     }
-  }, [activeTerminalTab, createTerm])
+  }, [activeTerminalTab, createTerm, fitTerminal])
 
   // Cleanup all on unmount
   useEffect(() => {
