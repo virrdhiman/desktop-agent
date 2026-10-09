@@ -14,6 +14,7 @@ import { createHash } from 'crypto'
 import {
   buildModelAttemptList,
   classifyModelError,
+  modelFailureCooldownMs,
   rankModels,
   tryModels,
   type ModelErrorKind,
@@ -41,6 +42,7 @@ type ChatSuccess = { content: string; models?: string[] }
 const MODELS_TIMEOUT_MS = 8000
 const CACHE_MS = 10 * 60 * 1000
 const modelCache = new Map<string, { ids: string[]; at: number }>()
+const modelCooldowns = new Map<string, number>()
 const activeControllers = new Set<AbortController>()
 
 function trimBase(baseUrl: string) {
@@ -51,6 +53,20 @@ function trimBase(baseUrl: string) {
 function cacheKey(baseUrl: string, apiKey: string) {
   const digest = createHash('sha256').update(apiKey).digest('hex').slice(0, 16)
   return `${trimBase(baseUrl)}::${digest}`
+}
+
+function availableModels(baseUrl: string, apiKey: string, ids: string[]): string[] {
+  const scope = cacheKey(baseUrl, apiKey)
+  const now = Date.now()
+  for (const [key, until] of modelCooldowns) {
+    if (until <= now) modelCooldowns.delete(key)
+  }
+  return ids.filter((id) => (modelCooldowns.get(`${scope}::${id}`) || 0) <= now)
+}
+
+function coolDownModel(baseUrl: string, apiKey: string, model: string, error: string, status?: number) {
+  const duration = modelFailureCooldownMs(error, status)
+  if (duration > 0) modelCooldowns.set(`${cacheKey(baseUrl, apiKey)}::${model}`, Date.now() + duration)
 }
 
 function redactKey(text: string, apiKey: string) {
@@ -213,25 +229,27 @@ export function registerAiHandlers(getMainWindow: () => BrowserWindow | null) {
         try {
           discovered = await listProviderModels(config.baseUrl, config.apiKey)
           if (discovered.length === 0 && Array.isArray(config.knownModels)) discovered = config.knownModels
-          models = buildModelAttemptList(config.model, discovered, undefined, config.modelPerformance, config.taskKind, {
+          models = buildModelAttemptList(config.model, availableModels(config.baseUrl, config.apiKey, discovered), undefined, config.modelPerformance, config.taskKind, {
             budget: config.modelBudget,
             preferFree: config.preferFreeModels,
           })
         } catch {
           discovered = Array.isArray(config.knownModels) ? config.knownModels : []
-          models = buildModelAttemptList(config.model, discovered, undefined, config.modelPerformance, config.taskKind, {
+          models = buildModelAttemptList(config.model, availableModels(config.baseUrl, config.apiKey, discovered), undefined, config.modelPerformance, config.taskKind, {
             budget: config.modelBudget,
             preferFree: config.preferFreeModels,
           })
         }
+        models = availableModels(config.baseUrl, config.apiKey, models)
       }
 
       const result = await tryModels(
         models,
         (model) => completeOpenAI(getMainWindow, config, model, controller.signal),
-        () => controller.signal.aborted
+        () => controller.signal.aborted,
+        (model, failure) => coolDownModel(config.baseUrl, config.apiKey, model, failure.error, failure.status)
       )
-      const catalog = rankModels(discovered, { budget: config.modelBudget, preferFree: config.preferFreeModels }).slice(0, 40)
+      const catalog = rankModels(availableModels(config.baseUrl, config.apiKey, discovered), { budget: config.modelBudget, preferFree: config.preferFreeModels }).slice(0, 40)
       return catalog.length > 0 ? { ...result, models: catalog } : result
     } catch (err: any) {
       if (isAbort(err, controller)) return { error: 'Cancelled', kind: 'cancelled' }
@@ -252,7 +270,7 @@ export function registerAiHandlers(getMainWindow: () => BrowserWindow | null) {
     const apiKey = await resolveProviderApiKey(config.provider, config.apiKey)
     if (config.provider === 'anthropic' || !apiKey || !config.baseUrl) return []
     try {
-      return rankModels(await listProviderModels(config.baseUrl, apiKey), { budget: config.modelBudget, preferFree: config.preferFreeModels })
+      return rankModels(availableModels(config.baseUrl, apiKey, await listProviderModels(config.baseUrl, apiKey)), { budget: config.modelBudget, preferFree: config.preferFreeModels })
     } catch {
       return []
     }

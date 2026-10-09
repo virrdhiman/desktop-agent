@@ -129,7 +129,7 @@ export function rankModels(ids: string[], options: ModelRankOptions = {}): strin
   const budget = options.budget || 'balanced'
   const preferFree = options.preferFree !== false
   const free = usable.filter(isFreeModel)
-  const pool = preferFree && free.length > 0 && budget !== 'strong' ? free : usable
+  const pool = preferFree && free.length > 0 ? free : usable
   const ranked = pool.sort((a, b) => scoreModel(b, options) - scoreModel(a, options) || a.localeCompare(b))
   const best = ranked.length > 0 ? scoreModel(ranked[0], options) : -1000
   // Once a provider exposes strong models, moving to tiny fallback models usually produces
@@ -208,6 +208,15 @@ export function buildModelAttemptList(
 
 export type ModelErrorKind = 'auth' | 'retry-model' | 'other'
 
+/** Keep failed models out of Auto until the provider has had time to recover. */
+export function modelFailureCooldownMs(message: string, status?: number): number {
+  if (classifyModelError(message, status) !== 'retry-model') return 0
+  if (/decommissioned|deprecated|no longer (available|supported)|model[_ ]?not[_ ]?found|unknown model|no such model|does not exist|unsupported model|model is not supported/i.test(message)) {
+    return 60 * 60_000
+  }
+  return 2 * 60_000
+}
+
 const AUTH_TEXT =
   /unauthori[sz]ed|invalid[_ ]?api[_ ]?key|incorrect api key|api key not valid|api_key_invalid|invalid[_ ]?(auth|token|credentials)|authentication (failed|error|required)|missing (api key|authorization)|no api key/
 
@@ -260,7 +269,7 @@ export type ModelOutcome =
 /**
  * Try models in order. A retryable error or a blank reply moves on to the next model; some
  * reasoning models (e.g. gpt-oss) can finish with no answer text at all. A blank reply from the
- * last model is returned as-is so the caller can still ask for a corrected one.
+ * last model is reported as an error so the provider chain can continue.
  *
  * When every model fails, the first real error is reported: it comes from the strongest model
  * and is usually the actionable one (a rate limit), unlike a weak fallback's parameter limits.
@@ -268,7 +277,8 @@ export type ModelOutcome =
 export async function tryModels(
   models: string[],
   attempt: (model: string) => Promise<ModelAttemptResult>,
-  isCancelled: () => boolean = () => false
+  isCancelled: () => boolean = () => false,
+  onFailedModel: (model: string, failure: Extract<ModelAttemptResult, { error: string }>) => void = () => {}
 ): Promise<ModelOutcome> {
   let first: Extract<ModelOutcome, { error: string }> | undefined
   let tried = 0
@@ -279,12 +289,14 @@ export async function tryModels(
     tried++
     if ('error' in result) {
       const failure = { ...result, error: `${model}: ${result.error}` }
+      if (result.kind === 'retry-model') onFailedModel(model, result)
       if (result.kind !== 'retry-model') return failure
       first ??= failure
       continue
     }
-    if (result.content.trim() || i === models.length - 1) return { content: result.content, model }
+    if (result.content.trim()) return { content: result.content, model }
+    onFailedModel(model, { error: 'Model returned an empty answer', kind: 'retry-model' })
   }
-  if (!first) return { error: 'No model available for this provider', kind: 'retry-model' }
+  if (!first) return { error: tried ? 'Models returned empty answers' : 'No model available for this provider', kind: 'retry-model' }
   return tried > 1 ? { ...first, error: `${first.error} (${tried} models tried)` } : first
 }

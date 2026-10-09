@@ -37,11 +37,12 @@ LLM7 can also be configured from Settings with `https://api.llm7.io/v1`, but
 VD Agent treats it as a paid/credit provider and does not use it in automatic
 free fallback.
 
-For providers that are not in the catalog yet, use **Custom OpenAI-Compatible**.
+For providers that are not in the catalog yet, use **Add compatible provider** in Settings.
 Set the provider's `/v1` base URL, paste its key, set a starting model, then
 click **Refresh Live Models**. If the provider supports `/models`, Auto will
 rank the returned models and drop stale IDs the same way it does for built-in
-providers.
+providers. You can add multiple custom providers and choose whether each has
+a free tier. Remove a custom provider in its settings to delete its saved key.
 
 To add a key: **Settings →** select the provider **→ Get API Key →** paste the key **→ Save**. Selecting a provider in the list also makes it the active provider, marked with ●.
 
@@ -61,9 +62,9 @@ For OpenAI-compatible providers, on each request:
 
 1. VD Agent lists the models your key can call (`/models`, 8-second timeout, cached for 10 minutes).
 2. It drops non-chat models: embeddings, rerank, moderation, audio, speech, transcription, image, and video.
-3. It ranks the rest by coding quality, budget, then efficiency. Cheap/Balanced keep free providers free-first; Strong can use the best model your selected key can actually call.
+3. It ranks the rest by coding quality, budget, then efficiency. On free-tier aggregators with explicit `:free` model IDs, Auto stays on those models in every budget. To let Auto use other model IDs on such providers, enable **Allow paid model IDs** in Settings. Selecting a paid provider explicitly also allows its models. Providers without explicit free model IDs may still charge for usage; check their terms.
 4. It tries the best model first, then the next few. If `/models` returns a usable list, stale saved model IDs are dropped instead of retried.
-5. It moves to the next model on 404, 429, 503, overload, capacity, quota, model-not-found, and unsupported-model errors.
+5. It moves to the next model on 404, 429, 503, overload, capacity, quota, model-not-found, unsupported-model, and empty-answer errors. Failed model IDs are cooled down for two minutes; explicitly retired IDs for an hour.
 6. On an invalid key (401 or an auth error) it **stops** and tells you, without trying other models or providers.
 7. The refreshed live model list and the model that worked are saved, unless you pinned one.
 

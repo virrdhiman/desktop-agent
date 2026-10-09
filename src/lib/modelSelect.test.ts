@@ -12,6 +12,7 @@ import {
   isRetryableModelError,
   isUsableChatModel,
   MAX_MODEL_ATTEMPTS,
+  modelFailureCooldownMs,
   rankModels,
   rankModelsWithPerformance,
   scoreModel,
@@ -90,7 +91,7 @@ describe('model ranking', () => {
     expect(ranked).toEqual(['meta-llama/llama-3.3-70b-instruct:free', 'mistralai/mistral-7b-instruct:free'])
   })
 
-  it('can use paid-capable models when strong budget disables free-only ranking', () => {
+  it('keeps free-tagged models on the free route regardless of budget', () => {
     const ids = [
       'meta-llama/llama-3.1-405b-instruct',
       'meta-llama/llama-3.3-70b-instruct:free',
@@ -100,7 +101,8 @@ describe('model ranking', () => {
       'meta-llama/llama-3.3-70b-instruct:free',
       'mistralai/mistral-7b-instruct:free',
     ])
-    expect(rankModels(ids, { budget: 'strong', preferFree: true })[0]).toBe('meta-llama/llama-3.1-405b-instruct')
+    expect(rankModels(ids, { budget: 'strong', preferFree: true })[0]).toBe('meta-llama/llama-3.3-70b-instruct:free')
+    expect(rankModels(ids, { budget: 'strong', preferFree: false })[0]).toBe('meta-llama/llama-3.1-405b-instruct')
     expect(rankModels(ids, { budget: 'balanced', preferFree: false })[0]).toBe('meta-llama/llama-3.1-405b-instruct')
   })
 
@@ -208,6 +210,12 @@ describe('error classification', () => {
     expect(classifyModelError('API error (400): context length exceeded')).toBe('other')
     expect(classifyModelError('fetch failed')).toBe('other')
   })
+
+  it('cools down retired models longer than temporary rate limits', () => {
+    expect(modelFailureCooldownMs('model_not_found', 404)).toBe(60 * 60_000)
+    expect(modelFailureCooldownMs('API error (429): rate limit', 429)).toBe(2 * 60_000)
+    expect(modelFailureCooldownMs('API error (401): invalid API key', 401)).toBe(0)
+  })
 })
 
 describe('tryModels', () => {
@@ -226,9 +234,16 @@ describe('tryModels', () => {
     expect(tried).toEqual(['gpt-oss-120b', 'llama-3.3-70b'])
   })
 
-  it('returns a blank reply from the last model so the caller can correct it', async () => {
+  it('reports blank replies as failure so the provider chain can continue', async () => {
     const { attempt } = scripted({ a: { content: '' }, b: { content: '' } })
-    expect(await tryModels(['a', 'b'], attempt)).toEqual({ content: '', model: 'b' })
+    expect(await tryModels(['a', 'b'], attempt)).toEqual({ error: 'Models returned empty answers', kind: 'retry-model' })
+  })
+
+  it('reports each retryable model failure for temporary avoidance', async () => {
+    const failures: string[] = []
+    const { attempt } = scripted({ a: { error: 'rate limit', kind: 'retry-model' }, b: { content: 'Answer.' } })
+    expect(await tryModels(['a', 'b'], attempt, () => false, (model) => failures.push(model))).toEqual({ content: 'Answer.', model: 'b' })
+    expect(failures).toEqual(['a'])
   })
 
   it('reports the first real error, not the weakest fallback model', async () => {

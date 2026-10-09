@@ -88,6 +88,13 @@ describe('buildProviderChain', () => {
     const healthy = { ...p('cerebras', 'k'), performance: { successes: 8, failures: 1, avgLatencyMs: 500, lastUsedAt: 1 } }
     expect(buildProviderChain([active, slow, healthy], 'groq').map((provider) => provider.id)).toEqual(['groq', 'cerebras', 'gemini'])
   })
+
+  it('skips cooled-down fallbacks until their retry window ends', () => {
+    const cooling = { ...p('gemini', 'k'), performance: { successes: 0, failures: 3, avgLatencyMs: 100, lastUsedAt: 1, cooldownUntil: 500 } }
+    const providers = [p('groq', 'k'), cooling, p('cerebras', 'k')]
+    expect(buildProviderChain(providers, 'groq', 4, 'coding', 200).map((provider) => provider.id)).toEqual(['groq', 'cerebras'])
+    expect(buildProviderChain(providers, 'groq', 4, 'coding', 501).map((provider) => provider.id)).toContain('gemini')
+  })
 })
 
 describe('provider learning', () => {
@@ -149,14 +156,19 @@ describe('refreshProviderModelCatalog', () => {
     expect(provider?.models).not.toContain('old-free-model:free')
   })
 
-  it('lets strong budget use the best paid-capable model from a free aggregator', () => {
+  it('requires paid-model opt-in even with a strong budget on a free aggregator', () => {
     const strong = { ...base, teamTokenBudget: 'strong' as const }
     const next = refreshProviderModelCatalog(strong, 'openrouter', [
       'meta-llama/llama-3.1-405b-instruct',
       'meta-llama/llama-3.3-70b-instruct:free',
       'mistralai/mistral-7b-instruct:free',
     ], 123)
-    expect(next?.providers.find((x) => x.id === 'openrouter')?.model).toBe('meta-llama/llama-3.1-405b-instruct')
+    expect(next?.providers.find((x) => x.id === 'openrouter')?.model).toBe('meta-llama/llama-3.3-70b-instruct:free')
+    const optedIn = refreshProviderModelCatalog({ ...strong, allowPaidModels: true }, 'openrouter', [
+      'meta-llama/llama-3.1-405b-instruct',
+      'meta-llama/llama-3.3-70b-instruct:free',
+    ], 124)
+    expect(optedIn?.providers.find((x) => x.id === 'openrouter')?.model).toBe('meta-llama/llama-3.1-405b-instruct')
   })
 
   it('keeps settings unchanged when discovery returns no usable chat models', () => {

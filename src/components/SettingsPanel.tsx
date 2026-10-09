@@ -87,6 +87,10 @@ export default function SettingsPanel() {
 
   const saveProvider = useCallback(async (provider: ProviderConfig, clear = false) => {
     try {
+      if (!provider.name.trim() || !provider.baseUrl.trim() || !provider.model.trim()) {
+        setRefreshMessage('Name, base URL, and fallback model are required.')
+        return
+      }
       const local = getProviderCategory(provider) === 'local'
       const typed = apiKeyInput.trim()
       const outgoing = {
@@ -96,7 +100,9 @@ export default function SettingsPanel() {
       }
       const toSave = {
         ...settings,
-        providers: settings.providers.map((p) => (p.id === provider.id ? outgoing : p)),
+        providers: settings.providers.some((p) => p.id === provider.id)
+          ? settings.providers.map((p) => (p.id === provider.id ? outgoing : p))
+          : [...settings.providers, outgoing],
       }
       const view = {
         ...toSave,
@@ -108,6 +114,29 @@ export default function SettingsPanel() {
       await window.api.saveSettings(toSave)
     } catch (err) { console.error('Failed to save provider:', err) }
   }, [settings, apiKeyInput])
+
+  const addCustomProvider = useCallback(() => {
+    setEditing({
+      id: `custom_${crypto.randomUUID()}`,
+      name: '', apiKey: '', baseUrl: '', model: '', freeTier: false,
+    })
+    setApiKeyInput('')
+    setRefreshMessage('')
+  }, [])
+
+  const removeCustomProvider = useCallback(async (provider: ProviderConfig) => {
+    if (!provider.id.startsWith('custom_') || provider.id === 'custom_openai' || !settings.providers.some((p) => p.id === provider.id)) return
+    if (!window.confirm(`Remove ${provider.name} and its saved key?`)) return
+    const providers = settings.providers.filter((p) => p.id !== provider.id)
+    const next = {
+      ...settings,
+      providers,
+      activeProvider: settings.activeProvider === provider.id ? (providers.find((p) => p.id === 'groq')?.id || providers[0]?.id || '') : settings.activeProvider,
+    }
+    await window.api.saveSettings(next)
+    setSettings(next)
+    setEditing(null)
+  }, [settings, setSettings])
 
   const refreshModels = useCallback(async () => {
     if (!editing) return
@@ -125,7 +154,7 @@ export default function SettingsPanel() {
         apiKey: local ? editing.apiKey : typed,
         baseUrl: editing.baseUrl,
         modelBudget: settings.teamTokenBudget || 'balanced',
-        preferFreeModels: providerPrefersFreeModels(editing),
+        preferFreeModels: providerPrefersFreeModels(editing) && !settings.allowPaidModels,
       })
       if (!Array.isArray(ids) || ids.length === 0) {
         setRefreshMessage('No usable chat models were returned. The saved fallback model was kept.')
@@ -218,6 +247,8 @@ export default function SettingsPanel() {
             Paste an API key. VD lists the models that key can call, drops expired IDs, and saves the best working chat model for the selected budget. Pick a specific model in the Agent header to pin it instead.
           </div>
 
+          <button className="btn btn-sm" onClick={addCustomProvider} style={{ marginBottom: 10 }}>+ Add compatible provider</button>
+
           {/* Search */}
           <div style={{ margin: '10px 0 8px' }}>
             <input
@@ -282,6 +313,13 @@ export default function SettingsPanel() {
                     {providerIsConfigured(provider) ? `✓ Key set · ${provider.model}${provider.models?.length ? ` · ${provider.models.length} live models` : ''}` :
                      provider.notes?.slice(0, 80) + (provider.notes && provider.notes.length > 80 ? '...' : '') || `Model: ${provider.model}`}
                   </div>
+                  {provider.performance && (
+                    <div style={{ fontSize: 11, marginTop: 3, color: (provider.performance.cooldownUntil || 0) > Date.now() ? 'var(--error)' : 'var(--text-muted)' }}>
+                      {(provider.performance.cooldownUntil || 0) > Date.now()
+                        ? `Cooling down until ${new Date(provider.performance.cooldownUntil!).toLocaleTimeString()}`
+                        : `${provider.performance.successes} successful · ${provider.performance.failures} failed`}
+                    </div>
+                  )}
                 </div>
               )
             })}
@@ -320,6 +358,18 @@ export default function SettingsPanel() {
             )}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {editing.id.startsWith('custom_') && (
+                <>
+                  <div className="input-group">
+                    <label className="input-label">Provider name</label>
+                    <input className="input" value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} placeholder="Provider name" />
+                  </div>
+                  <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12 }}>
+                    <input type="checkbox" checked={!!editing.freeTier} onChange={(e) => setEditing({ ...editing, freeTier: e.target.checked })} />
+                    Free tier (eligible as a free-provider fallback)
+                  </label>
+                </>
+              )}
               {getProviderCategory(editing) !== 'local' && (
                 <div className="input-group">
                   <label className="input-label">API Key</label>
@@ -406,7 +456,11 @@ export default function SettingsPanel() {
                   💾 Save Changes
                 </button>
                 <button className="btn" onClick={() => setEditing(null)}>Cancel</button>
+                {editing.id.startsWith('custom_') && editing.id !== 'custom_openai' && settings.providers.some((p) => p.id === editing.id) && (
+                  <button className="btn" onClick={() => void removeCustomProvider(editing)}>Remove</button>
+                )}
               </div>
+              {refreshMessage && <div role="status" style={{ fontSize: 11, color: 'var(--text-muted)' }}>{refreshMessage}</div>}
             </div>
           </div>
         ) : (
@@ -570,6 +624,18 @@ export default function SettingsPanel() {
                   </select>
                 </div>
               </div>
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10, fontSize: 12 }}>
+                <input
+                  type="checkbox"
+                  checked={settings.allowPaidModels === true}
+                  onChange={(event) => {
+                    const next = { ...settings, allowPaidModels: event.target.checked }
+                    setSettings(next)
+                    void window.api.saveSettings(next)
+                  }}
+                />
+                Allow paid model IDs alongside tagged free models in Auto
+              </label>
               <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10, fontSize: 12 }}>
                 <input
                   type="checkbox"

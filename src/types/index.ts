@@ -101,6 +101,8 @@ export interface Settings {
   teamMode?: TeamMode
   teamPreset?: TeamPreset
   teamTokenBudget?: TeamTokenBudget
+  /** Allow billable model IDs on a provider that also lists explicitly free models. */
+  allowPaidModels?: boolean
   dynamicTeam?: boolean
   teamProfile?: TeamRoleProfile
   permissionMode?: 'ask-risky' | 'ask-all-writes' | 'trusted'

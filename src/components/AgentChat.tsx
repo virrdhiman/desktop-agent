@@ -484,7 +484,7 @@ export default function AgentChat() {
     Promise.resolve(window.api.aiListModels({
       provider: activeProvider.id, apiKey: activeProvider.apiKey, baseUrl: activeProvider.baseUrl,
       modelBudget: appSettings.teamTokenBudget || 'balanced',
-      preferFreeModels: providerPrefersFreeModels(activeProvider),
+      preferFreeModels: providerPrefersFreeModels(activeProvider) && !appSettings.allowPaidModels,
     }))
       .then((ids) => {
         if (stale || !Array.isArray(ids)) return
@@ -498,7 +498,7 @@ export default function AgentChat() {
       })
       .catch(() => {})
     return () => { stale = true }
-  }, [activeProvider?.id, activeProvider?.apiKey, activeProvider?.hasKey, activeProvider?.baseUrl, appSettings.teamTokenBudget, setAppSettings])
+  }, [activeProvider?.id, activeProvider?.apiKey, activeProvider?.hasKey, activeProvider?.baseUrl, appSettings.teamTokenBudget, appSettings.allowPaidModels, setAppSettings])
 
   // Paste image handler
   useEffect(() => {
@@ -657,7 +657,7 @@ export default function AgentChat() {
           modelPerformance: p.performance?.models,
           taskKind,
           modelBudget: current.teamTokenBudget || 'balanced',
-          preferFreeModels: providerPrefersFreeModels(p),
+          preferFreeModels: providerPrefersFreeModels(p) && !current.allowPaidModels,
         })
       } catch (err: any) {
         result = { error: err?.message || String(err), kind: 'other' }

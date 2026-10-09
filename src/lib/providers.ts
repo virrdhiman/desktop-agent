@@ -58,7 +58,8 @@ export function buildProviderChain(
   const active = providers.find((p) => p.id === activeId)
   const activeCategory = active ? getProviderCategory(active) : 'free'
   const fallbacks = providers.filter(
-    (p) => p.id !== activeId && providerIsConfigured(p) && providerCanFallbackFrom(activeCategory, getProviderCategory(p))
+    (p) => p.id !== activeId && providerIsConfigured(p) &&
+      (p.performance?.cooldownUntil || 0) <= now && providerCanFallbackFrom(activeCategory, getProviderCategory(p))
   ).sort((a, b) => providerScore(b, taskKind, now) - providerScore(a, taskKind, now))
   return [...(active ? [active] : []), ...fallbacks].slice(0, max)
 }
@@ -191,9 +192,10 @@ export function providerPrefersFreeModels(provider: Pick<ProviderConfig, 'id' | 
 export function rankProviderModels(
   provider: Pick<ProviderConfig, 'id' | 'freeTier'>,
   discovered: string[],
-  budget?: TeamTokenBudget
+  budget?: TeamTokenBudget,
+  allowPaidModels = false
 ): string[] {
-  return rankModels(discovered, { budget, preferFree: providerPrefersFreeModels(provider) })
+  return rankModels(discovered, { budget, preferFree: providerPrefersFreeModels(provider) && !allowPaidModels })
 }
 
 /**
@@ -208,7 +210,7 @@ export function refreshProviderModelCatalog(
 ): Settings | null {
   const provider = settings.providers.find((p) => p.id === providerId)
   if (!provider) return null
-  const ranked = rankProviderModels(provider, discovered, settings.teamTokenBudget).slice(0, 40)
+  const ranked = rankProviderModels(provider, discovered, settings.teamTokenBudget, settings.allowPaidModels).slice(0, 40)
   if (ranked.length === 0) return null
 
   const nextModel = ranked[0]

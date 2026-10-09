@@ -164,6 +164,7 @@ export async function loadRuntimeSettings(): Promise<any> {
     parsed.teamMode ??= 'auto'
     parsed.teamPreset ??= 'default'
     parsed.teamTokenBudget ??= 'balanced'
+    parsed.allowPaidModels ??= false
     parsed.dynamicTeam ??= true
     if (!parsed.teamProfile || typeof parsed.teamProfile !== 'object') parsed.teamProfile = {}
     parsed.activeProvider = normalizeActiveProvider(parsed.activeProvider, parsed.providers)
@@ -178,6 +179,7 @@ export async function loadRuntimeSettings(): Promise<any> {
       teamMode: 'auto',
       teamPreset: 'default',
       teamTokenBudget: 'balanced',
+      allowPaidModels: false,
       dynamicTeam: true,
       teamProfile: {},
     }
