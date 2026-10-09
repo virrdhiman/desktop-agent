@@ -5,9 +5,10 @@ selection, visible files, and open files into `.vd-agent/vscode-bridge.json`,
 and processes local VD Agent commands for open-file, diff-preview, and exact
 edit actions.
 
-It also maintains a local workspace index, offers lightweight symbol/word inline
-completions, and provides commands to accept or reject the last VD Agent diff
-preview directly inside VS Code.
+It also maintains a local workspace index, offers lightweight VS Code
+language-server/symbol/word inline completions, exposes definition, reference,
+and rename commands, and provides commands to accept or reject the last VD Agent
+diff preview directly inside VS Code.
 
 Use `VD Agent: Run Inline Autocomplete Smoke Test` with the cursor after a
 prefix in a code file to verify that the local fallback can produce a candidate.
@@ -30,7 +31,7 @@ npm run vscode:package
 Install it in VS Code:
 
 ```powershell
-code --install-extension "release/vd-agent-vscode-bridge-0.4.3.vsix"
+code --install-extension "release/vd-agent-vscode-bridge-0.4.4.vsix"
 ```
 
 If VS Code opens the repository in Restricted Mode, the bridge runs in limited

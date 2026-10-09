@@ -11,6 +11,9 @@ All notable changes to VD Agent are documented here.
 
 ## [Unreleased]
 
+### VS Code bridge
+- Bumped the bundled VS Code bridge to 0.4.4 with no-cost language-server completion fallback for inline suggestions, richer dependency/snippet workspace indexing, and native definition/references/rename commands exposed from the sidebar and editor context menu.
+
 ## [1.1.0] - 2026-10-04
 
 ### Release

@@ -49,8 +49,8 @@ npm run vscode:package
 This writes:
 
 ```text
-release/vd-agent-vscode-bridge-0.4.3.vsix
-vscode-extension/vd-agent-vscode-bridge-0.4.3.vsix
+release/vd-agent-vscode-bridge-0.4.4.vsix
+vscode-extension/vd-agent-vscode-bridge-0.4.4.vsix
 ```
 
 Install from VD Agent: open the `VS Code Bridge` panel, click `Install Bridge`,
@@ -60,7 +60,7 @@ install the free VS Code app first.
 Or install from the command line:
 
 ```powershell
-code --install-extension "release/vd-agent-vscode-bridge-0.4.3.vsix"
+code --install-extension "release/vd-agent-vscode-bridge-0.4.4.vsix"
 ```
 
 Or install from VS Code: Extensions panel -> `...` -> Install from VSIX -> pick
@@ -81,9 +81,11 @@ workflows.
 The extension also adds no-cost VS Code-side polish:
 
 - `VD Agent: Rebuild Local Workspace Index` writes a local symbol/token index
-  for faster context and status reporting.
-- Lightweight inline completions suggest workspace words and symbols without a
-  paid AI autocomplete service.
+  with symbols, imports, dependency links, and small context snippets for faster
+  ranking and status reporting.
+- Lightweight inline completions suggest VS Code language-server candidates,
+  workspace words, symbols, imports, and dependency names without a paid AI
+  autocomplete service.
 - Optional AI inline completions use local Ollama by default, with debounce,
   cancellation, small fill-in-middle context, cache, and local-symbol fallback.
 - `VD Agent: Check AI Status` and `VD Agent: Select AI Model` expose local
@@ -95,6 +97,9 @@ The extension also adds no-cost VS Code-side polish:
   and terminal controls inside VS Code.
 - Editor context actions add `Fix with VD`, `Explain Selection`,
   `Refactor Selection`, and `Generate Tests`.
+- Native VS Code commands for `Go to Definition`, `Find References`, and
+  `Rename Symbol` are available from the Command Palette, editor context menu,
+  and VD Agent sidebar.
 - `VD Agent: Review Last Previewed Edit`, `Accept Last Previewed Edit`, and
   `Reject Last Previewed Edit` let users inspect preview hunks in VS Code
   before applying the remaining edit.

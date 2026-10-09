@@ -143,7 +143,7 @@ export default function VsCodeBridgePanel() {
           <Row
             label="VS Code index"
             value={status?.state?.index
-              ? `${status.state.index.files} files, ${status.state.index.symbols} symbols, ${status.state.index.imports || 0} imports, ${status.state.index.semanticFiles || 0} semantic files, ${fmtTime(status.state.index.updatedAt)}`
+              ? `${status.state.index.files} files, ${status.state.index.symbols} symbols, ${status.state.index.imports || 0} imports, ${status.state.index.dependencies || 0} links, ${status.state.index.snippets || 0} snippets, ${status.state.index.semanticFiles || 0} semantic files, ${fmtTime(status.state.index.updatedAt)}`
               : <span style={{ color: 'var(--text-muted)' }}>Not exported yet</span>}
           />
           <Row

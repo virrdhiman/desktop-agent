@@ -29,7 +29,7 @@ describe('vscodeBridge', () => {
       selection: { text: 'const app', startLine: 1, startColumn: 8, endLine: 1, endColumn: 11 },
       visibleFiles: [path.join(root, 'src', 'app.ts')],
       openFiles: [path.join(root, 'src', 'app.ts'), path.join(root, '..', 'outside.ts')],
-      index: { updatedAt: 789, files: 12, symbols: 34, imports: 5, semanticFiles: 3, bytes: 1000 },
+      index: { updatedAt: 789, files: 12, symbols: 34, imports: 5, dependencies: 2, snippets: 7, semanticFiles: 3, bytes: 1000 },
     }))
 
     const state = await loadVsCodeBridgeState(root)
@@ -40,7 +40,7 @@ describe('vscodeBridge', () => {
     const formatted = await formatVsCodeContext(root)
     expect(formatted).toContain('Active file: src/app.ts')
     expect(formatted).toContain('Selection 1:8-1:11')
-    expect(formatted).toContain('VS Code local index: 12 files, 34 symbols, 5 imports, 3 semantic files')
+    expect(formatted).toContain('VS Code local index: 12 files, 34 symbols, 5 imports, 2 dependency links, 7 snippets, 3 semantic files')
   })
 
   it('returns setup guidance when no bridge file exists', async () => {

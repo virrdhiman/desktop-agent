@@ -2,7 +2,7 @@
   "name": "vd-agent-vscode-bridge",
   "displayName": "VD Agent Bridge",
   "description": "Exports VS Code workspace/editor context, local index data, AI inline suggestions, and VD Agent editor commands.",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "publisher": "virender-dhiman",
   "license": "SEE LICENSE IN ../LICENSE",
   "engines": {
@@ -34,7 +34,10 @@
     "onCommand:vdAgent.explainWithVD",
     "onCommand:vdAgent.refactorWithVD",
     "onCommand:vdAgent.generateTestsWithVD",
-    "onCommand:vdAgent.openWorkspaceTerminal"
+    "onCommand:vdAgent.openWorkspaceTerminal",
+    "onCommand:vdAgent.goToDefinition",
+    "onCommand:vdAgent.findReferences",
+    "onCommand:vdAgent.renameSymbol"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -110,6 +113,18 @@
       {
         "command": "vdAgent.openWorkspaceTerminal",
         "title": "VD Agent: Open Workspace Terminal"
+      },
+      {
+        "command": "vdAgent.goToDefinition",
+        "title": "VD Agent: Go to Definition"
+      },
+      {
+        "command": "vdAgent.findReferences",
+        "title": "VD Agent: Find References"
+      },
+      {
+        "command": "vdAgent.renameSymbol",
+        "title": "VD Agent: Rename Symbol"
       }
     ],
     "viewsContainers": {
@@ -146,7 +161,10 @@
         { "command": "vdAgent.explainWithVD" },
         { "command": "vdAgent.refactorWithVD" },
         { "command": "vdAgent.generateTestsWithVD" },
-        { "command": "vdAgent.openWorkspaceTerminal" }
+        { "command": "vdAgent.openWorkspaceTerminal" },
+        { "command": "vdAgent.goToDefinition" },
+        { "command": "vdAgent.findReferences" },
+        { "command": "vdAgent.renameSymbol" }
       ],
       "editor/context": [
         {
@@ -164,6 +182,18 @@
         {
           "command": "vdAgent.generateTestsWithVD",
           "group": "vdAgent@4"
+        },
+        {
+          "command": "vdAgent.goToDefinition",
+          "group": "vdAgent@5"
+        },
+        {
+          "command": "vdAgent.findReferences",
+          "group": "vdAgent@6"
+        },
+        {
+          "command": "vdAgent.renameSymbol",
+          "group": "vdAgent@7"
         }
       ],
       "editor/title": [
@@ -236,6 +266,11 @@
           "minimum": 500,
           "maximum": 10000,
           "description": "Maximum time to wait for an AI inline completion before using local fallback."
+        },
+        "vdAgentBridge.vsCodeCompletionFallback": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use VS Code language-server completion items as a no-cost inline fallback."
         },
         "vdAgentBridge.autoIndex": {
           "type": "boolean",

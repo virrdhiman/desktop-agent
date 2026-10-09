@@ -70,6 +70,9 @@ function activate(context) {
     vscode.commands.registerCommand('vdAgent.refactorWithVD', () => runNativeEditorAction('refactor')),
     vscode.commands.registerCommand('vdAgent.generateTestsWithVD', () => runNativeEditorAction('tests')),
     vscode.commands.registerCommand('vdAgent.openWorkspaceTerminal', openWorkspaceTerminal),
+    vscode.commands.registerCommand('vdAgent.goToDefinition', () => runBuiltInEditorCommand('editor.action.revealDefinition', 'go to definition')),
+    vscode.commands.registerCommand('vdAgent.findReferences', () => runBuiltInEditorCommand('editor.action.referenceSearch.trigger', 'find references')),
+    vscode.commands.registerCommand('vdAgent.renameSymbol', () => runBuiltInEditorCommand('editor.action.rename', 'rename symbol')),
     vscode.window.registerWebviewViewProvider('vdAgent.assistantView', assistantProvider),
     vscode.languages.registerCodeActionsProvider({ scheme: 'file' }, {
       provideCodeActions(document, range, context) {
@@ -204,14 +207,19 @@ async function rebuildIndex() {
     const regexSymbols = extractSymbols(text, 16)
     const symbols = unique([...semanticSymbols, ...regexSymbols]).slice(0, 32)
     const imports = extractImports(text, 24)
-    const tokens = tokenize(`${vscode.workspace.asRelativePath(uri)} ${symbols.join(' ')} ${imports.join(' ')} ${text.slice(0, 40000)}`).slice(0, 120)
+    const dependencies = extractImportSpecifiers(text, 30)
+    const snippets = extractContextSnippets(text, symbols, imports, 6)
+    const tokens = tokenize(`${vscode.workspace.asRelativePath(uri)} ${symbols.join(' ')} ${imports.join(' ')} ${dependencies.join(' ')} ${snippets.join(' ')} ${text.slice(0, 40000)}`).slice(0, 140)
     totalBytes += Buffer.byteLength(text)
     files.push({
       path: vscode.workspace.asRelativePath(uri),
       language: languageFor(uri.fsPath),
       bytes: Buffer.byteLength(text),
+      mtimeMs: Number(stat.mtimeMs || 0),
       symbols,
       imports,
+      dependencies,
+      snippets,
       tokens,
     })
   }
@@ -223,6 +231,8 @@ async function rebuildIndex() {
     fileCount: files.length,
     symbolCount: files.reduce((sum, file) => sum + file.symbols.length, 0),
     importCount: files.reduce((sum, file) => sum + file.imports.length, 0),
+    dependencyCount: files.reduce((sum, file) => sum + file.dependencies.length, 0),
+    snippetCount: files.reduce((sum, file) => sum + file.snippets.length, 0),
     semanticFiles,
     totalBytes,
   }
@@ -241,6 +251,8 @@ async function readIndexSummary(root) {
     files: Number(index.fileCount || index.files?.length || 0),
     symbols: Number(index.symbolCount || 0),
     imports: Number(index.importCount || 0),
+    dependencies: Number(index.dependencyCount || 0),
+    snippets: Number(index.snippetCount || 0),
     semanticFiles: Number(index.semanticFiles || 0),
     bytes: Number(index.totalBytes || 0),
   }
@@ -250,7 +262,7 @@ async function provideInlineCompletions(document, position, _context, token) {
   const config = vscode.workspace.getConfiguration('vdAgentBridge')
   if (!config.get('inlineCompletion', true)) return []
   if (document.uri.scheme !== 'file' || document.lineAt(position.line).text.trimStart().startsWith('//')) return []
-  const local = provideLocalInlineCompletions(document, position)
+  const local = await provideLocalInlineCompletions(document, position, token)
   if (!isWorkspaceTrusted()) {
     noteInlineFallback(local)
     return local
@@ -303,7 +315,7 @@ function noteInlineFallback(local) {
   }
 }
 
-function provideLocalInlineCompletions(document, position) {
+async function provideLocalInlineCompletions(document, position, token) {
   const linePrefix = document.lineAt(position.line).text.slice(0, position.character)
   const match = linePrefix.match(/[A-Za-z_$][\w$]{2,}$/)
   if (!match) return []
@@ -311,20 +323,56 @@ function provideLocalInlineCompletions(document, position) {
   const prefixLower = prefix.toLowerCase()
   const localText = document.getText().slice(Math.max(0, document.offsetAt(position) - 10000), document.offsetAt(position) + 10000)
   const localWords = completionWords(localText)
-  const candidates = new Set()
-  for (const token of localWords) candidates.add(token)
-  for (const token of tokenize(localText)) candidates.add(token)
-  for (const file of latestIndex?.files || []) {
-    for (const symbol of file.symbols || []) candidates.add(symbol)
-    for (const token of file.tokens || []) candidates.add(token)
+  const config = vscode.workspace.getConfiguration('vdAgentBridge')
+  const vsCodeItems = config.get('vsCodeCompletionFallback', true)
+    ? await provideVsCodeCompletionFallback(document, position, prefix, token)
+    : []
+  const candidates = new Map()
+  const addCandidate = (value, score) => {
+    if (typeof value !== 'string' || !value) return
+    candidates.set(value, Math.max(score, candidates.get(value) || 0))
   }
-  const items = [...candidates]
-    .filter((item) => typeof item === 'string' && item.length > prefix.length && item.toLowerCase().startsWith(prefixLower))
-    .filter((item) => item !== prefix && /^[A-Za-z_$][\w$.-]*$/.test(item))
-    .sort((a, b) => a.length - b.length || a.localeCompare(b))
+  for (const item of vsCodeItems) addCandidate(item, 8)
+  for (const word of localWords) addCandidate(word, 3)
+  for (const word of tokenize(localText)) addCandidate(word, 2)
+  for (const file of latestIndex?.files || []) {
+    for (const symbol of file.symbols || []) addCandidate(symbol, 6)
+    for (const imported of file.imports || []) addCandidate(imported, 5)
+    for (const dependency of file.dependencies || []) addCandidate(path.basename(dependency).replace(/\.[^.]+$/, ''), 4)
+    for (const word of file.tokens || []) addCandidate(word, 1)
+  }
+  const items = [...candidates.entries()]
+    .filter(([item]) => typeof item === 'string' && item.length > prefix.length && item.toLowerCase().startsWith(prefixLower))
+    .map(([item, score]) => ({ item, score }))
+    .filter(({ item }) => item !== prefix && /^[A-Za-z_$][\w$.-]*$/.test(item))
+    .sort((a, b) => b.score - a.score || a.item.length - b.item.length || a.item.localeCompare(b.item))
     .slice(0, 5)
-    .map((item) => new vscode.InlineCompletionItem(item.slice(prefix.length), new vscode.Range(position, position)))
+    .map(({ item }) => new vscode.InlineCompletionItem(item.slice(prefix.length), new vscode.Range(position, position)))
   return new vscode.InlineCompletionList(items)
+}
+
+async function provideVsCodeCompletionFallback(document, position, prefix, token) {
+  if (token?.isCancellationRequested) return []
+  try {
+    const list = await vscode.commands.executeCommand('vscode.executeCompletionItemProvider', document.uri, position)
+    if (token?.isCancellationRequested) return []
+    const items = Array.isArray(list?.items) ? list.items : []
+    return unique(items
+      .map((item) => completionLabelToString(item.label) || completionLabelToString(item.insertText))
+      .filter((item) => item && item.toLowerCase().startsWith(prefix.toLowerCase()))
+      .slice(0, 20))
+  } catch {
+    return []
+  }
+}
+
+function completionLabelToString(value) {
+  if (typeof value === 'string') return value
+  if (value && typeof value === 'object') {
+    if (typeof value.label === 'string') return value.label
+    if (typeof value.value === 'string') return value.value
+  }
+  return ''
 }
 
 function completionWords(text) {
@@ -348,7 +396,7 @@ async function runAutocompleteSmoke() {
   if (!editor || editor.document.uri.scheme !== 'file') {
     return vscode.window.showWarningMessage('Open a code file and place the cursor after a prefix before running the VD autocomplete smoke test.')
   }
-  const list = provideLocalInlineCompletions(editor.document, editor.selection.active)
+  const list = await provideLocalInlineCompletions(editor.document, editor.selection.active)
   const items = Array.isArray(list?.items) ? list.items : []
   const suggestions = items
     .map((item) => typeof item.insertText === 'string' ? item.insertText : item.insertText?.value)
@@ -616,21 +664,26 @@ function relatedIndexContext(file, limit = 6) {
   return latestIndex.files
     .filter((entry) => entry.path !== activeRel)
     .map((entry) => {
-      const haystack = new Set([...(entry.tokens || []), ...(entry.symbols || []).flatMap(tokenize), ...(entry.imports || []).flatMap(tokenize)])
+      const haystack = new Set([...(entry.tokens || []), ...(entry.symbols || []).flatMap(tokenize), ...(entry.imports || []).flatMap(tokenize), ...(entry.dependencies || []).flatMap(tokenize)])
       let score = 0
       for (const token of query) if (haystack.has(token)) score += 1
       if (sameDirectory(activeRel, entry.path)) score += 2
+      if ((active?.dependencies || []).some((dependency) => entry.path.endsWith(normalizeDependencyPath(dependency)))) score += 4
       return { entry, score }
     })
     .filter((item) => item.score > 0)
     .sort((a, b) => b.score - a.score || a.entry.path.localeCompare(b.entry.path))
     .slice(0, limit)
-    .map(({ entry }) => `${entry.path}: symbols=${(entry.symbols || []).slice(0, 8).join(', ')} imports=${(entry.imports || []).slice(0, 6).join(', ')}`)
+    .map(({ entry }) => `${entry.path}: symbols=${(entry.symbols || []).slice(0, 8).join(', ')} imports=${(entry.imports || []).slice(0, 6).join(', ')} snippets=${(entry.snippets || []).slice(0, 2).join(' | ')}`)
     .join('\n')
 }
 
 function sameDirectory(a, b) {
   return path.dirname(a.replace(/\\/g, '/')) === path.dirname(b.replace(/\\/g, '/'))
+}
+
+function normalizeDependencyPath(value) {
+  return String(value || '').replace(/\\/g, '/').replace(/^\.\//, '').replace(/\.(ts|tsx|js|jsx|mjs|cjs|json|css|scss)$/i, '')
 }
 
 async function processCommandFile(commandFile, root) {
@@ -1026,6 +1079,15 @@ async function openWorkspaceTerminal() {
   terminal.show()
 }
 
+async function runBuiltInEditorCommand(command, label) {
+  if (!requireWorkspaceTrust(label)) return
+  const editor = vscode.window.activeTextEditor
+  if (!editor || editor.document.uri.scheme !== 'file') {
+    return vscode.window.showWarningMessage(`Open a code file before using VD Agent ${label}.`)
+  }
+  await vscode.commands.executeCommand(command)
+}
+
 async function showBridgeStatus() {
   const folder = activeWorkspaceFolder()
   if (!folder) return vscode.window.showWarningMessage('No workspace is open for VD Agent Bridge.')
@@ -1213,6 +1275,9 @@ class VdAgentAssistantViewProvider {
       if (message?.command === 'dashboard') await openDashboard()
       if (message?.command === 'index') await rebuildIndex()
       if (message?.command === 'terminal') await openWorkspaceTerminal()
+      if (message?.command === 'definition') await runBuiltInEditorCommand('editor.action.revealDefinition', 'go to definition')
+      if (message?.command === 'references') await runBuiltInEditorCommand('editor.action.referenceSearch.trigger', 'find references')
+      if (message?.command === 'rename') await runBuiltInEditorCommand('editor.action.rename', 'rename symbol')
       if (message?.command === 'ai') await showAiStatus()
       if (message?.command === 'model') await selectAiModel()
       if (message?.command === 'review') await openPreviewReview()
@@ -1273,6 +1338,9 @@ async function assistantHtml() {
   <div>
     <button data-command="ask">Ask</button>
     <button data-command="index">Rebuild Index</button>
+    <button data-command="definition">Definition</button>
+    <button data-command="references">References</button>
+    <button data-command="rename">Rename</button>
     <button data-command="ai">AI Status</button>
     <button data-command="model">Model</button>
     <button data-command="review">Review Patch</button>
@@ -1513,6 +1581,35 @@ function extractImports(text, max = 24) {
     while ((match = pattern.exec(text)) && imports.size < max) imports.add(match[1])
   }
   return [...imports]
+}
+
+function extractImportSpecifiers(text, max = 30) {
+  return extractImports(text, max)
+    .map((item) => String(item).replace(/\\/g, '/'))
+    .filter((item) => item.startsWith('.') || item.includes('/'))
+    .slice(0, max)
+}
+
+function extractContextSnippets(text, symbols, imports, max = 6) {
+  const lines = String(text || '').split(/\r?\n/)
+  const needles = unique([...symbols, ...imports])
+    .filter((item) => item.length >= 3)
+    .slice(0, 24)
+  const snippets = []
+  const seen = new Set()
+  for (let i = 0; i < lines.length && snippets.length < max; i += 1) {
+    const line = lines[i]
+    if (!needles.some((needle) => line.includes(needle))) continue
+    const start = Math.max(0, i - 1)
+    const end = Math.min(lines.length, i + 2)
+    const snippet = lines.slice(start, end).map((value) => value.trim()).filter(Boolean).join(' ').slice(0, 240)
+    const key = snippet.toLowerCase()
+    if (snippet && !seen.has(key)) {
+      seen.add(key)
+      snippets.push(`${i + 1}: ${snippet}`)
+    }
+  }
+  return snippets
 }
 
 function tokenize(text) {

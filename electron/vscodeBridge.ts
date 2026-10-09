@@ -26,6 +26,8 @@ export type VsCodeBridgeState = {
     files: number
     symbols: number
     imports?: number
+    dependencies?: number
+    snippets?: number
     semanticFiles?: number
     bytes?: number
   }
@@ -57,7 +59,7 @@ const RESULT_DIR = path.join('.vd-agent', 'command-results')
 const LAST_COMMAND_FILE = path.join('.vd-agent', 'vscode-last-command.json')
 const DEFAULT_COMMAND_TIMEOUT_MS = 8_000
 const VSCODE_DOWNLOAD_URL = 'https://code.visualstudio.com/Download'
-const VSIX_NAME = 'vd-agent-vscode-bridge-0.4.3.vsix'
+const VSIX_NAME = 'vd-agent-vscode-bridge-0.4.4.vsix'
 const execFileAsync = promisify(execFile)
 
 type VsCodeBridgeCommand = {
@@ -150,7 +152,7 @@ export async function formatVsCodeContext(workspace: string): Promise<string> {
     `Active language: ${state.activeLanguage || 'unknown'}`,
     `Visible files: ${state.visibleFiles.length ? state.visibleFiles.join(', ') : 'none'}`,
     `Open files: ${state.openFiles.length ? state.openFiles.slice(0, 40).join(', ') : 'none'}`,
-    `VS Code local index: ${state.index ? `${state.index.files} files, ${state.index.symbols} symbols, ${state.index.imports || 0} imports, ${state.index.semanticFiles || 0} semantic files, updated ${new Date(state.index.updatedAt).toISOString()}` : 'not available'}`,
+    `VS Code local index: ${state.index ? `${state.index.files} files, ${state.index.symbols} symbols, ${state.index.imports || 0} imports, ${state.index.dependencies || 0} dependency links, ${state.index.snippets || 0} snippets, ${state.index.semanticFiles || 0} semantic files, updated ${new Date(state.index.updatedAt).toISOString()}` : 'not available'}`,
     `VS Code AI: ${state.ai ? `${state.ai.ok ? 'ready' : 'not ready'}, ${state.ai.provider}, ${state.ai.model}, ${state.ai.message}` : 'not exported yet'}`,
     `VS Code preview: ${state.preview ? `${state.preview.file}, ${state.preview.hunks} hunks, +${state.preview.additions}/-${state.preview.deletions}` : 'none'}`,
   ]
@@ -420,6 +422,8 @@ function sanitizeIndex(index: unknown): VsCodeBridgeState['index'] | undefined {
     files,
     symbols,
     imports: Number(value.imports || 0),
+    dependencies: Number(value.dependencies || 0),
+    snippets: Number(value.snippets || 0),
     semanticFiles: Number(value.semanticFiles || 0),
     bytes: Number(value.bytes || 0),
   }

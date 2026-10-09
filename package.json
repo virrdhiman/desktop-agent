@@ -146,8 +146,8 @@
         "to": "icon.ico"
       },
       {
-        "from": "vscode-extension/vd-agent-vscode-bridge-0.4.3.vsix",
-        "to": "vd-agent-vscode-bridge-0.4.3.vsix"
+        "from": "vscode-extension/vd-agent-vscode-bridge-0.4.4.vsix",
+        "to": "vd-agent-vscode-bridge-0.4.4.vsix"
       }
     ],
     "mac": {
