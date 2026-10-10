@@ -2,7 +2,7 @@
   "name": "vd-agent-vscode-bridge",
   "displayName": "VD Agent Bridge",
   "description": "Exports VS Code workspace/editor context, local index data, AI inline suggestions, and VD Agent editor commands.",
-  "version": "0.4.4",
+  "version": "0.4.5",
   "publisher": "virender-dhiman",
   "license": "SEE LICENSE IN ../LICENSE",
   "engines": {

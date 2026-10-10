@@ -21,6 +21,7 @@ beforeEach(() => {
   fs.writeFileSync(path.join(root, 'src', 'AgentChat.test.tsx'), 'import { AgentChat } from "./AgentChat"\n')
   fs.writeFileSync(path.join(root, 'src', 'GitPanel.tsx'), 'export const ReviewBundle = () => null\n')
   fs.writeFileSync(path.join(root, 'node_modules', 'ignored', 'bad.ts'), 'queryQueue should not be indexed\n')
+  fs.writeFileSync(path.join(root, '.env'), 'SECRET_TOKEN=must_not_index\n')
 })
 
 afterEach(() => {
@@ -33,6 +34,7 @@ describe('repoIndex', () => {
     const map = await buildRepoMap(root)
     expect(map.map((entry) => entry.path)).toContain('src/AgentChat.tsx')
     expect(map.map((entry) => entry.path)).not.toContain('node_modules/ignored/bad.ts')
+    expect(map.map((entry) => entry.path)).not.toContain('.env')
     const agentChat = map.find((entry) => entry.path === 'src/AgentChat.tsx')
     expect(agentChat?.symbols).toContain('AgentChat')
     expect(agentChat?.imports).toContain('./agentLoop')
@@ -56,6 +58,20 @@ describe('repoIndex', () => {
     const third = await buildRepoIndex(root)
     expect(third.cached).toBe(false)
     expect(third.files).toBeGreaterThan(first.files)
+    expect(third.updatedFiles).toBe(1)
+    expect(third.reusedFiles).toBe(first.files)
+    fs.writeFileSync(path.join(root, 'src', 'GitPanel.tsx'), 'export const ChangedSymbol = () => null\n')
+    const fourth = await buildRepoIndex(root)
+    expect(fourth.updatedFiles).toBe(1)
+    expect(fourth.reusedFiles).toBe(third.files - 1)
+    expect((await searchRepo(root, 'ChangedSymbol'))[0].path).toBe('src/GitPanel.tsx')
+    fs.unlinkSync(path.join(root, 'src', 'new.ts'))
+    const fifth = await buildRepoIndex(root)
+    expect(fifth.updatedFiles).toBe(0)
+    expect(fifth.files).toBe(third.files - 1)
+    const forced = await buildRepoIndex(root, true)
+    expect(forced.updatedFiles).toBe(forced.files)
+    expect(forced.reusedFiles).toBe(0)
   })
 
   it('starts a background watcher for the repo index', async () => {

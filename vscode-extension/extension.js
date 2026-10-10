@@ -1,6 +1,7 @@
 const fs = require('fs')
 const path = require('path')
 const vscode = require('vscode')
+const { lineDiffHunks, discardHunk, diffStats, compatibleUrl, contentHash } = require('./previewDiff')
 
 const BRIDGE_DIR = '.vd-agent'
 const BRIDGE_FILE = 'vscode-bridge.json'
@@ -195,27 +196,45 @@ async function rebuildIndex() {
     maxIndexedFiles,
   )
   const files = []
+  const previousIndex = latestIndex?.workspacePath === root ? latestIndex : await readJson(target)
+  const previousFiles = new Map(
+    previousIndex?.version === 1 && previousIndex.workspacePath === root && previousIndex.maxSemanticSymbolFiles === maxSemanticSymbolFiles
+      ? (previousIndex.files || []).map((file) => [file.path, file])
+      : [],
+  )
   let totalBytes = 0
   let semanticFiles = 0
   for (const uri of uris) {
     if (uri.scheme !== 'file' || !isTextFile(uri.fsPath) || !isFileInside(root, uri.fsPath)) continue
+    if (path.relative(root, uri.fsPath).split(path.sep).some((part) => part.startsWith('.'))) continue
     const stat = await fs.promises.stat(uri.fsPath).catch(() => null)
     if (!stat || stat.size > MAX_FILE_BYTES) continue
+    const relativePath = vscode.workspace.asRelativePath(uri)
+    const previous = previousFiles.get(relativePath)
+    if (previous && previous.sourceBytes === stat.size && previous.mtimeMs === Number(stat.mtimeMs || 0)) {
+      files.push(previous)
+      totalBytes += previous.bytes
+      if (previous.semanticIndexed) semanticFiles += 1
+      continue
+    }
     const text = await fs.promises.readFile(uri.fsPath, 'utf8').catch(() => '')
-    const semanticSymbols = semanticFiles < maxSemanticSymbolFiles ? await extractVsCodeSymbols(uri) : []
-    if (semanticSymbols.length) semanticFiles += 1
+    const semanticIndexed = semanticFiles < maxSemanticSymbolFiles
+    const semanticSymbols = semanticIndexed ? await extractVsCodeSymbols(uri) : []
+    if (semanticIndexed) semanticFiles += 1
     const regexSymbols = extractSymbols(text, 16)
     const symbols = unique([...semanticSymbols, ...regexSymbols]).slice(0, 32)
     const imports = extractImports(text, 24)
     const dependencies = extractImportSpecifiers(text, 30)
     const snippets = extractContextSnippets(text, symbols, imports, 6)
-    const tokens = tokenize(`${vscode.workspace.asRelativePath(uri)} ${symbols.join(' ')} ${imports.join(' ')} ${dependencies.join(' ')} ${snippets.join(' ')} ${text.slice(0, 40000)}`).slice(0, 140)
+    const tokens = tokenize(`${relativePath} ${symbols.join(' ')} ${imports.join(' ')} ${dependencies.join(' ')} ${snippets.join(' ')} ${text.slice(0, 40000)}`).slice(0, 140)
     totalBytes += Buffer.byteLength(text)
     files.push({
-      path: vscode.workspace.asRelativePath(uri),
+      path: relativePath,
       language: languageFor(uri.fsPath),
       bytes: Buffer.byteLength(text),
       mtimeMs: Number(stat.mtimeMs || 0),
+      sourceBytes: stat.size,
+      semanticIndexed,
       symbols,
       imports,
       dependencies,
@@ -226,6 +245,7 @@ async function rebuildIndex() {
   latestIndex = {
     version: 1,
     workspacePath: root,
+    maxSemanticSymbolFiles,
     updatedAt: Date.now(),
     files,
     fileCount: files.length,
@@ -513,7 +533,7 @@ async function requestAiText(prompt, options = {}) {
   const cancel = options.token?.onCancellationRequested?.(() => controller.abort())
   try {
     if (provider === 'openai-compatible') {
-      const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+      const response = await fetch(compatibleUrl(baseUrl, 'chat/completions'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -598,7 +618,7 @@ async function checkAiStatus(options = {}) {
           ? `Ollama is running, but ${model} is not installed.`
           : 'Ollama is running, but no local models are installed.'
     } else {
-      const response = await fetch(`${baseUrl}/v1/models`, {
+      const response = await fetch(compatibleUrl(baseUrl, 'models'), {
         headers: config.get('aiApiKey', '') ? { Authorization: `Bearer ${config.get('aiApiKey')}` } : {},
         signal: controller.signal,
       })
@@ -772,7 +792,8 @@ async function applyTextReplacement(file, oldString, newString) {
 }
 
 async function writeDiffPreview(root, file, oldString, newString, content) {
-  const before = await fs.promises.readFile(file, 'utf8')
+  const document = await vscode.workspace.openTextDocument(vscode.Uri.file(file))
+  const before = document.getText()
   let after
   if (typeof content === 'string') {
     after = content
@@ -790,6 +811,7 @@ async function writeDiffPreview(root, file, oldString, newString, content) {
     createdAt: Date.now(),
     file,
     preview,
+    baseHash: contentHash(before),
     title: vscode.workspace.asRelativePath(file),
     stats: diffStats(before, after),
   }, null, 2)}\n`, 'utf8')
@@ -808,6 +830,7 @@ async function acceptLastPreview() {
   const preview = resolveInside(folder.uri.fsPath, meta.preview)
   const after = await fs.promises.readFile(preview, 'utf8')
   const document = await vscode.workspace.openTextDocument(vscode.Uri.file(file))
+  if (!previewMatches(meta, document.getText())) return
   const edit = new vscode.WorkspaceEdit()
   edit.replace(document.uri, new vscode.Range(document.positionAt(0), document.positionAt(document.getText().length)), after)
   const applied = await vscode.workspace.applyEdit(edit)
@@ -877,16 +900,13 @@ async function discardPreviewHunk(index) {
   if (!meta?.file || !meta?.preview) return vscode.window.showWarningMessage('No VD Agent preview is waiting to review.')
   const file = resolveInside(folder.uri.fsPath, meta.file)
   const preview = resolveInside(folder.uri.fsPath, meta.preview)
-  const before = await fs.promises.readFile(file, 'utf8')
+  const document = await vscode.workspace.openTextDocument(vscode.Uri.file(file))
+  const before = document.getText()
+  if (!previewMatches(meta, before)) return
   const after = await fs.promises.readFile(preview, 'utf8')
-  const hunks = lineDiffHunks(before, after)
-  const hunk = hunks[index]
-  if (!hunk) return vscode.window.showWarningMessage('That VD Agent preview hunk no longer exists.')
-  const beforeLines = splitLines(before)
-  const afterLines = splitLines(after)
-  afterLines.splice(hunk.newStart, Math.max(0, hunk.newEnd - hunk.newStart), ...beforeLines.slice(hunk.oldStart, hunk.oldEnd))
-  await fs.promises.writeFile(preview, joinLines(afterLines), 'utf8')
-  const nextAfter = await fs.promises.readFile(preview, 'utf8')
+  const nextAfter = discardHunk(before, after, index)
+  if (nextAfter === null) return vscode.window.showWarningMessage('That VD Agent preview hunk no longer exists.')
+  await fs.promises.writeFile(preview, nextAfter, 'utf8')
   await fs.promises.writeFile(path.join(folder.uri.fsPath, BRIDGE_DIR, LAST_PREVIEW_FILE), `${JSON.stringify({
     ...meta,
     updatedAt: Date.now(),
@@ -914,6 +934,12 @@ async function readPreviewSummary(root) {
   }
 }
 
+function previewMatches(meta, text) {
+  if (meta.baseHash === contentHash(text)) return true
+  vscode.window.showWarningMessage('The file changed after this VD Agent preview was created. Review or reject it and request a fresh preview; your newer edits were not overwritten.')
+  return false
+}
+
 async function previewReviewHtml(root) {
   const meta = await readJson(path.join(root, BRIDGE_DIR, LAST_PREVIEW_FILE))
   const nonce = String(Date.now())
@@ -927,8 +953,10 @@ async function previewReviewHtml(root) {
   }
   const file = resolveInside(root, meta.file)
   const preview = resolveInside(root, meta.preview)
-  const before = await fs.promises.readFile(file, 'utf8').catch(() => '')
+  const document = await vscode.workspace.openTextDocument(vscode.Uri.file(file))
+  const before = document.getText()
   const after = await fs.promises.readFile(preview, 'utf8').catch(() => '')
+  const stale = meta.baseHash !== contentHash(before)
   const hunks = lineDiffHunks(before, after)
   const stats = diffStats(before, after)
   return htmlPage(nonce, `
@@ -943,9 +971,10 @@ async function previewReviewHtml(root) {
         <span class="pill del">-${stats.deletions}</span>
       </div>
     </header>
+    ${stale ? '<p class="conflict">This file changed since the preview was created. Reject this preview and request a new one; newer edits will not be overwritten.</p>' : ''}
     <section class="actions">
       <button data-command="openDiff">Open Diff</button>
-      <button data-command="accept">Accept Remaining</button>
+      <button data-command="accept" ${stale ? 'disabled' : ''}>Accept Remaining</button>
       <button class="secondary" data-command="reject">Reject All</button>
     </section>
     <section class="hunks">
@@ -954,7 +983,7 @@ async function previewReviewHtml(root) {
           <div class="hunk-head">
             <strong>Hunk ${index + 1}</strong>
             <span class="muted">old ${hunk.oldStart + 1}-${hunk.oldEnd}, new ${hunk.newStart + 1}-${hunk.newEnd}</span>
-            <button class="secondary" data-command="discardHunk" data-index="${index}">Discard Hunk</button>
+            <button class="secondary" data-command="discardHunk" data-index="${index}" ${stale ? 'disabled' : ''}>Discard Hunk</button>
           </div>
           <pre>${escapeHtml(renderHunk(hunk))}</pre>
         </article>
@@ -1416,75 +1445,10 @@ function requireWorkspaceTrust(action) {
   return false
 }
 
-function splitLines(text) {
-  return String(text).split(/\r?\n/)
-}
-
-function joinLines(lines) {
-  return lines.join('\n')
-}
-
-function lineDiffHunks(before, after) {
-  const oldLines = splitLines(before)
-  const newLines = splitLines(after)
-  const max = Math.max(oldLines.length, newLines.length)
-  const hunks = []
-  let current = null
-  for (let i = 0; i < max; i++) {
-    if (oldLines[i] === newLines[i]) {
-      current = null
-      continue
-    }
-    if (!current) {
-      current = {
-        oldStart: Math.max(0, i - 2),
-        newStart: Math.max(0, i - 2),
-        oldEnd: i,
-        newEnd: i,
-        oldLines,
-        newLines,
-      }
-      hunks.push(current)
-    }
-    current.oldEnd = Math.min(oldLines.length, i + 3)
-    current.newEnd = Math.min(newLines.length, i + 3)
-  }
-  return hunks
-}
-
-function diffStats(before, after) {
-  const hunks = lineDiffHunks(before, after)
-  let additions = 0
-  let deletions = 0
-  for (const hunk of hunks) {
-    const oldSlice = hunk.oldLines.slice(hunk.oldStart, hunk.oldEnd)
-    const newSlice = hunk.newLines.slice(hunk.newStart, hunk.newEnd)
-    const len = Math.max(oldSlice.length, newSlice.length)
-    for (let i = 0; i < len; i++) {
-      if (oldSlice[i] === newSlice[i]) continue
-      if (newSlice[i] !== undefined) additions += 1
-      if (oldSlice[i] !== undefined) deletions += 1
-    }
-  }
-  return { hunks: hunks.length, additions, deletions }
-}
-
 function renderHunk(hunk) {
   const oldSlice = hunk.oldLines.slice(hunk.oldStart, hunk.oldEnd)
   const newSlice = hunk.newLines.slice(hunk.newStart, hunk.newEnd)
-  const lines = []
-  const len = Math.max(oldSlice.length, newSlice.length)
-  for (let i = 0; i < len; i++) {
-    const oldLine = oldSlice[i]
-    const newLine = newSlice[i]
-    if (oldLine === newLine) {
-      lines.push(`  ${oldLine ?? ''}`)
-    } else {
-      if (oldLine !== undefined) lines.push(`- ${oldLine}`)
-      if (newLine !== undefined) lines.push(`+ ${newLine}`)
-    }
-  }
-  return lines.join('\n')
+  return [...oldSlice.map((line) => `- ${line}`), ...newSlice.map((line) => `+ ${line}`)].join('\n')
 }
 
 function htmlPage(nonce, body) {
@@ -1502,8 +1466,10 @@ function htmlPage(nonce, body) {
   .pill { border: 1px solid var(--vscode-panel-border); border-radius: 999px; padding: 4px 9px; color: var(--vscode-descriptionForeground); }
   .add { color: var(--vscode-gitDecoration-addedResourceForeground); }
   .del { color: var(--vscode-gitDecoration-deletedResourceForeground); }
+  .conflict { padding: 10px; border-left: 3px solid var(--vscode-inputValidation-warningBorder); color: var(--vscode-foreground); background: var(--vscode-inputValidation-warningBackground); }
   .actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0; }
   button { color: var(--vscode-button-foreground); background: var(--vscode-button-background); border: 0; border-radius: 4px; padding: 7px 10px; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
   button.secondary { color: var(--vscode-button-secondaryForeground); background: var(--vscode-button-secondaryBackground); }
   .hunks { display: grid; gap: 12px; }
   .hunk { border: 1px solid var(--vscode-panel-border); border-radius: 8px; overflow: hidden; }

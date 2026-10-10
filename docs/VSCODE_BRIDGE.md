@@ -49,8 +49,8 @@ npm run vscode:package
 This writes:
 
 ```text
-release/vd-agent-vscode-bridge-0.4.4.vsix
-vscode-extension/vd-agent-vscode-bridge-0.4.4.vsix
+release/vd-agent-vscode-bridge-0.4.5.vsix
+vscode-extension/vd-agent-vscode-bridge-0.4.5.vsix
 ```
 
 Install from VD Agent: open the `VS Code Bridge` panel, click `Install Bridge`,
@@ -60,7 +60,7 @@ install the free VS Code app first.
 Or install from the command line:
 
 ```powershell
-code --install-extension "release/vd-agent-vscode-bridge-0.4.4.vsix"
+code --install-extension "release/vd-agent-vscode-bridge-0.4.5.vsix"
 ```
 
 Or install from VS Code: Extensions panel -> `...` -> Install from VSIX -> pick

@@ -27,11 +27,14 @@ export type RepoIndexStats = {
   updatedAt: number
   cached: boolean
   watching?: boolean
+  reusedFiles?: number
+  updatedFiles?: number
 }
 
 type IndexedFile = RepoMapEntry & {
   absPath: string
   modifiedMs: number
+  sourceBytes: number
   text: string
   tokens: string[]
   vector: Map<string, number>
@@ -41,6 +44,8 @@ type RepoIndexCache = {
   fingerprint: string
   updatedAt: number
   files: IndexedFile[]
+  reusedFiles: number
+  updatedFiles: number
 }
 
 type RepoIndexWatcher = {
@@ -145,7 +150,7 @@ async function walkTextFiles(root: string): Promise<{ file: string; size: number
     if (files.length >= MAX_FILES || depth > 10) return
     const entries = await fs.promises.readdir(dir, { withFileTypes: true }).catch(() => [])
     for (const entry of entries) {
-      if (entry.name.startsWith('.') && entry.name !== '.env') continue
+      if (entry.name.startsWith('.')) continue
       if (entry.isDirectory()) {
         if (!SKIP_DIRS.has(entry.name)) await walk(path.join(dir, entry.name), depth + 1)
         continue
@@ -177,7 +182,15 @@ export async function buildRepoIndex(root: string, force = false): Promise<RepoI
   }
 
   const files: IndexedFile[] = []
+  const previous = new Map(existing?.files.map((file) => [file.absPath, file]) || [])
+  let reusedFiles = 0
   for (const item of candidates) {
+    const cachedFile = previous.get(item.file)
+    if (!force && cachedFile && cachedFile.sourceBytes === item.size && cachedFile.modifiedMs === item.modifiedMs) {
+      files.push(cachedFile)
+      reusedFiles += 1
+      continue
+    }
     const text = await fs.promises.readFile(item.file, 'utf-8').catch(() => '')
     const symbols = extractSymbols(text, 20)
     const imports = extractImports(text, 12)
@@ -191,13 +204,14 @@ export async function buildRepoIndex(root: string, force = false): Promise<RepoI
       imports,
       testLike: isTestLike(item.file),
       modifiedMs: item.modifiedMs,
+      sourceBytes: item.size,
       text,
       tokens,
       vector: vector(tokens),
     })
   }
 
-  const cache: RepoIndexCache = { fingerprint, updatedAt: Date.now(), files }
+  const cache: RepoIndexCache = { fingerprint, updatedAt: Date.now(), files, reusedFiles, updatedFiles: files.length - reusedFiles }
   repoCaches.set(workspace, cache)
   return indexStats(workspace, cache, false)
 }
@@ -219,7 +233,7 @@ export async function startRepoIndexWatcher(root: string): Promise<RepoIndexStat
     watcher.lastEventAt = Date.now()
     if (watcher.timer) clearTimeout(watcher.timer)
     watcher.timer = setTimeout(() => {
-      void buildRepoIndex(workspace, true).catch(() => {})
+      void buildRepoIndex(workspace).catch(() => {})
     }, 750)
   }
 
@@ -258,6 +272,8 @@ function indexStats(workspace: string, cache: RepoIndexCache, cached: boolean): 
     updatedAt: cache.updatedAt,
     cached,
     watching: repoWatchers.has(workspace),
+    reusedFiles: cache.reusedFiles,
+    updatedFiles: cache.updatedFiles,
   }
 }
 
@@ -268,7 +284,7 @@ function shouldIgnoreWatchEvent(file: string): boolean {
     if (parts.some((part) => SKIP_DIRS.has(part))) return true
   }
   const base = path.basename(normalized)
-  return base.startsWith('.') && base !== '.env' || !isTextFile(base)
+  return base.startsWith('.') || !isTextFile(base)
 }
 
 async function indexedFiles(root: string): Promise<IndexedFile[]> {

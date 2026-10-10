@@ -43,7 +43,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "vitest run",
+    "test": "vitest run --maxWorkers=3",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:reliability": "vitest run electron/__tests__/reliability.test.ts electron/__tests__/archiveStore.test.ts electron/__tests__/diagnostics.test.ts",
@@ -150,8 +150,8 @@
         "to": "icon.ico"
       },
       {
-        "from": "vscode-extension/vd-agent-vscode-bridge-0.4.4.vsix",
-        "to": "vd-agent-vscode-bridge-0.4.4.vsix"
+        "from": "vscode-extension/vd-agent-vscode-bridge-0.4.5.vsix",
+        "to": "vd-agent-vscode-bridge-0.4.5.vsix"
       }
     ],
     "mac": {
