@@ -43,7 +43,7 @@ type ChatSuccess = { content: string; models?: string[] }
 const MODELS_TIMEOUT_MS = 8000
 const CACHE_MS = 10 * 60 * 1000
 const modelCache = new Map<string, { ids: string[]; at: number }>()
-const modelCooldowns = new Map<string, number>()
+const modelCooldowns = new Map<string, { until: number; reason: string }>()
 const activeControllers = new Set<AbortController>()
 
 function trimBase(baseUrl: string) {
@@ -59,15 +59,24 @@ function cacheKey(baseUrl: string, apiKey: string) {
 function availableModels(baseUrl: string, apiKey: string, ids: string[]): string[] {
   const scope = cacheKey(baseUrl, apiKey)
   const now = Date.now()
-  for (const [key, until] of modelCooldowns) {
-    if (until <= now) modelCooldowns.delete(key)
+  for (const [key, failure] of modelCooldowns) {
+    if (failure.until <= now) modelCooldowns.delete(key)
   }
-  return ids.filter((id) => (modelCooldowns.get(`${scope}::${id}`) || 0) <= now)
+  return ids.filter((id) => (modelCooldowns.get(`${scope}::${id}`)?.until || 0) <= now)
 }
 
 function coolDownModel(baseUrl: string, apiKey: string, model: string, error: string, status?: number) {
   const duration = modelFailureCooldownMs(error, status)
-  if (duration > 0) modelCooldowns.set(`${cacheKey(baseUrl, apiKey)}::${model}`, Date.now() + duration)
+  if (duration > 0) modelCooldowns.set(`${cacheKey(baseUrl, apiKey)}::${model}`, { until: Date.now() + duration, reason: error })
+}
+
+function cooledModelError(baseUrl: string, apiKey: string, ids: string[]): string | null {
+  const scope = cacheKey(baseUrl, apiKey)
+  const failures = ids.map((id) => modelCooldowns.get(`${scope}::${id}`))
+    .filter((item): item is { until: number; reason: string } => !!item && item.until > Date.now())
+  if (failures.length === 0) return null
+  const retrySeconds = Math.max(1, Math.ceil((Math.min(...failures.map((item) => item.until)) - Date.now()) / 1000))
+  return `All available models are cooling down. Last error: ${failures[0].reason}. Retry in about ${retrySeconds}s.`
 }
 
 function redactKey(text: string, apiKey: string) {
@@ -242,6 +251,11 @@ export function registerAiHandlers(getMainWindow: () => BrowserWindow | null) {
           })
         }
         models = availableModels(config.baseUrl, config.apiKey, models)
+      }
+
+      if (models.length === 0) {
+        const error = cooledModelError(config.baseUrl, config.apiKey, [...discovered, config.model])
+        return { error: error || 'No model available for this provider', kind: 'retry-model' }
       }
 
       const result = await tryModels(

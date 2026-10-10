@@ -64,7 +64,7 @@ For OpenAI-compatible providers, on each request:
 2. It drops non-chat models: embeddings, rerank, moderation, audio, speech, transcription, image, and video.
 3. It ranks the rest by coding quality, budget, then efficiency. On free-tier aggregators with explicit `:free` model IDs, Auto stays on those models in every budget. To let Auto use other model IDs on such providers, enable **Allow paid model IDs** in Settings. Selecting a paid provider explicitly also allows its models. Providers without explicit free model IDs may still charge for usage; check their terms.
 4. It tries the best model first, then the next few. If `/models` returns a usable list, stale saved model IDs are dropped instead of retried.
-5. It moves to the next model on 404, 429, 503, overload, capacity, quota, model-not-found, unsupported-model, and empty-answer errors. Failed model IDs are cooled down for two minutes; explicitly retired IDs for an hour.
+5. It moves to the next model on 404, 429, 503, overload, capacity, quota, model-not-found, unsupported-model, and intermediate empty-answer errors. A final empty answer goes through VD's corrective retry. Failed model IDs are cooled down for two minutes; explicitly retired IDs for an hour.
 6. On an invalid key (401 or an auth error) it **stops** and tells you, without trying other models or providers.
 7. The refreshed live model list and the model that worked are saved, unless you pinned one.
 

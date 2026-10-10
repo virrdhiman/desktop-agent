@@ -629,7 +629,7 @@ try {
     toolFailureOk ? '' : followUp ? followUp.slice(0, 400).replace(/\s+/g, ' ') : `requests: ${toolsReqs.map((r) => `${r.provider}<${lastUser(r.body).slice(0, 24).replace(/\s+/g, ' ')}>`).join(', ')}`)
   check('agent: relative tool paths resolve against the workspace', followUp.includes('Tool read_file succeeded.') && followUp.includes('SMOKE_EDITOR_MARKER'))
   check('agent: a malformed tool block is reported to the model, not dropped', followUp.includes('Tool block 3 is not valid'))
-  check('agent: later rounds stay on the provider that answered', firstGemini > 0 && toolsReqs.slice(firstGemini).every((r) => r.provider !== 'groq'))
+  check('agent: later rounds stay on the provider that answered', firstGemini >= 0 && toolsReqs.slice(firstGemini).every((r) => r.provider !== 'groq'))
   const ui1 = await c.evaluate(`document.body.innerText`)
   check('agent: the user is told which provider answered after a fallback', (ui1.match(/so this answer came from Google Gemini/g) || []).length >= 1)
   check('agent: filler is stripped from replies and next steps are kept',

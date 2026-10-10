@@ -89,10 +89,10 @@ describe('buildProviderChain', () => {
     expect(buildProviderChain([active, slow, healthy], 'groq').map((provider) => provider.id)).toEqual(['groq', 'cerebras', 'gemini'])
   })
 
-  it('skips cooled-down fallbacks until their retry window ends', () => {
+  it('tries cooled-down fallbacks last when other providers are available', () => {
     const cooling = { ...p('gemini', 'k'), performance: { successes: 0, failures: 3, avgLatencyMs: 100, lastUsedAt: 1, cooldownUntil: 500 } }
     const providers = [p('groq', 'k'), cooling, p('cerebras', 'k')]
-    expect(buildProviderChain(providers, 'groq', 4, 'coding', 200).map((provider) => provider.id)).toEqual(['groq', 'cerebras'])
+    expect(buildProviderChain(providers, 'groq', 4, 'coding', 200).map((provider) => provider.id)).toEqual(['groq', 'cerebras', 'gemini'])
     expect(buildProviderChain(providers, 'groq', 4, 'coding', 501).map((provider) => provider.id)).toContain('gemini')
   })
 })

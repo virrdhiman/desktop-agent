@@ -58,8 +58,7 @@ export function buildProviderChain(
   const active = providers.find((p) => p.id === activeId)
   const activeCategory = active ? getProviderCategory(active) : 'free'
   const fallbacks = providers.filter(
-    (p) => p.id !== activeId && providerIsConfigured(p) &&
-      (p.performance?.cooldownUntil || 0) <= now && providerCanFallbackFrom(activeCategory, getProviderCategory(p))
+    (p) => p.id !== activeId && providerIsConfigured(p) && providerCanFallbackFrom(activeCategory, getProviderCategory(p))
   ).sort((a, b) => providerScore(b, taskKind, now) - providerScore(a, taskKind, now))
   return [...(active ? [active] : []), ...fallbacks].slice(0, max)
 }

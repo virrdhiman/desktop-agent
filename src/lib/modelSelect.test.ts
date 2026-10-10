@@ -218,6 +218,7 @@ describe('error classification', () => {
   it('cools down retired models longer than temporary rate limits', () => {
     expect(modelFailureCooldownMs('model_not_found', 404)).toBe(60 * 60_000)
     expect(modelFailureCooldownMs('API error (429): rate limit', 429)).toBe(2 * 60_000)
+    expect(modelFailureCooldownMs('Model returned an empty answer')).toBe(2 * 60_000)
     expect(modelFailureCooldownMs('API error (401): invalid API key', 401)).toBe(0)
   })
 })
@@ -238,9 +239,9 @@ describe('tryModels', () => {
     expect(tried).toEqual(['gpt-oss-120b', 'llama-3.3-70b'])
   })
 
-  it('reports blank replies as failure so the provider chain can continue', async () => {
+  it('returns a blank final reply for the caller to correct', async () => {
     const { attempt } = scripted({ a: { content: '' }, b: { content: '' } })
-    expect(await tryModels(['a', 'b'], attempt)).toEqual({ error: 'Models returned empty answers', kind: 'retry-model' })
+    expect(await tryModels(['a', 'b'], attempt)).toEqual({ content: '', model: 'b' })
   })
 
   it('reports each retryable model failure for temporary avoidance', async () => {
