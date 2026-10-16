@@ -29,6 +29,7 @@ export type RepoIndexStats = {
   watching?: boolean
   reusedFiles?: number
   updatedFiles?: number
+  truncated?: boolean
 }
 
 type IndexedFile = RepoMapEntry & {
@@ -46,6 +47,7 @@ type RepoIndexCache = {
   files: IndexedFile[]
   reusedFiles: number
   updatedFiles: number
+  truncated: boolean
 }
 
 type RepoIndexWatcher = {
@@ -61,8 +63,9 @@ const TEXT_EXTS = new Set([
   '.rb', '.php', '.sh', '.ps1', '.sql', '.yaml', '.yml', '.toml', '.ini', '.env',
 ])
 const SKIP_DIRS = new Set(['.git', 'node_modules', 'dist', 'dist-electron', 'release', 'coverage', '.vite', '.next', 'out', 'build', 'target'])
-const MAX_FILE_BYTES = 500_000
-const MAX_FILES = 2500
+export const MAX_INDEX_FILE_BYTES = 500_000
+export const MAX_INDEX_FILES = 2500
+export const MAX_INDEX_TOTAL_BYTES = 64 * 1024 * 1024
 const repoCaches = new Map<string, RepoIndexCache>()
 const repoWatchers = new Map<string, RepoIndexWatcher>()
 
@@ -144,11 +147,22 @@ function isTestLike(file: string): boolean {
   return /(^|\/)(__tests__|tests?|specs?)\//.test(normalized) || /\.(test|spec)\.[a-z0-9]+$/.test(normalized)
 }
 
-async function walkTextFiles(root: string): Promise<{ file: string; size: number; modifiedMs: number }[]> {
+async function walkTextFiles(root: string): Promise<{
+  files: { file: string; size: number; modifiedMs: number }[]
+  truncated: boolean
+  fingerprint: string
+}> {
   const files: { file: string; size: number; modifiedMs: number }[] = []
+  let indexedBytes = 0
+  let truncated = false
+  const fingerprint = crypto.createHash('sha1')
   async function walk(dir: string, depth: number) {
-    if (files.length >= MAX_FILES || depth > 10) return
+    if (depth > 10) {
+      truncated = true
+      return
+    }
     const entries = await fs.promises.readdir(dir, { withFileTypes: true }).catch(() => [])
+    entries.sort((a, b) => a.name.localeCompare(b.name))
     for (const entry of entries) {
       if (entry.name.startsWith('.')) continue
       if (entry.isDirectory()) {
@@ -158,24 +172,26 @@ async function walkTextFiles(root: string): Promise<{ file: string; size: number
       const file = path.join(dir, entry.name)
       if (!isTextFile(file)) continue
       const stat = await fs.promises.stat(file).catch(() => null)
-      if (stat && stat.size <= MAX_FILE_BYTES) files.push({ file, size: stat.size, modifiedMs: Math.round(stat.mtimeMs) })
-      if (files.length >= MAX_FILES) break
+      if (stat) fingerprint.update(`${relative(path.resolve(root), file)}:${stat.size}:${Math.round(stat.mtimeMs)}\n`)
+      if (!stat || stat.size > MAX_INDEX_FILE_BYTES) {
+        if (stat) truncated = true
+        continue
+      }
+      if (files.length >= MAX_INDEX_FILES || indexedBytes + stat.size > MAX_INDEX_TOTAL_BYTES) {
+        truncated = true
+        continue
+      }
+      files.push({ file, size: stat.size, modifiedMs: Math.round(stat.mtimeMs) })
+      indexedBytes += stat.size
     }
   }
   await walk(path.resolve(root), 0)
-  return files
-}
-
-function fingerprintFiles(workspace: string, files: { file: string; size: number; modifiedMs: number }[]): string {
-  const hash = crypto.createHash('sha1')
-  for (const item of files) hash.update(`${relative(workspace, item.file)}:${item.size}:${item.modifiedMs}\n`)
-  return hash.digest('hex')
+  return { files, truncated, fingerprint: fingerprint.digest('hex') }
 }
 
 export async function buildRepoIndex(root: string, force = false): Promise<RepoIndexStats> {
   const workspace = path.resolve(root)
-  const candidates = await walkTextFiles(workspace)
-  const fingerprint = fingerprintFiles(workspace, candidates)
+  const { files: candidates, truncated, fingerprint } = await walkTextFiles(workspace)
   const existing = repoCaches.get(workspace)
   if (!force && existing?.fingerprint === fingerprint) {
     return indexStats(workspace, existing, true)
@@ -211,7 +227,14 @@ export async function buildRepoIndex(root: string, force = false): Promise<RepoI
     })
   }
 
-  const cache: RepoIndexCache = { fingerprint, updatedAt: Date.now(), files, reusedFiles, updatedFiles: files.length - reusedFiles }
+  const cache: RepoIndexCache = {
+    fingerprint,
+    updatedAt: Date.now(),
+    files,
+    reusedFiles,
+    updatedFiles: files.length - reusedFiles,
+    truncated,
+  }
   repoCaches.set(workspace, cache)
   return indexStats(workspace, cache, false)
 }
@@ -274,6 +297,7 @@ function indexStats(workspace: string, cache: RepoIndexCache, cached: boolean): 
     watching: repoWatchers.has(workspace),
     reusedFiles: cache.reusedFiles,
     updatedFiles: cache.updatedFiles,
+    truncated: cache.truncated,
   }
 }
 

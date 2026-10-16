@@ -11,6 +11,9 @@ All notable changes to VD Agent are documented here.
 
 ## [Unreleased]
 
+### Clean-room reliability
+- Repository indexing now traverses deterministically, enforces a 64 MiB workspace source budget in addition to its file limits, and reports when eligible files were omitted. Added ignore rules for local QA artifacts, screenshots, credentials, and generated binaries.
+
 ### VS Code bridge
 - Bumped the bundled bridge to 0.4.5. Patch previews now reject stale baselines instead of overwriting newer editor edits, and per-hunk rejection handles shifted lines and CRLF files correctly. Workspace index refreshes reuse unchanged files, and OpenAI-compatible `/v1` URLs work without duplication.
 - Bumped the bundled VS Code bridge to 0.4.4 with no-cost language-server completion fallback for inline suggestions, richer dependency/snippet workspace indexing, and native definition/references/rename commands exposed from the sidebar and editor context menu.

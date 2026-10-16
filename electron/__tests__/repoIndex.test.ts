@@ -3,7 +3,15 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { buildRepoIndex, buildRepoMap, searchRepo, startRepoIndexWatcher, stopRepoIndexWatchers } from '../repoIndex'
+import {
+  buildRepoIndex,
+  buildRepoMap,
+  MAX_INDEX_FILES,
+  MAX_INDEX_TOTAL_BYTES,
+  searchRepo,
+  startRepoIndexWatcher,
+  stopRepoIndexWatchers,
+} from '../repoIndex'
 
 let root: string
 
@@ -80,4 +88,43 @@ describe('repoIndex', () => {
     const second = await buildRepoIndex(root)
     expect(second.watching).toBe(true)
   })
+
+  it('keeps bounded indexing deterministic and reports omitted candidates', async () => {
+    const boundedRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'vd-repo-index-bounded-'))
+    try {
+      const fileCount = MAX_INDEX_FILES + 2
+      for (let i = 0; i < fileCount; i++) {
+        fs.writeFileSync(path.join(boundedRoot, `file-${String(i).padStart(4, '0')}.ts`), `export const file${i} = ${i}\n`)
+      }
+
+      const stats = await buildRepoIndex(boundedRoot, true)
+      expect(stats.files).toBe(MAX_INDEX_FILES)
+      expect(stats.truncated).toBe(true)
+      const map = await buildRepoMap(boundedRoot, MAX_INDEX_FILES)
+      expect(map[map.length - 1]?.path).toBe(`file-${String(MAX_INDEX_FILES - 1).padStart(4, '0')}.ts`)
+    } finally {
+      fs.rmSync(boundedRoot, { recursive: true, force: true })
+    }
+  }, 30_000)
+
+  it('does not exceed the total source-byte budget', async () => {
+    const boundedRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'vd-repo-index-bytes-'))
+    try {
+      const fileSize = 400_000
+      const count = Math.ceil(MAX_INDEX_TOTAL_BYTES / fileSize) + 1
+      const content = `export const padding = '${'x'.repeat(fileSize - 30)}'\n`
+      for (let i = 0; i < count; i++) {
+        fs.writeFileSync(path.join(boundedRoot, `part-${String(i).padStart(3, '0')}.ts`), content)
+      }
+
+      const stats = await buildRepoIndex(boundedRoot, true)
+      expect(stats.bytes).toBeLessThanOrEqual(MAX_INDEX_TOTAL_BYTES)
+      expect(stats.truncated).toBe(true)
+      fs.appendFileSync(path.join(boundedRoot, `part-${String(count - 1).padStart(3, '0')}.ts`), '\n')
+      const changedOmittedFile = await buildRepoIndex(boundedRoot)
+      expect(changedOmittedFile.cached).toBe(false)
+    } finally {
+      fs.rmSync(boundedRoot, { recursive: true, force: true })
+    }
+  }, 30_000)
 })

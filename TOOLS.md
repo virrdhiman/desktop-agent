@@ -74,6 +74,16 @@ Search file contents (grep-like).
 { "name": "search_code", "args": { "pattern": "useState", "path": "src/" } }
 ```
 
+### Repository index tools
+
+`repo_index` builds or refreshes a cached semantic index; `repo_map` lists its
+symbol-oriented file map; `repo_search` finds relevant files and snippets; and
+`repo_plan` produces a bounded change plan. The index excludes hidden files and
+generated/dependency folders, reuses unchanged files, and may watch the
+workspace in the background. It is bounded at 2,500 files, 500,000 bytes per
+file, and 64 MiB total. `repo_index` reports when eligible files were omitted
+by those limits.
+
 ## Commands
 
 ### `run_command`
