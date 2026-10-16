@@ -2,6 +2,7 @@ const fs = require('fs')
 const path = require('path')
 const vscode = require('vscode')
 const { lineDiffHunks, discardHunk, diffStats, compatibleUrl, contentHash } = require('./previewDiff')
+const { cleanInlineCompletion, isCompletionCurrent } = require('./inlineCompletionCore')
 
 const BRIDGE_DIR = '.vd-agent'
 const BRIDGE_FILE = 'vscode-bridge.json'
@@ -27,6 +28,7 @@ let statusBar
 let dashboardPanel = null
 let assistantProvider = null
 let activeCompletionController = null
+let latestCompletionRequestId = 0
 const inlineStats = { ai: 0, local: 0, failed: 0, lastLatencyMs: 0, lastAt: 0 }
 const completionCache = new Map()
 const processing = new Set()
@@ -85,7 +87,7 @@ function activate(context) {
         return previewCodeLenses(document)
       },
     }),
-    vscode.languages.registerInlineCompletionItemProvider({ pattern: '**/*' }, {
+    vscode.languages.registerInlineCompletionItemProvider({ scheme: 'file' }, {
       provideInlineCompletionItems(document, position, context, token) {
         return provideInlineCompletions(document, position, context, token)
       },
@@ -282,7 +284,9 @@ async function provideInlineCompletions(document, position, _context, token) {
   const config = vscode.workspace.getConfiguration('vdAgentBridge')
   if (!config.get('inlineCompletion', true)) return []
   if (document.uri.scheme !== 'file' || document.lineAt(position.line).text.trimStart().startsWith('//')) return []
+  const requestId = ++latestCompletionRequestId
   const local = await provideLocalInlineCompletions(document, position, token)
+  if (!isCompletionCurrent(requestId, latestCompletionRequestId, token?.isCancellationRequested)) return []
   if (!isWorkspaceTrusted()) {
     noteInlineFallback(local)
     return local
@@ -298,7 +302,7 @@ async function provideInlineCompletions(document, position, _context, token) {
   }
   const delayMs = config.get('aiAutocompleteDelayMs', 220)
   await delay(delayMs, token)
-  if (token?.isCancellationRequested) return []
+  if (!isCompletionCurrent(requestId, latestCompletionRequestId, token?.isCancellationRequested)) return []
   const cacheKey = completionCacheKey(document, position)
   const cached = completionCache.get(cacheKey)
   if (cached && Date.now() - cached.at < 30_000) {
@@ -310,6 +314,7 @@ async function provideInlineCompletions(document, position, _context, token) {
     const started = Date.now()
     const text = await requestAiInlineCompletion(document, position, token)
     inlineStats.lastLatencyMs = Date.now() - started
+    if (!isCompletionCurrent(requestId, latestCompletionRequestId, token?.isCancellationRequested)) return []
     if (!text) {
       noteInlineFallback(local)
       return local
@@ -484,25 +489,6 @@ function trimCompletionCache() {
   }
 }
 
-function cleanInlineCompletion(raw, before) {
-  let text = String(raw || '')
-    .replace(/```[a-zA-Z0-9_-]*\n?/g, '')
-    .replace(/```/g, '')
-    .replace(/^<INSERT_COMPLETION>/i, '')
-    .trimEnd()
-  const beforeTail = before.slice(-120)
-  for (let i = Math.min(text.length, beforeTail.length); i > 8; i--) {
-    if (beforeTail.endsWith(text.slice(0, i))) {
-      text = text.slice(i)
-      break
-    }
-  }
-  const lines = text.split('\n')
-  if (lines.length > 8) text = lines.slice(0, 8).join('\n')
-  if (text.length > 600) text = text.slice(0, 600)
-  return text
-}
-
 async function processAllCommands() {
   if (!isWorkspaceTrusted()) {
     updateStatusBar('$(shield) VD Agent limited mode')
@@ -581,7 +567,10 @@ async function requestAiText(prompt, options = {}) {
 
 async function checkAiStatus(options = {}) {
   const maxAgeMs = Number(options.maxAgeMs || 0)
-  if (lastAiStatus && maxAgeMs > 0 && Date.now() - lastAiStatus.checkedAt < maxAgeMs) return lastAiStatus
+  if (lastAiStatus && maxAgeMs > 0 && Date.now() - lastAiStatus.checkedAt < maxAgeMs) {
+    lastAiStatus = { ...lastAiStatus, inline: { ...inlineStats } }
+    return lastAiStatus
+  }
   const config = vscode.workspace.getConfiguration('vdAgentBridge')
   const provider = config.get('aiProvider', 'ollama')
   const baseUrl = String(config.get('aiBaseUrl', 'http://localhost:11434')).replace(/\/+$/, '')

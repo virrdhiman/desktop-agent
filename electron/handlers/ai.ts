@@ -191,34 +191,40 @@ async function completeOpenAI(
   model: string,
   signal: AbortSignal
 ): Promise<ChatSuccess | ChatError> {
-  const response = await fetch(`${trimBase(config.baseUrl)}/chat/completions`, {
-    method: 'POST',
-    signal,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      messages: config.messages,
-      max_tokens: 8192,
-      stream: !!config.stream,
-    }),
-  })
+  try {
+    const response = await fetch(`${trimBase(config.baseUrl)}/chat/completions`, {
+      method: 'POST',
+      signal,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${config.apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: config.messages,
+        max_tokens: 8192,
+        stream: !!config.stream,
+      }),
+    })
 
-  if (!response.ok) return toError(response, config.apiKey)
+    if (!response.ok) return toError(response, config.apiKey)
 
-  if (config.stream && response.body) {
-    const content = await readSse(response.body, getMainWindow, (p) => p.choices?.[0]?.delta?.content)
-    return { content }
-  }
+    if (config.stream && response.body) {
+      const content = await readSse(response.body, getMainWindow, (p) => p.choices?.[0]?.delta?.content)
+      return { content }
+    }
 
-  const data = await response.json()
-  if (data.error) {
-    const error = redactKey(String(data.error.message || JSON.stringify(data.error)), config.apiKey)
+    const data = await response.json()
+    if (data.error) {
+      const error = redactKey(String(data.error.message || JSON.stringify(data.error)), config.apiKey)
+      return { error, kind: classifyModelError(error) }
+    }
+    return { content: data.choices?.[0]?.message?.content || '' }
+  } catch (err: any) {
+    if (isAbort(err)) return { error: 'Cancelled', kind: 'cancelled' }
+    const error = redactKey(String(err?.message || err), config.apiKey)
     return { error, kind: classifyModelError(error) }
   }
-  return { content: data.choices?.[0]?.message?.content || '' }
 }
 
 export function registerAiHandlers(getMainWindow: () => BrowserWindow | null) {

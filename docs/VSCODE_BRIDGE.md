@@ -10,6 +10,13 @@
 VD Agent can read VS Code's current workspace/editor context and send local
 editor commands through the VD Agent Bridge extension in `vscode-extension/`.
 
+The packaged VD Agent build bundles the bridge VSIX and desktop integration, but
+VS Code itself is a separate application. Install VS Code for your platform,
+then install/load the bridge into that VS Code installation and open the same
+workspace. A bundled VSIX is not proof that VS Code is installed or that the
+bridge is connected; use the VS Code Bridge panel to see detected CLI,
+installation, export, and command-result state.
+
 The bridge writes a local file at:
 
 ```text
@@ -49,8 +56,8 @@ npm run vscode:package
 This writes:
 
 ```text
-release/vd-agent-vscode-bridge-0.4.5.vsix
-vscode-extension/vd-agent-vscode-bridge-0.4.5.vsix
+release/vd-agent-vscode-bridge-0.4.7.vsix
+vscode-extension/vd-agent-vscode-bridge-0.4.7.vsix
 ```
 
 Install from VD Agent: open the `VS Code Bridge` panel, click `Install Bridge`,
@@ -60,7 +67,7 @@ install the free VS Code app first.
 Or install from the command line:
 
 ```powershell
-code --install-extension "release/vd-agent-vscode-bridge-0.4.5.vsix"
+code --install-extension "release/vd-agent-vscode-bridge-0.4.7.vsix"
 ```
 
 Or install from VS Code: Extensions panel -> `...` -> Install from VSIX -> pick

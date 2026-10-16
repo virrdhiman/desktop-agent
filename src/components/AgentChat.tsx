@@ -30,6 +30,7 @@ import {
 } from '../lib/providers'
 import { highlightSyntax } from '../lib/highlight'
 import { imageAttachmentError, withImageContent } from '../lib/vision'
+import { toolActivityArgs, toolActivityResult } from '../lib/toolActivity'
 import { AUTHOR_NAME, AUTHOR_URL, REPO_URL } from '../lib/brand'
 import {
   MAX_TOOL_ROUNDS, assessResponse, buildContext, buildHistory, buildSystemPrompt, cleanResponse,
@@ -524,10 +525,11 @@ export default function AgentChat() {
   }, [])
 
   const executeTool = useCallback(async (toolName: string, args: Record<string, any>, taskId: string) => {
+    const loggedArgs = toolActivityArgs(toolName, args)
     addTerminalEntry({
       id: Date.now().toString(),
       type: 'command',
-      content: `agent:tool ${toolName} ${JSON.stringify(args).slice(0, 120)}`,
+      content: `agent:tool ${toolName} ${JSON.stringify(loggedArgs).slice(0, 120)}`,
       timestamp: Date.now(),
     })
     try {
@@ -571,22 +573,23 @@ export default function AgentChat() {
       addStepToTask(taskId, {
         id: Date.now().toString(),
         type: 'action',
-        content: `Executing: ${toolCall.name}(${JSON.stringify(toolCall.args).slice(0, 100)})`,
+        content: `Executing: ${toolCall.name}(${JSON.stringify(toolActivityArgs(toolCall.name, toolCall.args)).slice(0, 100)})`,
         timestamp: Date.now(),
-        toolCall: { ...toolCall, id: Date.now().toString(), status: 'running' },
+        toolCall: { ...toolCall, args: toolActivityArgs(toolCall.name, toolCall.args), id: Date.now().toString(), status: 'running' },
       } as AgentStep)
 
       const result = await executeTool(toolCall.name, toolCall.args, taskId)
       addToolExecution(settings.activeProvider)
       const ok = !!result && typeof result.error !== 'string'
       const resultText = ok ? (result?.result || 'Done') : result?.error || 'No result'
-      runs.push({ name: toolCall.name, ok, summary: resultText.slice(0, 1_000) })
+      const activityResult = toolActivityResult(toolCall.name, resultText, ok)
+      runs.push({ name: toolCall.name, ok, summary: activityResult.slice(0, 1_000) })
       recordToolExecution({
         name: toolCall.name,
         ok,
         timestamp: Date.now(),
-        argsSummary: JSON.stringify(toolCall.args).slice(0, 600),
-        resultSummary: resultText.slice(0, 1_200),
+        argsSummary: JSON.stringify(toolActivityArgs(toolCall.name, toolCall.args)).slice(0, 600),
+        resultSummary: activityResult.slice(0, 1_200),
       })
       if (toolCall.name === 'run_command' && typeof toolCall.args.command === 'string') {
         setLastVerification({
@@ -601,14 +604,14 @@ export default function AgentChat() {
         addStepToTask(taskId, {
           id: (Date.now() + 1).toString(),
           type: 'error',
-          content: `${toolCall.name} failed: ${result.error.slice(0, 800)}`,
+          content: `${toolCall.name} failed: ${activityResult.slice(0, 800)}`,
           timestamp: Date.now(),
         })
       } else {
         addStepToTask(taskId, {
           id: (Date.now() + 1).toString(),
           type: 'observation',
-          content: (result?.result || 'Done').slice(0, 800),
+          content: activityResult.slice(0, 800),
           timestamp: Date.now(),
         })
         if (toolCall.name === 'read_file' && typeof toolCall.args.path === 'string') {
@@ -617,13 +620,17 @@ export default function AgentChat() {
           setSelectedFile(opened)
         }
       }
-      results.push(formatToolResult(toolCall, result || { error: 'The tool returned nothing.' }))
+      results.push(formatToolResult(
+        toolCall.name === 'browser' ? { ...toolCall, args: toolActivityArgs(toolCall.name, toolCall.args) } : toolCall,
+        result || { error: 'The tool returned nothing.' },
+      ))
     }
     return results.join('\n\n')
   }, [executeTool, addTerminalEntry, addStepToTask, addOpenFile, setSelectedFile, recordToolExecution, setLastVerification])
 
   /**
-   * Active provider first, then official free providers with keys. Auth failures stop the chain.
+   * Active provider first, then official free providers with keys. Auto can recover from an
+   * expired key; an explicitly selected model still reports the key problem immediately.
    * `preferredId` moves the provider that already answered this request to the front, so later
    * tool rounds don't keep hitting a provider that is rate limited.
    */
@@ -686,7 +693,10 @@ export default function AgentChat() {
 
       if ('error' in result) {
         if (result.kind === 'cancelled' || useStore.getState().cancelRequested) return { error: 'Cancelled', cancelled: true }
-        if (result.kind === 'auth') return { error: describeAuthFailure(p.name, result.error) }
+        // Only an explicit model override opts out of provider fallback. Use the
+        // per-attempt value: a fallback provider must remain recoverable even if
+        // the component's selection state changes while the request is running.
+        if (result.kind === 'auth' && override) return { error: describeAuthFailure(p.name, result.error) }
         failed.push({ name: p.name, error: result.error })
         if (i < chain.length - 1) {
           addTerminalEntry({

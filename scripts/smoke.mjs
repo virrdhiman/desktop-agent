@@ -13,6 +13,7 @@
  *   npm run smoke                                  # dev build (runs `npm run build` first)
  *   npm run smoke -- --exe "release/win-unpacked/VD Agent.exe"   # packaged app
  *   npm run smoke -- --screenshots --out ./smoke-shots  # capture screenshots
+ *   node scripts/smoke.mjs --live-failover             # real invalid key/outage -> local Ollama
  *
  * Needs a desktop session (a window opens briefly). On headless Linux use xvfb-run.
  * Screenshots are opt-in because CDP capture can perturb some Electron renderers.
@@ -51,6 +52,20 @@ if (exe && !fs.existsSync(exe)) {
   process.exit(1)
 }
 
+function bundledEnglishOcrPath() {
+  if (!exe) return path.join(repo, 'assets', 'tessdata', 'eng.traineddata')
+  const executableDir = path.dirname(path.resolve(exe))
+  return process.platform === 'darwin'
+    ? path.resolve(executableDir, '..', 'Resources', 'tessdata', 'eng.traineddata')
+    : path.join(executableDir, 'resources', 'tessdata', 'eng.traineddata')
+}
+
+const englishOcrAsset = bundledEnglishOcrPath()
+if (!fs.existsSync(englishOcrAsset) || !fs.statSync(englishOcrAsset).isFile() || fs.statSync(englishOcrAsset).size === 0) {
+  console.error(`Bundled English OCR language data is missing or empty: ${englishOcrAsset}`)
+  process.exit(1)
+}
+
 const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'vd-agent-smoke-data-'))
 const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'vd-agent-smoke-ws-'))
 fs.writeFileSync(path.join(workspace, 'smoke-editor.ts'), 'export const SMOKE_EDITOR_MARKER = 42\n')
@@ -60,6 +75,7 @@ const check = (name, ok, detail = '') => {
   results.push({ name, ok: !!ok })
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? `  (${detail})` : ''}`)
 }
+check('bundled English OCR language data is present', true, englishOcrAsset)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 async function writeSmokeZip(target) {
@@ -226,6 +242,7 @@ const containsMessage = (body, marker) => (body?.messages || []).some((m) => m.c
  * exercises fallback to "gemini", whose replies are scripted by the user's SMOKE-* marker.
  */
 function mockReply(provider, body) {
+  if (provider === 'groq' && lastUser(body).includes('SMOKE-EXPIRED')) return { status: 401, message: 'Invalid API key' }
   if (provider === 'groq') return { status: 429, message: 'Rate limit reached for model mock-model. Please try again in 20s.' }
   const last = lastUser(body)
   const system = systemText(body)
@@ -260,6 +277,7 @@ function mockReply(provider, body) {
     return { text: 'SMOKE-FABRICATED Fixed.\n\n1. Edited `calc.js` to return `a + b`.\n2. Ran `node calc.test.js`.\n\nAll tests passed.' }
   }
   if (last.includes('SMOKE-ALLFAIL')) return { status: 503, message: 'Service unavailable' }
+  if (last.includes('SMOKE-EXPIRED')) return { text: 'SMOKE-EXPIRED-RECOVERED The fallback provider answered.' }
   if (last.includes('SMOKE-EMPTY')) return { text: '' }
   if (last.includes('SMOKE-DEFLECTION')) return { text: 'Hello! How can I assist you with your task? Please provide the details of the task and context.' }
   if (last.includes('SMOKE-QUEUE-SLOW')) return { text: 'SMOKE-QUEUE-SLOW-DONE first queued task finished.' }
@@ -282,6 +300,11 @@ function mockReply(provider, body) {
 function startMockProvider() {
   const requests = []
   const server = http.createServer((req, res) => {
+    if (req.method === 'GET' && req.url === '/browser-fixture') {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+      res.end('<!doctype html><html><head><title>VD Agent browser fixture</title></head><body><main><h1>SMOKE-BROWSER-TITLE</h1><p>SMOKE-BROWSER-BODY local browser verification.</p></main></body></html>')
+      return
+    }
     const provider = req.url.split('/')[1]
     if (req.method === 'GET' && req.url.endsWith('/models')) {
       res.writeHead(200, { 'Content-Type': 'application/json' })
@@ -363,6 +386,7 @@ let b
 let c
 let mock
 try {
+  mock = await startMockProvider()
   // Launch 1: fresh profile.
   a = await launch('launch-1')
   const info = await a.evaluate(`({
@@ -404,7 +428,27 @@ try {
 
   const settings = await a.evaluate(`window.api.loadSettings()`)
   check('settings load over IPC', Array.isArray(settings?.providers) && settings.providers.length > 0, `active=${settings?.activeProvider}`)
-  await a.evaluate(`window.api.loadSettings().then(s => window.api.saveSettings({ ...s, workspacePath: ${JSON.stringify(workspace)} }))`)
+  await a.evaluate(`window.api.loadSettings().then(s => window.api.saveSettings({ ...s, workspacePath: ${JSON.stringify(workspace)}, setupChecklistDismissed: true }))`)
+
+  const browserUrl = `${mock.url}/browser-fixture`
+  const disabledBrowser = await a.evaluate(`window.api.toolExecute({ name: 'browser', args: { operation: 'open_url', url: ${JSON.stringify(browserUrl)} }, workspace: ${JSON.stringify(workspace)}, sessionId: 'browser-smoke' })`)
+  check('browser tool is disabled by default', /browser tool is disabled/i.test(disabledBrowser?.error || ''))
+  const enabledBrowser = await a.evaluate(`window.api.loadSettings().then(s => window.api.saveSettings({ ...s, workspacePath: ${JSON.stringify(workspace)}, browserToolEnabled: true }))`)
+  const openedBrowser = await a.evaluate(`window.api.toolExecute({ name: 'browser', args: { operation: 'open_url', url: ${JSON.stringify(browserUrl)} }, workspace: ${JSON.stringify(workspace)}, sessionId: 'browser-smoke' })`)
+  const browserText = await a.evaluate(`window.api.toolExecute({ name: 'browser', args: { operation: 'read_page_text' }, workspace: ${JSON.stringify(workspace)}, sessionId: 'browser-smoke' })`)
+  const browserShot = await a.evaluate(`window.api.toolExecute({ name: 'browser', args: { operation: 'screenshot', width: 640, height: 480 }, workspace: ${JSON.stringify(workspace)}, sessionId: 'browser-smoke' })`)
+  let screenshotInfo = null
+  try { screenshotInfo = JSON.parse(browserShot?.result || '') } catch {}
+  check('browser tool opens and reads a local page', enabledBrowser?.success && openedBrowser?.result?.includes('Browser opened') && browserText?.result?.includes('SMOKE-BROWSER-TITLE') && browserText?.result?.includes('SMOKE-BROWSER-BODY'))
+  check('browser tool captures a bounded workspace screenshot', screenshotInfo?.operation === 'screenshot' && screenshotInfo.width === 640 && fs.existsSync(path.join(workspace, screenshotInfo.path)))
+  await a.evaluate(`window.api.loadSettings().then(s => window.api.saveSettings({ ...s, workspacePath: ${JSON.stringify(workspace)}, browserToolEnabled: false, ocrToolEnabled: true }))`)
+  const ocr = screenshotInfo?.path
+    ? await a.evaluate(`window.api.toolExecute({ name: 'ocr_image', args: { path: ${JSON.stringify(screenshotInfo.path)} }, workspace: ${JSON.stringify(workspace)}, sessionId: 'ocr-smoke' })`)
+    : null
+  check('offline OCR uses bundled English data without a language_path',
+    !ocr?.error && /SMOKE[- ]BROWSER/i.test(ocr?.result || ''),
+    ocr?.error || String(ocr?.result || '').slice(0, 120))
+  await a.evaluate(`window.api.loadSettings().then(s => window.api.saveSettings({ ...s, workspacePath: ${JSON.stringify(workspace)}, browserToolEnabled: false, ocrToolEnabled: false }))`)
 
   const terminal = await a.evaluate(`window.api.terminalCreate('smoke-terminal', ${JSON.stringify(workspace)})`)
   await a.evaluate(`window.api.terminalKill('smoke-terminal')`)
@@ -536,7 +580,6 @@ try {
   check('launch 2: no renderer errors', errors2.length === 0, errors2.slice(0, 3).join(' | '))
 
   // Launch 3: agent answer handling against the local mock provider. No network, no real keys.
-  mock = await startMockProvider()
   const settingsFile = path.join(userData, 'settings.json')
   const s3 = JSON.parse(fs.readFileSync(settingsFile, 'utf8'))
   s3.activeProvider = 'groq'
@@ -602,6 +645,30 @@ try {
     queuePanelShown && inputUsableWhileRunning && queuedEditOk && editedDone
       && queuedRequests.some((request) => lastUser(request.body).includes('SMOKE-QUEUE-EDITED after user changed')),
     `panel=${queuePanelShown} input=${inputUsableWhileRunning} edit=${queuedEditOk} done=${editedDone} detail=${JSON.stringify(queueDetail)}`)
+
+  // The queue scenario intentionally exercises rate-limit cooldowns. Reset the
+  // mock provider health before testing an independent authentication fallback,
+  // otherwise the expected first provider attempt can be skipped as still cooling down.
+  await c.evaluate(`(async () => {
+    const settings = await window.api.loadSettings()
+    settings.providers = settings.providers.map((provider) => ({ ...provider, performance: undefined }))
+    await window.api.saveSettings(settings)
+  })()`)
+  await c.close()
+  c = await launch('auth-fallback')
+  await c.evaluate(`document.querySelector('[aria-label^="Agent"]')?.click()`)
+  await sleep(500)
+
+  const expiredStart = mock.requests.length
+  await sendChat(c, 'SMOKE-EXPIRED check whether an expired key switches providers in Auto mode')
+  const expiredRecovered = await waitForText(c, 'SMOKE-EXPIRED-RECOVERED')
+  const expiredRequests = mock.requests.slice(expiredStart)
+  const expiredUi = await c.evaluate(`document.body.innerText`)
+  check('agent: an expired key falls back in Auto mode and reports the rejected key',
+    expiredRecovered && expiredRequests.some((request) => request.provider === 'groq')
+      && expiredRequests.some((request) => request.provider === 'gemini')
+      && expiredUi.includes('API key rejected') && expiredUi.includes('so this answer came from Google Gemini'),
+    `recovered=${expiredRecovered} requests=${expiredRequests.map((request) => `${request.provider}:${request.body?.model || ''}`).join(',')} ui=${expiredUi.slice(-500).replace(/\s+/g, ' ')}`)
 
   const toolsStart = mock.requests.length
   await sendChat(c, 'SMOKE-TOOLS read missing-smoke-file.txt and smoke-editor.ts')
@@ -718,6 +785,40 @@ try {
   await c.close()
   c = null
   check('launch 3: no renderer errors', errors3.length === 0, errors3.slice(0, 3).join(' | '))
+
+  if (process.argv.includes('--live-failover')) {
+    const tags = await fetch('http://127.0.0.1:11434/api/tags', { signal: AbortSignal.timeout(5000) }).then((response) => response.json())
+    if (!tags.models?.some((model) => model.name === 'qwen2.5-coder:1.5b')) throw new Error('Live failover QA needs Ollama with qwen2.5-coder:1.5b installed.')
+    for (const scenario of [
+      { name: 'expired key', baseUrl: 'https://api.groq.com/openai/v1', reason: 'API key rejected' },
+      { name: 'provider outage', baseUrl: 'http://127.0.0.1:1/v1', reason: 'network error' },
+    ]) {
+      const live = JSON.parse(fs.readFileSync(settingsFile, 'utf8'))
+      live.activeProvider = 'groq'
+      live.teamMode = 'off'
+      live.providers = live.providers.map((provider) => {
+        if (provider.id === 'groq') return {
+          ...provider, apiKey: 'vd-agent-intentionally-invalid', baseUrl: scenario.baseUrl,
+          model: 'llama-3.3-70b-versatile', models: [], performance: undefined,
+        }
+        if (provider.id === 'custom_openai') return {
+          ...provider, name: 'Local Ollama QA', freeTier: true, apiKey: 'ollama',
+          baseUrl: 'http://127.0.0.1:11434/v1', model: 'qwen2.5-coder:1.5b', models: [], performance: undefined,
+        }
+        return { ...provider, apiKey: '' }
+      })
+      fs.writeFileSync(settingsFile, JSON.stringify(live, null, 2))
+      c = await launch(`live-${scenario.name}`)
+      await c.evaluate(`document.querySelector('[aria-label^="Agent"]')?.click()`)
+      await sleep(500)
+      await sendChat(c, 'What is 2 plus 3? Give the number only.')
+      const answered = await waitForText(c, 'so this answer came from Local Ollama QA', 60_000)
+      const ui = await c.evaluate(`document.body.innerText`)
+      check(`agent: live ${scenario.name} switches to local Ollama`, answered && ui.includes(scenario.reason))
+      await c.close()
+      c = null
+    }
+  }
 
   check('real user data folder untouched', stamp(realDir) === realBefore, realDir)
 } catch (e) {

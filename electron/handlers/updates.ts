@@ -14,9 +14,30 @@ export type UpdateStatus = {
 let status: UpdateStatus = { state: 'idle', message: 'Updates have not been checked.' }
 let initialized = false
 
+async function updatePreferences(): Promise<{ autoUpdate?: boolean; updateChannel?: string }> {
+  try {
+    return JSON.parse(await fs.promises.readFile(path.join(app.getPath('userData'), 'settings.json'), 'utf-8'))
+  } catch { return {} }
+}
+
 function updater() {
   const { autoUpdater } = electronUpdater
   return autoUpdater
+}
+
+function configureUpdateFeed() {
+  const configured = process.env.VD_AGENT_UPDATE_URL?.trim()
+  if (!configured) return
+  let url: URL
+  try {
+    url = new URL(configured)
+  } catch {
+    throw new Error('VD_AGENT_UPDATE_URL must be an absolute http(s) URL')
+  }
+  if (!['http:', 'https:'].includes(url.protocol)) {
+    throw new Error('VD_AGENT_UPDATE_URL must use http or https')
+  }
+  updater().setFeedURL({ provider: 'generic', url: url.toString().replace(/\/?$/, '/') })
 }
 
 export function registerUpdateHandlers(getMainWindow: () => BrowserWindow | null) {
@@ -28,6 +49,7 @@ export function registerUpdateHandlers(getMainWindow: () => BrowserWindow | null
   if (!initialized) {
     initialized = true
     const autoUpdater = updater()
+    configureUpdateFeed()
     autoUpdater.autoDownload = true
     autoUpdater.autoInstallOnAppQuit = true
     autoUpdater.on('checking-for-update', () => publish({ state: 'checking', message: 'Checking for a verified release update...' }))
@@ -45,6 +67,7 @@ export function registerUpdateHandlers(getMainWindow: () => BrowserWindow | null
       return status
     }
     try {
+      updater().allowPrerelease = (await updatePreferences()).updateChannel === 'beta'
       await updater().checkForUpdates()
       return status
     } catch (err: any) {
@@ -54,18 +77,16 @@ export function registerUpdateHandlers(getMainWindow: () => BrowserWindow | null
   })
   ipcMain.handle('updates:install', () => {
     if (status.state !== 'downloaded') return { error: 'No downloaded update is ready.' }
-    updater().quitAndInstall(false, true)
+    // The user already confirmed from the UI; silent mode keeps the handoff unattended.
+    updater().quitAndInstall(true, true)
     return { success: true }
   })
 
   if (app.isPackaged) {
     setTimeout(async () => {
-      let enabled = false
-      try {
-        const raw = await fs.promises.readFile(path.join(app.getPath('userData'), 'settings.json'), 'utf-8')
-        enabled = JSON.parse(raw).autoUpdate === true
-      } catch {}
-      if (!enabled) return
+      const preferences = await updatePreferences()
+      if (preferences.autoUpdate !== true) return
+      updater().allowPrerelease = preferences.updateChannel === 'beta'
       void updater().checkForUpdates().catch(() => {})
     }, 15_000)
   }

@@ -14,11 +14,14 @@
  * Event listeners (onAIStream, onTerminalData) use ipcRenderer.on().
  */
 import { contextBridge, ipcRenderer } from 'electron'
+import type { SetupDefinition, SetupItemId } from '../src/lib/prerequisiteSetup'
+import type { DiagnosticsViewerPayload } from './diagnostics'
+import type { RepoIndexStatus } from '../src/types'
 
 /** Invoke with a timeout — prevents renderer from hanging if main process stalls */
 function invokeWithTimeout(channel: string, ...args: any[]): Promise<any> {
   // tool:execute outlives run_command's own 30 s limit so its clearer timeout message wins.
-  const ms = channel === 'ai:chat' ? 10 * 60 * 1000 : channel === 'tool:execute' ? 60_000 : 30_000
+  const ms = channel === 'ollama:pullSmallModel' ? 15 * 60_000 : channel === 'ai:chat' ? 10 * 60_000 : channel === 'tool:execute' ? 60_000 : 30_000
   return Promise.race([
     ipcRenderer.invoke(channel, ...args),
     new Promise((_, reject) => setTimeout(() => reject(new Error(`IPC timeout: ${channel} did not respond in ${ms / 1000}s`)), ms)),
@@ -78,6 +81,11 @@ contextBridge.exposeInMainWorld('api', {
   // ═══ Agent Tools ══════════════════════════════════════════════════════════════
   // Tools the agent calls autonomously (definitions in src/types AGENT_TOOLS)
   toolExecute: (tool: { name: string; args: Record<string, any>; workspace?: string; sessionId?: string; taskId?: string }) => invokeWithTimeout('tool:execute', tool),
+  onRepoIndexStatus: (cb: (status: RepoIndexStatus) => void) => {
+    const listener = (_e: unknown, status: RepoIndexStatus) => cb(status)
+    ipcRenderer.on('repo-index:status', listener)
+    return () => { ipcRenderer.removeListener('repo-index:status', listener) }
+  },
   vscodeStatus: (workspace: string) => invokeWithTimeout('vscode:status', workspace),
   vscodeInstallBridge: () => invokeWithTimeout('vscode:installBridge'),
   vscodeOpenWorkspace: (workspace: string) => invokeWithTimeout('vscode:openWorkspace', workspace),
@@ -91,6 +99,8 @@ contextBridge.exposeInMainWorld('api', {
   // API keys, providers, workspace config
   loadSettings: () => invokeWithTimeout('settings:load'),
   saveSettings: (settings: any) => invokeWithTimeout('settings:save', settings),
+  ollamaModels: () => invokeWithTimeout('ollama:models'),
+  ollamaPullSmallModel: (request: { consent: boolean; model: string }) => invokeWithTimeout('ollama:pullSmallModel', request),
 
   // ═══ AI ════════════════════════════════════════════════════════════════════════
   // Streaming chat completions, per-key model discovery, cancellation
@@ -109,6 +119,19 @@ contextBridge.exposeInMainWorld('api', {
   openPath: (targetPath: string) => invokeWithTimeout('shell:openPath', targetPath),
   showItemInFolder: (targetPath: string) => invokeWithTimeout('shell:showItemInFolder', targetPath),
 
+  // ═══ Optional prerequisite installers ════════════════════════════════════════
+  // The renderer supplies only an allowlisted item id, explicit consent, and a
+  // user-confirmed expected hash. URLs are selected and verified in main.
+  listPrerequisites: () => invokeWithTimeout('prerequisites:list'),
+  openOfficialPrerequisite: (request: { id: SetupItemId; consent: boolean }) => invokeWithTimeout('prerequisites:openOfficial', request),
+  downloadPrerequisite: (request: { id: SetupItemId; consent: boolean; expectedSha256: string }) => invokeWithTimeout('prerequisites:download', request),
+  cancelPrerequisite: (id?: SetupItemId) => invokeWithTimeout('prerequisites:cancel', id),
+  onPrerequisiteProgress: (cb: (progress: PrerequisiteProgress) => void) => {
+    const listener = (_e: unknown, progress: PrerequisiteProgress) => cb(progress)
+    ipcRenderer.on('prerequisites:progress', listener)
+    return () => { ipcRenderer.removeListener('prerequisites:progress', listener) }
+  },
+
   // ═══ Conversations ═════════════════════════════════════════════════════════════
   // Chat history stored locally in userData/conversations (one file per session)
   saveConversation: (session: ConversationInput) => invokeWithTimeout('conversations:save', session),
@@ -120,6 +143,9 @@ contextBridge.exposeInMainWorld('api', {
 
   // Privacy-redacted support metadata; excludes chats, code, filenames, paths, and API keys.
   exportDiagnostics: () => invokeWithTimeout('diagnostics:export'),
+  readDiagnostics: () => invokeWithTimeout('diagnostics:read') as Promise<DiagnosticsViewerPayload>,
+  copyDiagnostics: (text: string) => invokeWithTimeout('diagnostics:copy', text),
+  recordDiagnostics: (event: { source: 'renderer' | 'unhandled'; severity: 'debug' | 'info' | 'warn' | 'error'; message: string; stack?: string }) => invokeWithTimeout('diagnostics:record', event),
 
   // TypeScript/JavaScript language service.
   lspDiagnostics: (root: string, file: string) => invokeWithTimeout('lsp:diagnostics', root, file),
@@ -143,9 +169,38 @@ contextBridge.exposeInMainWorld('api', {
   },
 })
 
+function reportRendererError(message: string, stack?: string, source: 'renderer' | 'unhandled' = 'renderer'): void {
+  void ipcRenderer.invoke('diagnostics:record', {
+    source,
+    severity: 'error',
+    message,
+    ...(stack ? { stack } : {}),
+  }).catch(() => {})
+}
+
+window.addEventListener('error', (event) => {
+  reportRendererError(event.message || 'Unhandled renderer error', event.error?.stack)
+})
+window.addEventListener('unhandledrejection', (event) => {
+  const reason = event.reason instanceof Error ? event.reason.message : String(event.reason)
+  reportRendererError(reason, event.reason instanceof Error ? event.reason.stack : undefined, 'unhandled')
+})
+
 export type ConversationMessage = { id: string; role: 'user' | 'assistant' | 'system'; content: string; timestamp: number }
 export type CheckpointSummary = { id: string; sessionId: string; createdAt: number; label: string; files: string[] }
 export type UpdateStatus = { state: 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'current' | 'error' | 'unavailable'; message: string; version?: string; percent?: number }
+export type PrerequisiteCatalogItem = SetupDefinition
+export type PrerequisiteProgress = {
+  id: SetupItemId
+  state: 'queued' | 'downloading' | 'verifying' | 'launching' | 'ready' | 'cancelled' | 'failed'
+  bytesReceived: number
+  totalBytes?: number
+  percent?: number
+  message?: string
+}
+export type PrerequisiteDownloadResult =
+  | { success: true; path: string; sha256: string; bytes: number }
+  | { success: false; cancelled?: boolean; error: string }
 export type ConversationInput = { id: string; title?: string; createdAt?: number; messages: ConversationMessage[]; pinned?: boolean; summary?: string; resume?: Record<string, unknown> }
 export type ConversationRecord = ConversationInput & { version: number; title: string; createdAt: number; updatedAt: number }
 export type LspLocation = { path: string; line: number; column: number; preview: string }
@@ -241,12 +296,15 @@ export type ElectronAPI = {
   onTerminalData: (cb: (termId: string, data: string) => void) => void
   onTerminalExit: (cb: (termId: string, exitCode: number) => void) => void
   toolExecute: (tool: { name: string; args: Record<string, any>; workspace?: string; sessionId?: string; taskId?: string }) => Promise<{ result?: string; error?: string }>
+  onRepoIndexStatus: (cb: (status: RepoIndexStatus) => void) => () => void
   vscodeStatus: (workspace: string) => Promise<VsCodeBridgeStatus | { error: string }>
   vscodeInstallBridge: () => Promise<{ result?: string; error?: string }>
   vscodeOpenWorkspace: (workspace: string) => Promise<{ result?: string; error?: string }>
   onCheckpointCreated: (cb: (checkpoint: CheckpointSummary) => void) => () => void
   loadSettings: () => Promise<Settings>
   saveSettings: (settings: Settings) => Promise<{ success: boolean } | { error: string }>
+  ollamaModels: () => Promise<{ models: string[] } | { error: string }>
+  ollamaPullSmallModel: (request: { consent: boolean; model: string }) => Promise<{ success: true } | { error: string }>
   aiChat: (config: { provider: string; apiKey: string; baseUrl: string; model: string; messages: any[]; stream?: boolean; autoSelect?: boolean; knownModels?: string[]; modelPerformance?: Record<string, unknown>; taskKind?: string; modelBudget?: 'cheap' | 'balanced' | 'strong'; preferFreeModels?: boolean }) =>
     Promise<AiChatResult>
   aiCancel: () => Promise<{ success: boolean }>
@@ -254,6 +312,11 @@ export type ElectronAPI = {
   onAIStream: (cb: (token: string) => void) => () => void
   openPath: (targetPath: string) => Promise<void>
   showItemInFolder: (targetPath: string) => Promise<void>
+  listPrerequisites: () => Promise<PrerequisiteCatalogItem[]>
+  openOfficialPrerequisite: (request: { id: SetupItemId; consent: boolean }) => Promise<{ success: boolean; error?: string }>
+  downloadPrerequisite: (request: { id: SetupItemId; consent: boolean; expectedSha256: string }) => Promise<PrerequisiteDownloadResult>
+  cancelPrerequisite: (id?: SetupItemId) => Promise<{ success: boolean; error?: string }>
+  onPrerequisiteProgress: (cb: (progress: PrerequisiteProgress) => void) => () => void
   saveConversation: (session: ConversationInput) => Promise<{ success: boolean; id: string; updatedAt: number } | { error: string }>
   listConversations: () => Promise<ConversationRecord[] | { error: string }>
   deleteConversation: (id: string) => Promise<{ success: boolean } | { error: string }>
@@ -261,6 +324,9 @@ export type ElectronAPI = {
   exportConversation: (id: string) => Promise<{ success?: boolean; cancelled?: boolean; path?: string; error?: string }>
   importConversations: () => Promise<ConversationRecord[] | { error: string }>
   exportDiagnostics: () => Promise<{ success?: boolean; cancelled?: boolean; path?: string; error?: string }>
+  readDiagnostics: () => Promise<DiagnosticsViewerPayload>
+  copyDiagnostics: (text: string) => Promise<{ success: boolean; error?: string }>
+  recordDiagnostics: (event: { source: 'renderer' | 'unhandled'; severity: 'debug' | 'info' | 'warn' | 'error'; message: string; stack?: string }) => Promise<{ success: boolean; error?: string }>
   lspDiagnostics: (root: string, file: string) => Promise<LspDiagnostic[] | { error: string }>
   lspDefinition: (root: string, file: string, line: number, column: number) => Promise<LspLocation | null | { error: string }>
   lspReferences: (root: string, file: string, line: number, column: number) => Promise<LspLocation[] | { error: string }>
@@ -291,7 +357,7 @@ type ProviderConfig = {
   modelsUpdatedAt?: number
   performance?: any
 }
-type Settings = {
+type Settings = import('../src/types').Settings & {
   providers: ProviderConfig[]
   activeProvider: string
   workspacePath: string
@@ -302,6 +368,7 @@ type Settings = {
   teamTokenBudget?: 'cheap' | 'balanced' | 'strong'
   dynamicTeam?: boolean
   teamProfile?: { analyst?: string; executor?: string; reviewer?: string; verifier?: string }
-  permissionMode?: 'ask-risky' | 'ask-all-writes' | 'trusted'
+  permissionMode?: 'always' | 'ask-risky' | 'auto' | 'ask-all-writes' | 'trusted'
+  browserToolEnabled?: boolean
   autoUpdate?: boolean
 }

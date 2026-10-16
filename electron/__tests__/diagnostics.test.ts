@@ -3,7 +3,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { buildDiagnosticsReport } from '../diagnostics'
+import {
+  appendDiagnosticsLog,
+  buildDiagnosticsReport,
+  readDiagnosticsLines,
+  redactDiagnosticText,
+} from '../diagnostics'
 
 let userData: string
 
@@ -18,6 +23,37 @@ afterEach(() => {
 })
 
 describe('diagnostics', () => {
+  it('redacts API keys, authorization headers, cookies, and provider key fields', () => {
+    const secret = 'sk-proj-12345678901234567890'
+    const redacted = redactDiagnosticText(JSON.stringify({
+      message: secret,
+      authorization: `Bearer ${secret}`,
+      cookie: 'session=private-cookie',
+      provider: { apiKey: 'provider-secret-value', access_token: 'access-secret-value' },
+    }))
+
+    expect(redacted).not.toContain(secret)
+    expect(redacted).not.toContain('private-cookie')
+    expect(redacted).not.toContain('provider-secret-value')
+    expect(redacted).not.toContain('access-secret-value')
+    expect(redacted).toContain('[redacted')
+  })
+
+  it('keeps local diagnostic logs bounded and rotates older files', async () => {
+    for (let index = 0; index < 8; index++) {
+      appendDiagnosticsLog(userData, {
+        source: 'main', severity: 'error', message: `event-${index}-${'x'.repeat(40)}`,
+      }, { maxBytes: 120, maxFiles: 2 })
+    }
+
+    const lines = await readDiagnosticsLines(userData, 200, { maxFiles: 2 })
+    expect(lines[lines.length - 1]).toContain('event-7')
+    expect(lines.some((line) => line.includes('event-0'))).toBe(false)
+    const logFiles = fs.readdirSync(path.join(userData, 'logs')).filter((name) => name.startsWith('diagnostics.log'))
+    expect(logFiles).toHaveLength(2)
+    for (const file of logFiles) expect(fs.statSync(path.join(userData, 'logs', file)).size).toBeLessThanOrEqual(120)
+  })
+
   it('reports useful health metadata without chats, code, paths, filenames, or API keys', async () => {
     const apiKey = 'custom-provider-secret-123456789'
     const workspace = path.join(userData, 'private-client-project')

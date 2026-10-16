@@ -224,6 +224,12 @@ const AUTH_TEXT =
 const RETRY_TEXT =
   /model[_ ]?not[_ ]?found|does not exist|unknown model|invalid model|no such model|model .{0,60}not (found|available|supported)|not a valid model|decommissioned|deprecated|no longer (available|supported)|unsupported model|model is not supported|no endpoints found|rate[_ ]?limit|too many requests|quota|resource[_ ]exhausted|capacity|overloaded|temporarily unavailable|service unavailable|insufficient credits|payment required/
 
+// A provider can fail after headers have arrived (for example, while an SSE
+// response is being read). Treat transport failures as retryable so Auto can
+// move to the next provider/model without losing the conversation request.
+const NETWORK_RETRY_TEXT =
+  /fetch failed|network (?:error|request failed)|socket hang up|econn(?:reset|refused|aborted)|connection (?:reset|closed|aborted)|(?:readable stream )?(?:terminated|closed)|(?:request|operation) timed out|timeout/
+
 /**
  * Per-model limits, not request problems: an output cap ("`max_tokens` must be less than or equal
  * to 4096") or a model that needs its terms accepted in the provider console first.
@@ -248,6 +254,7 @@ export function classifyModelError(message: string, status?: number): ModelError
   if (code === 401 || AUTH_TEXT.test(t)) return 'auth'
   if (code === 403) return /model/.test(t) ? 'retry-model' : 'auth'
   if (code !== undefined && [402, 404, 408, 429, 502, 503, 504, 529].includes(code)) return 'retry-model'
+  if (NETWORK_RETRY_TEXT.test(t)) return 'retry-model'
   if (RETRY_TEXT.test(t) || MODEL_LIMIT_TEXT.test(t) || IMAGE_LIMIT_TEXT.test(t)) return 'retry-model'
   return 'other'
 }

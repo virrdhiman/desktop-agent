@@ -4,7 +4,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import {
-  createCheckpoint, listCheckpoints, MAX_CHECKPOINT_FILE_BYTES, MAX_CHECKPOINTS_PER_SESSION, restoreCheckpoint,
+  createCheckpoint, finalizeCheckpoint, listCheckpoints, MAX_CHECKPOINT_FILE_BYTES, MAX_CHECKPOINTS_PER_SESSION, restoreCheckpoint,
 } from '../checkpointStore'
 
 let root: string
@@ -61,5 +61,19 @@ describe('checkpointStore', () => {
       await createCheckpoint(checkpoints, { sessionId: 'bounded', workspace: root, label: `edit ${index}`, paths: [file] })
     }
     expect(await listCheckpoints(checkpoints, 'bounded')).toHaveLength(MAX_CHECKPOINTS_PER_SESSION)
+  })
+
+  it('refuses to overwrite a user edit made after the agent change', async () => {
+    const file = path.join(root, 'user-edit.txt')
+    fs.writeFileSync(file, 'before')
+    const checkpoint = await createCheckpoint(checkpoints, {
+      sessionId: 'safe-undo', workspace: root, label: 'agent edit', paths: [file],
+    })
+    fs.writeFileSync(file, 'agent result')
+    await finalizeCheckpoint(checkpoints, checkpoint!)
+    fs.writeFileSync(file, 'user edit after agent')
+
+    await expect(restoreCheckpoint(checkpoints, 'safe-undo', checkpoint!.id)).rejects.toThrow(/changed after checkpoint/)
+    expect(fs.readFileSync(file, 'utf-8')).toBe('user edit after agent')
   })
 })

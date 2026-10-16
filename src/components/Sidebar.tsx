@@ -8,7 +8,7 @@
  * Sidebar — Navigation sidebar
  *
  * Vertical icon bar with tooltips showing keyboard shortcuts:
- * - Agent, Files, Git, Branches, Tasks, Sessions, Terminal, Settings
+ * - Agent, Files, Git, Branches, Tasks, Sessions, Terminal, Settings, Help
  * - Command Palette trigger (Ctrl+P)
  * - Terminal toggle (Ctrl+`)
  *
@@ -28,10 +28,14 @@ const PANELS: { id: Panel; icon: string; label: string; shortcut?: string }[] = 
   { id: 'vscode', icon: '⌘', label: 'VS Code' },
   { id: 'terminal', icon: '⬛', label: 'Terminal', shortcut: 'Ctrl+`' },
   { id: 'settings', icon: '⚙️', label: 'Settings' },
+  { id: 'help', icon: '❔', label: 'Help' },
 ]
 
 export default function Sidebar() {
-  const { activePanel, setActivePanel, toggleTerminal, showTerminal, toggleCommandPalette } = useStore()
+  const { activePanel, setActivePanel, toggleTerminal, showTerminal, toggleCommandPalette, repoIndexStatus } = useStore()
+  const indexLabel = repoIndexStatus.state === 'indexing'
+    ? `Indexing ${repoIndexStatus.files}${repoIndexStatus.total ? `/${repoIndexStatus.total}` : ''}`
+    : repoIndexStatus.state === 'failed' ? 'Index failed' : `${repoIndexStatus.files} indexed`
 
   return (
     <nav className="sidebar" role="navigation" aria-label="Main navigation">
@@ -79,6 +83,14 @@ export default function Sidebar() {
             {p.icon}
           </button>
         ))}
+      </div>
+
+      <div
+        aria-label={`Project index: ${indexLabel}`}
+        title={`Project index: ${indexLabel}`}
+        style={{ fontSize: 8, color: repoIndexStatus.state === 'failed' ? 'var(--error)' : repoIndexStatus.state === 'indexing' ? 'var(--warning)' : 'var(--text-muted)', textAlign: 'center', lineHeight: 1.2, marginTop: 6, maxWidth: 50, overflowWrap: 'anywhere' }}
+      >
+        {repoIndexStatus.state === 'indexing' ? '◌' : repoIndexStatus.state === 'failed' ? '!' : '●'} {repoIndexStatus.files}
       </div>
 
       <div style={{ flex: 1 }} />

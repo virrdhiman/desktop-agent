@@ -13,15 +13,93 @@
  * - Timestamps for each step
  * - Error display
  */
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
+import type { AgentTask, CheckpointSummary, ToolExecutionSummary, VerificationSummary } from '../types'
+
+export type TaskReviewSummary = {
+  changedFiles: string[]
+  commands: string[]
+  verification: VerificationSummary | undefined
+  checkpoint: CheckpointSummary | undefined
+}
+
+/** Build the small, user-facing post-run review from state already collected during the run. */
+export function buildTaskReviewSummary(
+  task: AgentTask,
+  edits: { path: string; timestamp?: number }[],
+  executions: ToolExecutionSummary[],
+  verification: VerificationSummary | undefined,
+  checkpoint: CheckpointSummary | undefined,
+): TaskReviewSummary {
+  const writeTools = new Set(['write_file', 'edit_file', 'create_file', 'delete_file', 'multi_file_edit', 'archive_extract', 'vscode_apply_edit'])
+  const stepChangedFiles = task.steps.flatMap((step) => {
+    const call = step.toolCall
+    if (!call || !writeTools.has(call.name)) return []
+    const direct = typeof call.args?.path === 'string' ? [call.args.path] : []
+    const batch = Array.isArray(call.args?.edits)
+      ? call.args.edits.flatMap((edit: unknown) => typeof (edit as { path?: unknown })?.path === 'string' ? [(edit as { path: string }).path] : [])
+      : []
+    return [...direct, ...batch]
+  })
+  const recentEdits = edits.filter((edit) => edit.timestamp === undefined || edit.timestamp >= task.createdAt)
+  const commands = task.steps
+    .flatMap((step) => step.toolCall?.name === 'run_command' && typeof step.toolCall.args?.command === 'string'
+      ? [step.toolCall.args.command]
+      : [])
+  const executedCommands = executions
+    .filter((run) => run.name === 'run_command' && run.timestamp >= task.createdAt)
+    .map((run) => {
+      try {
+        const args = JSON.parse(run.argsSummary) as { command?: unknown }
+        return typeof args.command === 'string' ? args.command : ''
+      } catch {
+        return run.argsSummary.match(/(?:^|[,{\s])(?:command[=:])(["']?)(.+?)\1(?:[,}]|$)/)?.[2] || ''
+      }
+    })
+    .filter(Boolean)
+  const taskCommands = [...new Set(commands.length > 0 ? commands : executedCommands)]
+  const changedFiles = [...new Set(stepChangedFiles.length > 0
+    ? [...stepChangedFiles, ...recentEdits.filter((edit) => stepChangedFiles.includes(edit.path)).map((edit) => edit.path)]
+    : recentEdits.map((edit) => edit.path))]
+  const taskVerification = verification && verification.timestamp >= task.createdAt && taskCommands.includes(verification.command)
+    ? verification
+    : undefined
+  const taskCheckpoint = checkpoint && checkpoint.createdAt >= task.createdAt
+    && (changedFiles.length === 0 || checkpoint.files.some((file) => changedFiles.includes(file)))
+    ? checkpoint
+    : undefined
+  return {
+    changedFiles,
+    commands: taskCommands,
+    verification: taskVerification,
+    checkpoint: taskCheckpoint,
+  }
+}
 
 export default function TaskPanel() {
-  const { tasks } = useStore()
+  const { tasks, fileEditHistory, toolExecutions, lastVerification, latestCheckpoint } = useStore()
   const [expandedTask, setExpandedTask] = useState<string | null>(
     tasks.length > 0 ? tasks[tasks.length - 1].id : null
   )
   const [expandedTrace, setExpandedTrace] = useState<string | null>(null)
+  const taskButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+
+  const focusTask = (taskId: string) => taskButtonRefs.current[taskId]?.focus()
+
+  const handleTaskKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, taskId: string) => {
+    const ordered = [...tasks].reverse()
+    const index = ordered.findIndex((task) => task.id === taskId)
+    if (index < 0 || !['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return
+    event.preventDefault()
+    const nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? ordered.length - 1 :
+      (index + (event.key === 'ArrowDown' ? 1 : -1) + ordered.length) % ordered.length
+    focusTask(ordered[nextIndex].id)
+  }
+
+  useEffect(() => {
+    if (!expandedTask && tasks.length > 0) setExpandedTask(tasks[tasks.length - 1].id)
+  }, [tasks, expandedTask])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -52,11 +130,18 @@ export default function TaskPanel() {
               return (
                 <div key={task.id} className="card" style={{ overflow: 'hidden' }}>
                   {/* Task header */}
-                  <div
+                  <button
+                    type="button"
+                    ref={(element) => { taskButtonRefs.current[task.id] = element }}
                     onClick={() => setExpandedTask(isExpanded ? null : task.id)}
+                    onKeyDown={(event) => handleTaskKeyDown(event, task.id)}
+                    aria-expanded={isExpanded}
+                    aria-controls={`task-details-${task.id}`}
+                    aria-label={`${isExpanded ? 'Collapse' : 'Expand'} task ${task.title}`}
                     style={{
                       display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                      cursor: 'pointer', padding: '4px 0',
+                      cursor: 'pointer', padding: '4px 0', width: '100%',
+                      background: 'transparent', border: 'none', color: 'inherit', textAlign: 'left',
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
@@ -87,12 +172,40 @@ export default function TaskPanel() {
                          task.status === 'error' ? '✕' : '○'} {task.status}
                       </span>
                     </div>
-                  </div>
+                  </button>
 
                   {/* Task steps (expanded) */}
-                  {isExpanded && (
-                    <div style={{ marginTop: 8, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
-                      {traceSteps.length > 0 && (
+                    {isExpanded && (
+                      <div id={`task-details-${task.id}`} role="region" aria-label={`${task.title} details`} style={{ marginTop: 8, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
+                        <div aria-labelledby={`review-title-${task.id}`} style={{ marginBottom: 10, padding: 9, borderRadius: 6, background: 'rgba(59,130,246,0.06)', border: '1px solid var(--border)' }}>
+                          <div id={`review-title-${task.id}`} style={{ fontSize: 12, fontWeight: 700, marginBottom: 7 }}>Post-run review</div>
+                         {(() => {
+                           const review = buildTaskReviewSummary(task, fileEditHistory, toolExecutions, lastVerification, latestCheckpoint)
+                           return (
+                              <div style={{ display: 'grid', gap: 7, fontSize: 11 }}>
+                                <div>
+                                  <div role="heading" aria-level={3} style={{ color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 2 }}>Files</div>
+                                  {review.changedFiles.length ? <ul style={{ margin: 0, paddingLeft: 18 }}>{review.changedFiles.map((file) => <li key={file}>{file}</li>)}</ul> : <div>No file changes recorded</div>}
+                                </div>
+                                <div>
+                                  <div role="heading" aria-level={3} style={{ color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 2 }}>Commands</div>
+                                  {review.commands.length ? <ul style={{ margin: 0, paddingLeft: 18 }}>{review.commands.map((command) => <li key={command}><code style={{ fontSize: 11 }}>{command}</code></li>)}</ul> : <div>No commands recorded</div>}
+                                </div>
+                                <div>
+                                  <div role="heading" aria-level={3} style={{ color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 2 }}>Verification</div>
+                                  <div style={{ color: review.verification ? (review.verification.ok ? 'var(--success)' : 'var(--error)') : 'var(--text-secondary)' }}>
+                                    {review.verification ? `${review.verification.ok ? '✓ Passed' : '✕ Failed'} · ${review.verification.command}` : 'Not run yet'}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div role="heading" aria-level={3} style={{ color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 2 }}>Restore</div>
+                                  <div>{review.checkpoint ? `Available · ${review.checkpoint.files.length} file${review.checkpoint.files.length === 1 ? '' : 's'} · restore from Sessions` : 'No checkpoint available'}</div>
+                               </div>
+                             </div>
+                           )
+                         })()}
+                       </div>
+                       {traceSteps.length > 0 && (
                         <div style={{ marginBottom: 10, padding: 8, borderRadius: 6, background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                             <div style={{ fontSize: 12, fontWeight: 700 }}>Agent trace</div>

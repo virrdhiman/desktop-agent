@@ -94,9 +94,8 @@ if ($Prefer -eq 'HyperV') {
 }
 
 Write-Step "Next clean-machine QA step"
-Write-Host "1. Download a Windows evaluation ISO from Microsoft."
+Write-Host "1. Provide an existing Windows ISO at an explicit path; this script does not download one."
 Write-Host "2. Create a clean VM named VD-Agent-QA in VirtualBox."
 Write-Host "3. Install VS Code in the VM."
-Write-Host "4. Copy VD Agent Setup 1.1.0.exe and vd-agent-vscode-bridge-0.4.5.vsix from release/ into the VM."
+Write-Host "4. Copy the versioned installer and source VSIX from the explicit release path into the VM."
 Write-Host "5. Run npm run release:vm-qa on the host for artifact preflight, then run the manual VM QA checklist in the VM."
-

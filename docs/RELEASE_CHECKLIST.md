@@ -13,13 +13,42 @@ How to build, sign, verify, and publish a VD Agent release on GitHub. Only the m
 
 Each platform has to be built on that OS. Every script cleans `release/`, `dist/`, and `dist-electron/`, then runs `npm install`, `npm test`, `npm run lint`, and `npm run build`. It packages with electron-builder, writes `release/SHA256SUMS.txt`, and stops at the first failure.
 
+Before retrying an Electron Builder failure, run the read-only Node preflight:
+
+```bash
+npm run release:preflight
+```
+
+It records output access/lock evidence, recently active and stale package
+entries, Windows path length, active builder helper processes, and the configured
+source VSIX. It never deletes or overwrites anything. When `release/` is
+occupied, use the unique `.work/package-<version>-<timestamp>-<pid>` path it
+recommends with an explicit Electron Builder output override. A recent
+installer or a direct `EPERM`/`EACCES` probe is evidence to close the owning
+application/process before retrying; the preflight does not unlock it.
+
+For a built app, the safe Node-only package wrapper performs that preflight and
+uses a fresh `.work/` output by default:
+
+```bash
+npm run release:package -- --platform linux
+# or: --platform windows / --platform darwin
+```
+
+Pass `--output .work/<explicit-name>` when a stable path is useful. The wrapper
+rejects `release/`, passes `--publish never`, and checks that a resulting
+artifact contains the current `package.json` version.
+
+The package version is read from `package.json` by every Node-only harness. Do
+not copy a hardcoded version into a checklist or QA command.
+
 | Platform | Command | Output in `release/` |
 |----------|---------|----------------------|
 | Windows | `Win\build.bat` | `VD Agent Setup <version>.exe` (NSIS installer) and `VD Agent <version>.exe` (portable) |
 | macOS | `bash Mac/build.sh` | `VD Agent-<version>.dmg` and `VD Agent-<version>-mac.zip` (`-arm64` in the name on Apple Silicon) |
 | Linux | `bash Linux/build.sh` | `VD Agent-<version>.AppImage` and `vd-agent_<version>_amd64.deb` |
 
-**Only upload files built by these scripts.** `release/` can also contain test builds made with manual `electron-builder` commands. Those are not release builds; delete them or rebuild with the official script. `npmRebuild` is intentionally disabled because `node-pty` supplies Windows/macOS prebuilds and its install step builds the Linux Node-API binary; CI and packaged smoke tests verify that the terminal starts on each release platform.
+**Only upload files built by these scripts.** `release/` can also contain test builds made with manual `electron-builder` commands. Those are not release builds; leave them in place for evidence or rebuild into a fresh unique `.work/` output. `npmRebuild` is intentionally disabled because `node-pty` supplies Windows/macOS prebuilds and its install step builds the Linux Node-API binary; CI and packaged smoke tests verify that the terminal starts on each release platform.
 
 ## Code Signing and Notarization
 
@@ -40,6 +69,7 @@ Run `npm run release:signing` before packaging to see exactly which signing or n
 - [ ] `CHANGELOG.md` has a section for the version, with the release date
 - [ ] Release notes render cleanly: `npm run release:notes -- --version <x.y.z> --out release-notes.md`
 - [ ] Release preflight passes: `npm run icons && npm run release:qa && npm run release:signing`
+- [ ] Read-only packaging evidence passes: `npm run release:preflight`
 - [ ] Docs match the release: README, USAGE, `docs/`
 - [ ] App icons exist: `build/icon.ico` (Windows), `build/icon.icns` (macOS), `build/icon.png` 512×512 (Linux). Without them, electron-builder uses the default Electron icon.
 - [ ] Signing certificates are available on each build machine (see above)
@@ -64,6 +94,10 @@ Run `npm run release:signing` before packaging to see exactly which signing or n
 - [ ] Update QA if publishing updates: install the previous release first, enable update checks, publish the draft update metadata, and verify that the app detects, downloads, and asks before restart.
 - [ ] If signed, check the signature: file Properties → Digital Signatures on Windows, `codesign --verify --deep --strict` and `spctl -a -vv` on macOS
 - [ ] After packaging, rerun `npm run release:qa -- --artifacts` to confirm versioned installers and `SHA256SUMS.txt` are present.
+- [ ] Validate the metadata-only local update fixture without an installer: `npm run release:update-fixture`
+- [ ] Generate explicit-path Windows/Ubuntu QA instructions when needed, without creating a VM or downloading an ISO:
+      `npm run release:vm-harness -- --platform windows --artifacts release --output .work/mac-test/windows-qa.md`
+- [ ] Generate the tracked macOS template into ignored work output: `npm run release:mac-template`
 
 ## Checksums
 
@@ -96,7 +130,7 @@ When you build on several machines, combine the per-platform files into one `SHA
    ```
    Generate `notes.md` with `npm run release:notes -- --version <x.y.z> --out notes.md`, review it, and say whether each build is signed.
 3. Upload the installer artifacts, `latest*.yml`, and blockmaps produced by electron-builder. Installed builds use the metadata's SHA-512 hashes to verify downloads; code signing protects supported platform packages separately. Do not upload unpacked application directories or `builder-debug.yml`.
-4. Download each file from the draft, check it against `SHA256SUMS.txt`, and publish the release.
+4. Download each file from the draft, check it against `SHA256SUMS.txt`, and publish the release. Keep the generated `latest*.yml` metadata and blockmaps beside the installers: electron-updater needs these files and their versioned URLs to find updates.
 
 The release workflow in `.github/workflows/release.yml` builds and smoke-tests packaged apps on all three operating systems, then creates one draft release with combined checksums. Windows and macOS builds are signed when `WIN_CSC_LINK` / `WIN_CSC_KEY_PASSWORD` or `MAC_CSC_LINK` / `MAC_CSC_KEY_PASSWORD` are set. macOS notarization also needs `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID`. If those secrets are absent, the same workflow still uploads unsigned installers and `SHA256SUMS.txt`. A private GitHub repository cannot serve anonymous client updates; keep automatic updates disabled for general distribution until releases are public or use a public generic update feed.
 

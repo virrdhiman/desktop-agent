@@ -24,9 +24,10 @@
  * - Settings: providers, API keys, workspace, custom rules
  */
 import { create } from 'zustand'
+import { normalizeDataToolSettings } from '../lib/dataToolSettings'
 import type {
   FileEntry, GitStatus, GitLogEntry, GitBranchInfo, ChatMessage, ChatSession, TerminalEntry, TerminalTab,
-  Settings, ProviderConfig, Panel, AgentTask, CheckpointSummary, ToolExecutionSummary, VerificationSummary,
+  Settings, ProviderConfig, Panel, AgentTask, CheckpointSummary, ToolExecutionSummary, VerificationSummary, RepoIndexStatus,
 } from '../types'
 
 export const AUTOSAVE_DELAY_MS = 800
@@ -71,6 +72,8 @@ interface AppState {
   // Navigation
   activePanel: Panel
   setActivePanel: (panel: Panel) => void
+  advancedSettingsRequested: boolean
+  requestAdvancedSettings: (requested: boolean) => void
 
   // Command Palette
   showCommandPalette: boolean
@@ -103,6 +106,8 @@ interface AppState {
   // All files (for search)
   allFiles: { name: string; path: string; isDirectory: boolean }[]
   setAllFiles: (files: { name: string; path: string; isDirectory: boolean }[]) => void
+  repoIndexStatus: RepoIndexStatus
+  setRepoIndexStatus: (status: RepoIndexStatus) => void
 
   // Search results
   searchResults: string | null
@@ -208,6 +213,8 @@ export const useStore = create<AppState>((set, get) => ({
   // Navigation
   activePanel: 'chat',
   setActivePanel: (panel) => set({ activePanel: panel }),
+  advancedSettingsRequested: false,
+  requestAdvancedSettings: (requested) => set({ advancedSettingsRequested: requested }),
 
   // Command Palette
   showCommandPalette: false,
@@ -252,6 +259,8 @@ export const useStore = create<AppState>((set, get) => ({
   // All files
   allFiles: [],
   setAllFiles: (files) => set({ allFiles: files }),
+  repoIndexStatus: { state: 'idle', root: '', files: 0 },
+  setRepoIndexStatus: (status) => set({ repoIndexStatus: status }),
 
   // Search results
   searchResults: null,
@@ -403,6 +412,7 @@ export const useStore = create<AppState>((set, get) => ({
         toolExecutions: state.toolExecutions.slice(-100),
         providerId: state.settings.activeProvider,
         model: activeProvider?.model,
+        checklistState: { setupChecklistDismissed: state.settings.setupChecklistDismissed },
         projectMemory: state.projectMemory.slice(0, 12_000),
         conversationSummary: summary,
         checkpoint: state.latestCheckpoint,
@@ -466,13 +476,23 @@ export const useStore = create<AppState>((set, get) => ({
         projectMemory: resume?.projectMemory || '',
         latestCheckpoint: resume?.checkpoint,
         lastVerification: resume?.lastVerification,
+        settings: {
+          ...get().settings,
+          ...(resume?.checklistState?.setupChecklistDismissed !== undefined
+            ? { setupChecklistDismissed: resume.checklistState.setupChecklistDismissed }
+            : {}),
+        },
       })
-      if (resume?.workspacePath || resume?.providerId) {
+      set((state) => ({ sessions: state.sessions.map((candidate) => candidate.id === id ? { ...candidate, recovered: true } : candidate) }))
+      if (resume?.workspacePath || resume?.providerId || resume?.checklistState) {
         const currentSettings = get().settings
         const nextSettings = {
           ...currentSettings,
           workspacePath: resume.workspacePath || currentSettings.workspacePath,
           ...(resume.providerId ? { activeProvider: resume.providerId } : {}),
+          ...(resume.checklistState?.setupChecklistDismissed !== undefined
+            ? { setupChecklistDismissed: resume.checklistState.setupChecklistDismissed }
+            : {}),
           providers: currentSettings.providers.map((provider) => (
             provider.id === resume.providerId && resume.model ? { ...provider, model: resume.model } : provider
           )),
@@ -519,6 +539,7 @@ export const useStore = create<AppState>((set, get) => ({
         updatedAt,
         messages: rec.messages,
         pinned: rec.pinned === true,
+        recovered: false,
         summary: typeof rec.summary === 'string' ? rec.summary : undefined,
         resume: rec.resume && typeof rec.resume === 'object' ? rec.resume : undefined,
       })
@@ -528,10 +549,13 @@ export const useStore = create<AppState>((set, get) => ({
     const restore = options?.restoreLatest && messages.length === 0 ? sessions[0] : undefined
     const resume = restore?.resume
     const currentSettings = get().settings
-    const restoredSettings = resume && (resume.workspacePath || resume.providerId) ? {
+    const restoredSettings = resume && (resume.workspacePath || resume.providerId || resume.checklistState) ? {
       ...currentSettings,
       workspacePath: resume.workspacePath || currentSettings.workspacePath,
       ...(resume.providerId ? { activeProvider: resume.providerId } : {}),
+      ...(resume.checklistState?.setupChecklistDismissed !== undefined
+        ? { setupChecklistDismissed: resume.checklistState.setupChecklistDismissed }
+        : {}),
       providers: currentSettings.providers.map((provider) => (
         provider.id === resume.providerId && resume.model ? { ...provider, model: resume.model } : provider
       )),
@@ -552,10 +576,11 @@ export const useStore = create<AppState>((set, get) => ({
         projectMemory: resume?.projectMemory || '',
         latestCheckpoint: resume?.checkpoint,
         lastVerification: resume?.lastVerification,
-        settings: restoredSettings,
+       settings: restoredSettings,
       } : {}),
     })
-    if (restore && resume && (resume.workspacePath || resume.providerId)) {
+    if (restore) set((state) => ({ sessions: state.sessions.map((session) => session.id === restore.id ? { ...session, recovered: true } : session) }))
+    if (restore && resume && (resume.workspacePath || resume.providerId || resume.checklistState)) {
       void window.api.saveSettings(restoredSettings)
       if (resume.workspacePath) void window.api.walkDirectory(resume.workspacePath).then((files) => set({ allFiles: files }))
     }
@@ -585,9 +610,17 @@ export const useStore = create<AppState>((set, get) => ({
 
   // Settings
   settings: {
+    ...normalizeDataToolSettings(),
     providers: [],
     activeProvider: 'groq',
     workspacePath: '',
+    restrictedCommandMode: false,
+    browserToolEnabled: false,
+    setupChecklistDismissed: false,
+    autocompleteEnabled: false,
+    indexingEnabled: false,
+    telemetryEnabled: false,
+    updateChannel: 'stable',
   },
   setSettings: (settings) => set({ settings }),
   getActiveProvider: () => {

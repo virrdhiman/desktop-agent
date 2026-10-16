@@ -68,6 +68,14 @@ describe('conversationStore', () => {
     expect((await readConversation(dir, 'session-backup'))?.messages[0].content).toBe('recover me')
   })
 
+  it('lists the last atomic record when a forced kill leaves only the backup', async () => {
+    await saveConversation(dir, { id: 'session-interrupted', messages: [msg('1', 'user', 'last good')] })
+    await saveConversation(dir, { id: 'session-interrupted', messages: [msg('1', 'user', 'new edit')] })
+    fs.unlinkSync(path.join(dir, 'session-interrupted.json'))
+
+    expect((await listConversations(dir))[0].messages[0].content).toBe('last good')
+  })
+
   it('deletes the file from disk and tolerates already-deleted sessions', async () => {
     await saveConversation(dir, { id: 'session-del', messages: [msg('1', 'user', 'bye')] })
     await saveConversation(dir, { id: 'session-del', messages: [msg('1', 'user', 'bye again')] })
@@ -143,6 +151,31 @@ describe('conversationStore', () => {
     const [saved] = await listConversations(dir)
     expect(saved).toMatchObject({ version: 2, pinned: true, summary: 'worked with [redacted-key]' })
     expect(JSON.stringify(saved.resume)).not.toContain(secret)
+  })
+
+  it('does not persist provider credentials or launch commands in resume state', async () => {
+    await saveConversation(dir, {
+      id: 'session-safe-resume',
+      resume: {
+        providerId: 'groq',
+        model: 'llama-3.3-70b-versatile',
+        apiKey: 'short-secret-that-must-not-persist',
+        providers: [{ id: 'groq', apiKey: 'another-secret' }],
+        launchCommand: 'npm run dev',
+        checklistState: { setupChecklistDismissed: true },
+      },
+      messages: [msg('1', 'user', 'continue')],
+    })
+
+    const saved = await readConversation(dir, 'session-safe-resume')
+    expect(saved?.resume).toMatchObject({
+      providerId: 'groq',
+      model: 'llama-3.3-70b-versatile',
+      checklistState: { setupChecklistDismissed: true },
+    })
+    expect(JSON.stringify(saved?.resume)).not.toContain('apiKey')
+    expect(JSON.stringify(saved?.resume)).not.toContain('launchCommand')
+    expect(JSON.stringify(saved?.resume)).not.toContain('providers')
   })
 
   it('normalizeConversation drops invalid messages and returns null when nothing is left', () => {

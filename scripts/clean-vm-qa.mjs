@@ -2,10 +2,18 @@ import fs from 'fs'
 import path from 'path'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
+import { fileURLToPath } from 'url'
 
 const exec = promisify(execFile)
-const root = process.cwd()
-const releaseDir = path.join(root, 'release')
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
+const version = packageJson.version
+const bridgeResource = (packageJson.build?.extraResources || []).find((item) => /\.vsix$/i.test(item?.to || ''))
+const argValue = (flag) => {
+  const index = process.argv.indexOf(flag)
+  return index >= 0 ? process.argv[index + 1] : undefined
+}
+const releaseDir = path.resolve(argValue('--release-dir') || path.join(root, 'release'))
 const requireVm = process.argv.includes('--require-vm')
 
 async function exists(file) {
@@ -41,9 +49,9 @@ function line(ok, label, detail = '') {
 console.log('VD Agent clean VM QA preflight')
 console.log('================================')
 
-const installer = path.join(releaseDir, 'VD Agent Setup 1.1.0.exe')
-const portable = path.join(releaseDir, 'VD Agent 1.1.0.exe')
-const vsix = path.join(releaseDir, 'vd-agent-vscode-bridge-0.4.5.vsix')
+const installer = path.join(releaseDir, `VD Agent Setup ${version}.exe`)
+const portable = path.join(releaseDir, `VD Agent ${version}.exe`)
+const vsix = path.join(releaseDir, bridgeResource?.to || `vd-agent-vscode-bridge-${version}.vsix`)
 
 line(await exists(installer), 'Windows installer artifact', installer)
 line(await exists(portable), 'Windows portable artifact', portable)
@@ -61,23 +69,21 @@ const hyperv = await powershell('(Get-Command New-VM -ErrorAction SilentlyContin
 line(hyperv.ok && /true/i.test(hyperv.output), 'Hyper-V PowerShell module', (hyperv.output || '').trim() || 'not found')
 
 const vmName = process.env.VD_AGENT_QA_VM || ''
-const vmUser = process.env.VD_AGENT_QA_VM_USER || ''
-const vmPass = process.env.VD_AGENT_QA_VM_PASS || ''
-const hasVmConfig = !!(vmName && vmUser && vmPass)
-line(hasVmConfig, 'Configured QA VM', hasVmConfig ? vmName : 'set VD_AGENT_QA_VM, VD_AGENT_QA_VM_USER, VD_AGENT_QA_VM_PASS')
+const hasVmConfig = Boolean(vmName)
+line(hasVmConfig, 'Configured QA VM name', hasVmConfig ? vmName : 'set VD_AGENT_QA_VM only; no credentials are accepted')
 
 if (!hasVmConfig) {
   console.log('')
   console.log('Manual clean-machine QA path:')
   console.log('1. Create or start a clean Windows VM with VS Code installed.')
   console.log('2. Copy release artifacts into the VM.')
-  console.log('3. Install VD Agent Setup 1.1.0.exe.')
-  console.log('4. Install the VSIX with: code --install-extension vd-agent-vscode-bridge-0.4.5.vsix')
+  console.log(`3. Install VD Agent Setup ${version}.exe.`)
+  console.log(`4. Install the VSIX with the explicit packaged path: ${vsix}`)
   console.log('5. Open a repo in both apps, export VS Code context, run smoke prompts for file open, diff preview, and exact edit. Restricted Mode supports active-editor export/autocomplete; trust the workspace for indexing and edit/apply commands.')
   if (requireVm) process.exit(1)
   process.exit(0)
 }
 
 console.log('')
-console.log('VM execution is configured, but this script intentionally avoids making destructive VM changes automatically.')
+console.log('VM execution is configured, but this script intentionally avoids credentials and destructive VM changes automatically.')
 console.log('Next automation step: add provider-specific copy/run commands for your chosen VM manager after you confirm the VM name and snapshot policy.')

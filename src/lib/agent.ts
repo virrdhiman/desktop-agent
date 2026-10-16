@@ -544,9 +544,10 @@ export function unverifiedClaimsNotice(claims: UnverifiedClaim[]): string {
 // ─── Provider failures ──────────────────────────────────────────────────────
 
 export type ProviderAttempt = { name: string; error: string }
-type FailureKind = 'rate' | 'network' | 'server' | 'model' | 'context' | 'other'
+type FailureKind = 'auth' | 'rate' | 'network' | 'server' | 'model' | 'context' | 'other'
 
 export function classifyProviderError(error: string): FailureKind {
+  if (/\b401\b|\b403\b|invalid (?:api )?key|expired (?:api )?key|unauthorized|forbidden/i.test(error)) return 'auth'
   if (/\b429\b|rate[_ ]?limit|too many requests|quota|resource[_ ]exhausted/i.test(error)) return 'rate'
   if (/max_tokens.{0,60}(must be|less than or equal|exceeds?|too large)/i.test(error)) return 'model'
   if (/context|too long|maximum.*tokens|token limit|reduce the length/i.test(error)) return 'context'
@@ -557,6 +558,7 @@ export function classifyProviderError(error: string): FailureKind {
 }
 
 const KIND_LABEL: Record<FailureKind, string> = {
+  auth: 'API key rejected',
   rate: 'rate limited',
   network: 'network error',
   server: 'provider error',
@@ -566,6 +568,7 @@ const KIND_LABEL: Record<FailureKind, string> = {
 }
 
 const KIND_STEP: Record<FailureKind, string> = {
+  auth: 'Update or remove the rejected API key in Settings; Auto can still use another configured provider.',
   rate: 'Wait a minute and retry, or add a key for another free provider in Settings so VD Agent can fall back.',
   network: 'Check your internet connection, proxy, or firewall. For a local model, make sure its server is running.',
   server: 'The provider is having problems. Retry shortly or switch provider in Settings.',

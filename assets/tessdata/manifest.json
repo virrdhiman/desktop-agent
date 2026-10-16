@@ -1,0 +1,10 @@
+{
+  "language": "eng",
+  "sourceRepository": "https://github.com/tesseract-ocr/tessdata_fast",
+  "sourceCommit": "87416418657359cb625c412a48b6e1d6d41c29bd",
+  "sourceFile": "eng.traineddata",
+  "sha256": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2",
+  "size": 4113088,
+  "license": "Apache-2.0",
+  "licenseFile": "LICENSE.apache-2.0.txt"
+}

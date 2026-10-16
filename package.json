@@ -59,6 +59,13 @@
     "checksums": "node scripts/checksums.mjs",
     "release:notes": "node scripts/release-notes.mjs",
     "release:qa": "node scripts/release-qa.mjs",
+    "release:preflight": "node scripts/package-preflight.mjs",
+    "release:package": "node scripts/package-release.mjs",
+    "release:update-fixture": "node scripts/update-feed-qa.mjs",
+    "release:vm-harness": "node scripts/vm-qa-harness.mjs",
+    "release:mac-template": "node scripts/generate-mac-test-checklist.mjs",
+    "release:update": "node scripts/release-update-preflight.mjs",
+    "release:update-e2e": "node scripts/updater-e2e.mjs",
     "release:signing": "node scripts/signing-preflight.mjs",
     "release:local-cert": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/create-local-test-certificate.ps1",
     "release:secrets": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-release-secrets.ps1",
@@ -68,7 +75,7 @@
     "vm:create": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/create-clean-vm.ps1",
     "vscode:package": "node scripts/package-vscode-extension.mjs",
     "electron:dev": "vite --config vite.config.ts",
-    "electron:build": "vite build && electron-builder"
+    "electron:build": "npm run vscode:package && vite build && electron-builder"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
@@ -79,6 +86,7 @@
     "react-dom": "^18.3.1",
     "react-markdown": "^9.0.1",
     "simple-git": "^4.0.2",
+    "tesseract.js": "^7.0.0",
     "typescript": "^5.9.3",
     "xterm": "^5.3.0",
     "xterm-addon-fit": "^0.8.0",
@@ -150,8 +158,20 @@
         "to": "icon.ico"
       },
       {
-        "from": "vscode-extension/vd-agent-vscode-bridge-0.4.5.vsix",
-        "to": "vd-agent-vscode-bridge-0.4.5.vsix"
+        "from": "assets/tessdata/eng.traineddata",
+        "to": "tessdata/eng.traineddata"
+      },
+      {
+        "from": "assets/tessdata/manifest.json",
+        "to": "tessdata/manifest.json"
+      },
+      {
+        "from": "assets/tessdata/LICENSE.apache-2.0.txt",
+        "to": "tessdata/LICENSE.apache-2.0.txt"
+      },
+      {
+        "from": "vscode-extension/vd-agent-vscode-bridge-0.4.7.vsix",
+        "to": "vd-agent-vscode-bridge-0.4.7.vsix"
       }
     ],
     "mac": {

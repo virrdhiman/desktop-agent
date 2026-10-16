@@ -13,6 +13,7 @@ All notable changes to VD Agent are documented here.
 
 ### VS Code bridge
 - Bumped the bundled bridge to 0.4.5. Patch previews now reject stale baselines instead of overwriting newer editor edits, and per-hunk rejection handles shifted lines and CRLF files correctly. Workspace index refreshes reuse unchanged files, and OpenAI-compatible `/v1` URLs work without duplication.
+- Bumped the bundled bridge to 0.4.6. Native VS Code ghost-text autocomplete now registers explicitly for file-backed editors, and live QA verifies an Ollama completion can be shown and accepted with `Tab`.
 - Bumped the bundled VS Code bridge to 0.4.4 with no-cost language-server completion fallback for inline suggestions, richer dependency/snippet workspace indexing, and native definition/references/rename commands exposed from the sidebar and editor context menu.
 
 ### Reliability

@@ -36,6 +36,9 @@ import { registerWorkspaceStateHandlers } from './handlers/workspaceState'
 import { registerUpdateHandlers } from './handlers/updates'
 import { registerDiagnosticsHandlers } from './handlers/diagnostics'
 import { registerLspHandlers } from './handlers/lsp'
+import { registerPrerequisiteHandlers } from './handlers/prerequisites'
+import { closeBrowserSessions } from './browserTool'
+import { appendDiagnosticsLog } from './diagnostics'
 
 // package.json has "type": "module", so the main bundle is ESM and has no CommonJS __dirname.
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -44,6 +47,47 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 let mainWindow: BrowserWindow | null = null
 let rendererRecoveryAttempts = 0
 const getMainWindow = () => mainWindow
+
+const originalConsoleError = console.error.bind(console)
+
+function diagnosticMessage(args: unknown[]): string {
+  return args.map((value) => {
+    if (value instanceof Error) return value.stack || value.message
+    if (typeof value === 'string') return value
+    try { return JSON.stringify(value) } catch { return String(value) }
+  }).join(' ')
+}
+
+function recordMainDiagnostic(args: unknown[]): void {
+  try {
+    appendDiagnosticsLog(app.getPath('userData'), { source: 'main', severity: 'error', message: diagnosticMessage(args) })
+  } catch {
+    // Diagnostics must never interfere with normal logging.
+  }
+}
+
+console.error = (...args: unknown[]) => {
+  recordMainDiagnostic(args)
+  originalConsoleError(...args)
+}
+
+function recordUnhandledDiagnostic(message: string, stack?: string): void {
+  try {
+    appendDiagnosticsLog(app.getPath('userData'), { source: 'unhandled', severity: 'error', message, stack })
+  } catch {
+    // Diagnostics must never interfere with the original process failure.
+  }
+}
+
+process.on('uncaughtException', (error) => {
+  recordUnhandledDiagnostic(error?.message || String(error), error?.stack)
+  originalConsoleError('VD Agent uncaught exception:', error)
+})
+process.on('unhandledRejection', (reason) => {
+  const error = reason instanceof Error ? reason : new Error(typeof reason === 'string' ? reason : JSON.stringify(reason))
+  recordUnhandledDiagnostic(error.message, error.stack)
+  originalConsoleError('VD Agent unhandled rejection:', reason)
+})
 
 // ─── Window Management ────────────────────────────────────────────────────
 
@@ -109,7 +153,10 @@ function createWindow() {
     if (choice.response === 1 && mainWindow && !mainWindow.isDestroyed()) mainWindow.reload()
   })
 
-  mainWindow.on('closed', () => { mainWindow = null })
+  mainWindow.on('closed', () => {
+    mainWindow = null
+    closeBrowserSessions()
+  })
 }
 
 // ─── App Lifecycle ────────────────────────────────────────────────────────
@@ -146,6 +193,7 @@ app.whenReady().then(() => {
   registerLspHandlers()
   registerAiHandlers(getMainWindow)
   registerShellHandlers()
+  registerPrerequisiteHandlers(getMainWindow)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -155,3 +203,5 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
+
+app.on('before-quit', closeBrowserSessions)

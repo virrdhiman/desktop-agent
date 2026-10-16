@@ -269,6 +269,8 @@ Choose the permission mode in Settings:
 
 An approved shell command has your user permissions and can change files outside the workspace or call network services. Read the command in the native dialog before approving it.
 
+For a narrower command policy, enable **Restricted command mode** below the permission selector in Settings. It requires an open workspace, runs commands only with a cwd inside that workspace, and rejects shell chaining/redirection, nested shells, network clients, and package-install commands with an explicit error. This is cross-platform command filtering performed by the Electron process; it is not an OS sandbox and does not constrain the interactive terminal or other applications.
+
 ---
 
 ## 12. Images and Files

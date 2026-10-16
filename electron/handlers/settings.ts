@@ -13,8 +13,12 @@ import path from 'path'
 import fs from 'fs'
 import { randomUUID } from 'crypto'
 import { privateEnvCandidatePaths } from '../privateEnv'
-import { maskProviderForRenderer, nextStoredApiKey } from '../../src/lib/providerKeys'
+import { maskProviderForRenderer, secureStoredApiKey } from '../../src/lib/providerKeys'
 import { COMMUNITY_PROVIDER_IDS, omitCommunityProviders, omitRetiredProviders } from '../../src/lib/providers'
+import { closeBrowserSessions } from '../browserTool'
+import { normalizeDataToolSettings } from '../../src/lib/dataToolSettings'
+import { normalizeAdvancedSettings } from '../../src/lib/advancedSettings'
+import { listLocalOllamaModels, pullSmallOllamaModel } from '../ollamaModels'
 
 /** Path to settings JSON on disk */
 export const SETTINGS_PATH = path.join(app.getPath('userData'), 'settings.json')
@@ -73,11 +77,14 @@ const DEFAULT_PROVIDERS = [
 
 /** Encrypt an API key using Electron's safeStorage (OS keychain) */
 function encryptApiKey(key: string): string {
-  if (!key || !safeStorage.isEncryptionAvailable()) return key
+  if (!key) return ''
+  if (!safeStorage.isEncryptionAvailable() || (process.platform === 'linux' && safeStorage.getSelectedStorageBackend() === 'basic_text')) {
+    throw new Error('Secure OS key storage is unavailable. No API key was saved.')
+  }
   try {
     const encrypted = safeStorage.encryptString(key)
     return `enc:${encrypted.toString('base64')}`
-  } catch { return key }
+  } catch { throw new Error('Could not encrypt API key. No settings were saved.') }
 }
 
 /** Decrypt an API key that was encrypted with safeStorage */
@@ -86,7 +93,7 @@ function decryptApiKey(key: string): string {
   try {
     const buf = Buffer.from(key.slice(4), 'base64')
     return safeStorage.decryptString(buf)
-  } catch { return key }
+  } catch { return '' }
 }
 
 function parseDotEnv(text: string): Record<string, string> {
@@ -160,6 +167,13 @@ export async function loadRuntimeSettings(): Promise<any> {
       parsed.providers = withEnvProviderKeys(DEFAULT_PROVIDERS)
     }
     parsed.permissionMode ??= 'ask-risky'
+    if (parsed.permissionMode === 'ask-all-writes') parsed.permissionMode = 'always'
+    if (parsed.permissionMode === 'trusted') parsed.permissionMode = 'auto'
+    parsed.restrictedCommandMode ??= false
+    parsed.browserToolEnabled = parsed.browserToolEnabled === true
+    Object.assign(parsed, normalizeDataToolSettings(parsed))
+    Object.assign(parsed, normalizeAdvancedSettings(parsed))
+    parsed.setupChecklistDismissed = parsed.setupChecklistDismissed === true
     parsed.autoUpdate ??= false
     parsed.teamMode ??= 'auto'
     parsed.teamPreset ??= 'default'
@@ -175,6 +189,11 @@ export async function loadRuntimeSettings(): Promise<any> {
       activeProvider: 'groq',
       workspacePath: '',
       permissionMode: 'ask-risky',
+      restrictedCommandMode: false,
+      browserToolEnabled: false,
+      ...normalizeDataToolSettings(),
+      ...normalizeAdvancedSettings(),
+      setupChecklistDismissed: false,
       autoUpdate: false,
       teamMode: 'auto',
       teamPreset: 'default',
@@ -208,6 +227,19 @@ export async function loadConfiguredApiKeys(): Promise<string[]> {
 }
 
 export function registerSettingsHandlers() {
+  ipcMain.handle('ollama:models', async () => {
+    try { return { models: await listLocalOllamaModels() } }
+    catch { return { error: 'Ollama is unavailable on localhost. Start Ollama and try again.' } }
+  })
+  ipcMain.handle('ollama:pullSmallModel', async (_event, request: { consent: boolean; model: string }) => {
+    try {
+      await pullSmallOllamaModel(request)
+      return { success: true }
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : 'Model download failed.' }
+    }
+  })
+
   ipcMain.handle('settings:load', async () => {
     const parsed = await loadRuntimeSettings()
     parsed.providers = (parsed.providers || []).map((provider: any) => maskProviderForRenderer(provider))
@@ -224,17 +256,23 @@ export function registerSettingsHandlers() {
       const previousKeys = new Map(previous.map((provider) => [provider.id, provider.apiKey || '']))
       const toSave = {
         ...settings,
+        ...normalizeDataToolSettings(settings),
+        ...normalizeAdvancedSettings(settings),
+        permissionMode: settings.permissionMode === 'ask-all-writes' ? 'always' : settings.permissionMode === 'trusted' ? 'auto' : settings.permissionMode,
+        browserToolEnabled: settings.browserToolEnabled === true,
+        setupChecklistDismissed: settings.setupChecklistDismissed === true,
         providers: settings.providers?.map((provider: any) => {
           const { hasKey: _hasKey, clearKey: _clearKey, ...rest } = provider
           return {
             ...rest,
-            apiKey: nextStoredApiKey(provider, previousKeys.get(provider.id), encryptApiKey),
+            apiKey: secureStoredApiKey(provider, previousKeys.get(provider.id), encryptApiKey),
           }
         }) || settings.providers,
       }
       const tmp = `${SETTINGS_PATH}.${process.pid}.${randomUUID()}.tmp`
       await fs.promises.writeFile(tmp, JSON.stringify(toSave, null, 2), 'utf-8')
       await fs.promises.rename(tmp, SETTINGS_PATH)
+      if (!toSave.browserToolEnabled) closeBrowserSessions()
       return { success: true }
     } catch (err: any) {
       return { error: err.message }

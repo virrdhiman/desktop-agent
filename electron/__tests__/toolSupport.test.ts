@@ -20,6 +20,8 @@ describe('resolveToolArgs', () => {
     expect(resolveToolArgs('repo_search', { query: 'agent' }, ws).path).toBe(ws)
     expect(resolveToolArgs('repo_index', {}, ws).path).toBe(ws)
     expect(resolveToolArgs('repo_plan', { query: 'agent loop' }, ws).path).toBe(ws)
+    expect(resolveToolArgs('go_to_definition', { path: 'src/app.ts' }, ws).path).toBe(path.join(ws, 'src', 'app.ts'))
+    expect(resolveToolArgs('find_usages', { path: 'src/app.ts' }, ws).path).toBe(path.join(ws, 'src', 'app.ts'))
     expect(resolveToolArgs('vscode_context', {}, ws).path).toBe(ws)
     expect(resolveToolArgs('vscode_open', { path: 'src/app.ts' }, ws).path).toBe(path.join(ws, 'src', 'app.ts'))
     expect(resolveToolArgs('git_status', {}, ws).path).toBe(ws)
@@ -38,6 +40,14 @@ describe('resolveToolArgs', () => {
     const out = resolveToolArgs('archive_extract', { archive_path: 'orders.zip', output_path: 'orders-extracted' }, ws)
     expect(out.archive_path).toBe(path.join(ws, 'orders.zip'))
     expect(out.output_path).toBe(path.join(ws, 'orders-extracted'))
+  })
+
+  it('resolves database and OCR language asset paths against the workspace', () => {
+    const out = resolveToolArgs('sqlite_query', { path: 'data/sample.db' }, ws)
+    expect(out.path).toBe(path.join(ws, 'data', 'sample.db'))
+    const ocr = resolveToolArgs('ocr_image', { path: 'scan.png', language_path: 'models' }, ws)
+    expect(ocr.path).toBe(path.join(ws, 'scan.png'))
+    expect(ocr.language_path).toBe(path.join(ws, 'models'))
   })
 
   it('leaves URLs and non-path tools alone', () => {

@@ -14,6 +14,8 @@ import { randomUUID } from 'crypto'
 
 export const CONVERSATION_VERSION = 2
 export const MAX_STORED_MESSAGES = 1000
+export const MAX_STORED_MESSAGE_CHARS = 64_000
+export const MAX_STORED_CONVERSATION_BYTES = 512 * 1024
 export const DEFAULT_LIST_LIMIT = 100
 
 export type StoredRole = 'user' | 'assistant' | 'system'
@@ -101,7 +103,7 @@ export function normalizeConversation(raw: unknown, id: string, fallbackTime: nu
     messages.push({
       id: typeof m.id === 'string' && m.id ? m.id : `${id}-${i}`,
       role: m.role,
-      content: m.content,
+      content: m.content.slice(0, MAX_STORED_MESSAGE_CHARS),
       timestamp: toTimestamp(m.timestamp, fallbackTime),
     })
   })
@@ -163,34 +165,70 @@ export async function saveConversation(
     resume: sanitizeResume(input.resume, secrets),
   }
 
+  const boundedRecord = boundConversation(record)
   await fs.promises.mkdir(dir, { recursive: true })
   const target = fileFor(dir, record.id)
   return enqueueWrite(target, async () => {
     const tmp = `${target}.${process.pid}.${randomUUID()}.tmp`
     const backup = `${target}.bak`
-    const json = JSON.stringify(record, null, 2)
+    const json = JSON.stringify(boundedRecord, null, 2)
     await fs.promises.writeFile(tmp, json, 'utf-8')
     try {
-      try { await fs.promises.copyFile(target, backup) } catch {}
+      try {
+        await fs.promises.rm(backup, { force: true })
+        await fs.promises.rename(target, backup)
+      } catch (err: any) {
+        if (err?.code !== 'ENOENT') throw err
+      }
       await fs.promises.rename(tmp, target)
-    } catch {
-      // Windows can refuse the rename while another process holds the target open.
-      await fs.promises.writeFile(target, json, 'utf-8')
+    } catch (err) {
+      try { await fs.promises.rename(backup, target) } catch {}
       await fs.promises.rm(tmp, { force: true })
+      throw err
     }
-    return record
+    return boundedRecord
   })
 }
 
 function sanitizeResume(value: unknown, secrets: string[]): Record<string, unknown> | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
   try {
-    const json = JSON.stringify(value)
+    // Reject cyclic/non-serializable resume data rather than silently persisting
+    // an incomplete placeholder.
+    JSON.stringify(value)
+    const input = value as Record<string, unknown>
+    const allowed = [
+      'workspacePath', 'selectedFile', 'openFiles', 'tasks', 'terminalTabs', 'terminalEntries',
+      'toolExecutions', 'providerId', 'model', 'projectMemory', 'conversationSummary',
+      'checkpoint', 'lastVerification', 'git', 'checklistState',
+    ]
+    const safe = Object.fromEntries(allowed.filter((key) => key in input).map((key) => [key, stripSensitiveResumeFields(input[key])]))
+    const json = JSON.stringify(safe)
     if (json.length > 300_000) return { recoveryNote: 'Resume state exceeded the local storage limit.' }
     return JSON.parse(redactSecrets(json, secrets))
   } catch {
     return undefined
   }
+}
+
+function stripSensitiveResumeFields(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stripSensitiveResumeFields)
+  if (!value || typeof value !== 'object') return value
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>)
+    .filter(([key]) => !/^(?:api[_-]?key|providers?|launch(?:command|args)?|command)$/i.test(key))
+    .map(([key, child]) => [key, stripSensitiveResumeFields(child)]))
+}
+
+function boundConversation(record: StoredConversation): StoredConversation {
+  let messages = record.messages
+  const fits = (candidate: StoredMessage[]) =>
+    Buffer.byteLength(JSON.stringify({ ...record, messages: candidate }, null, 2), 'utf8') <= MAX_STORED_CONVERSATION_BYTES
+  while (messages.length > 1 && !fits(messages)) messages = messages.slice(1)
+  if (!fits(messages)) {
+    messages = messages.map((message) => ({ ...message, content: message.content.slice(0, 4_000) }))
+    while (messages.length > 1 && !fits(messages)) messages = messages.slice(1)
+  }
+  return { ...record, messages }
 }
 
 export async function listConversations(dir: string, limit = DEFAULT_LIST_LIMIT): Promise<StoredConversation[]> {
@@ -202,23 +240,29 @@ export async function listConversations(dir: string, limit = DEFAULT_LIST_LIMIT)
   }
 
   const results: StoredConversation[] = []
-  for (const name of names) {
-    if (!name.endsWith('.json')) continue
-    const id = name.slice(0, -'.json'.length)
+  const ids = new Set(names.flatMap((name) => (
+    name.endsWith('.json') ? [name.slice(0, -'.json'.length)]
+      : name.endsWith('.json.bak') ? [name.slice(0, -'.json.bak'.length)]
+        : []
+  )))
+  for (const id of ids) {
     if (!isValidSessionId(id)) continue
+    const name = `${id}.json`
     const file = path.join(dir, name)
     try {
       const [text, stat] = await Promise.all([fs.promises.readFile(file, 'utf-8'), fs.promises.stat(file)])
       const legacyTime = /^\d{12,}$/.test(id) ? Number(id) : stat.mtimeMs
       const conv = normalizeConversation(JSON.parse(text), id, legacyTime)
       if (conv) results.push(conv)
+      else console.error(`Skipping malformed conversation file: ${name}`)
     } catch {
       try {
         const backup = JSON.parse(await fs.promises.readFile(`${file}.bak`, 'utf-8'))
         const conv = normalizeConversation(backup, id, Date.now())
         if (conv) results.push(conv)
+        else console.error(`Skipping malformed conversation file: ${name}`)
       } catch {
-        console.warn(`Skipping unreadable conversation file: ${name}`)
+        console.error(`Skipping unreadable conversation file: ${name}`)
       }
     }
   }

@@ -6,6 +6,7 @@
  */
 import '@testing-library/jest-dom'
 import { vi } from 'vitest'
+import { getSetupCatalog } from '../lib/prerequisiteSetup'
 
 // Mock window.api for all DOM tests (node-environment tests have no window)
 if (typeof window !== 'undefined') Object.defineProperty(window, 'api', {
@@ -45,7 +46,8 @@ if (typeof window !== 'undefined') Object.defineProperty(window, 'api', {
     terminalKill: vi.fn(),
     onTerminalData: vi.fn(),
     onTerminalExit: vi.fn(),
-    toolExecute: vi.fn(),
+     toolExecute: vi.fn(),
+     onRepoIndexStatus: vi.fn(() => () => {}),
     vscodeStatus: vi.fn().mockResolvedValue({
       connected: false,
       bridgeFile: '',
@@ -65,19 +67,29 @@ if (typeof window !== 'undefined') Object.defineProperty(window, 'api', {
     onCheckpointCreated: vi.fn(() => () => {}),
     loadSettings: vi.fn(),
     saveSettings: vi.fn(),
+    ollamaModels: vi.fn().mockResolvedValue({ models: [] }),
+    ollamaPullSmallModel: vi.fn().mockResolvedValue({ success: true }),
     aiChat: vi.fn(),
     aiCancel: vi.fn().mockResolvedValue({ success: true }),
     aiListModels: vi.fn().mockResolvedValue([]),
     onAIStream: vi.fn(() => () => {}),
-    openPath: vi.fn(),
-    showItemInFolder: vi.fn(),
+     openPath: vi.fn(),
+     showItemInFolder: vi.fn(),
+     listPrerequisites: vi.fn().mockResolvedValue(getSetupCatalog('win32')),
+     openOfficialPrerequisite: vi.fn().mockResolvedValue({ success: true }),
+     downloadPrerequisite: vi.fn().mockResolvedValue({ success: false, error: 'not configured in test' }),
+     cancelPrerequisite: vi.fn().mockResolvedValue({ success: true }),
+     onPrerequisiteProgress: vi.fn(() => () => {}),
     saveConversation: vi.fn().mockResolvedValue({ success: true }),
     listConversations: vi.fn().mockResolvedValue([]),
     deleteConversation: vi.fn().mockResolvedValue({ success: true }),
     updateConversation: vi.fn().mockResolvedValue({ version: 2 }),
     exportConversation: vi.fn().mockResolvedValue({ success: true }),
-    importConversations: vi.fn().mockResolvedValue([]),
-    lspDiagnostics: vi.fn().mockResolvedValue([]),
+     importConversations: vi.fn().mockResolvedValue([]),
+    readDiagnostics: vi.fn(),
+    copyDiagnostics: vi.fn().mockResolvedValue({ success: true }),
+     recordDiagnostics: vi.fn().mockResolvedValue({ success: true }),
+     lspDiagnostics: vi.fn().mockResolvedValue([]),
     lspDefinition: vi.fn().mockResolvedValue(null),
     lspReferences: vi.fn().mockResolvedValue([]),
     lspRename: vi.fn().mockResolvedValue({ replacements: 0, updatedFiles: [], errors: [] }),

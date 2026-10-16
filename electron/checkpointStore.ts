@@ -1,7 +1,7 @@
 /** Crash-safe, bounded pre-edit snapshots for files the agent is about to change. */
 import fs from 'fs'
 import path from 'path'
-import { randomUUID } from 'crypto'
+import { createHash, randomUUID } from 'crypto'
 import { isPathInsideWorkspace, resolvesInsideWorkspace } from './toolPolicy'
 
 export const CHECKPOINT_VERSION = 1
@@ -14,6 +14,8 @@ export type CheckpointFile = {
   existed: boolean
   contentBase64?: string
   skipped?: string
+  afterExisted?: boolean
+  afterHash?: string
 }
 
 export type WorkspaceCheckpoint = {
@@ -38,6 +40,18 @@ async function atomicWrite(target: string, content: string) {
   const tmp = `${target}.${process.pid}.${randomUUID()}.tmp`
   await fs.promises.writeFile(tmp, content, 'utf-8')
   await fs.promises.rename(tmp, target)
+}
+
+async function fileHash(target: string): Promise<{ existed: boolean; hash?: string }> {
+  try {
+    const stat = await fs.promises.stat(target)
+    if (!stat.isFile()) return { existed: true }
+    const content = await fs.promises.readFile(target)
+    return { existed: true, hash: createHash('sha256').update(content).digest('hex') }
+  } catch (err: any) {
+    if (err?.code === 'ENOENT') return { existed: false }
+    throw err
+  }
 }
 
 export async function createCheckpoint(
@@ -92,6 +106,18 @@ export async function createCheckpoint(
   return checkpoint
 }
 
+/** Record the exact post-agent state so undo never overwrites a later user edit. */
+export async function finalizeCheckpoint(baseDir: string, checkpoint: WorkspaceCheckpoint): Promise<WorkspaceCheckpoint> {
+  for (const file of checkpoint.files) {
+    if (file.skipped) continue
+    const state = await fileHash(path.resolve(checkpoint.workspace, file.relativePath))
+    file.afterExisted = state.existed
+    file.afterHash = state.hash
+  }
+  await atomicWrite(checkpointFile(baseDir, checkpoint.sessionId, checkpoint.id), JSON.stringify(checkpoint, null, 2))
+  return checkpoint
+}
+
 export async function readCheckpoint(baseDir: string, sessionId: string, id: string): Promise<WorkspaceCheckpoint> {
   const raw = JSON.parse(await fs.promises.readFile(checkpointFile(baseDir, sessionId, id), 'utf-8'))
   if (!raw || raw.version !== CHECKPOINT_VERSION || raw.id !== id || raw.sessionId !== sessionId || !Array.isArray(raw.files)) {
@@ -105,6 +131,17 @@ export async function restoreCheckpoint(baseDir: string, sessionId: string, id: 
   const restored: string[] = []
   const removed: string[] = []
   const skipped: string[] = []
+  // Validate every tracked post-agent snapshot before changing anything. A user edit
+  // after the agent run makes the checkpoint ambiguous, so undo is refused atomically.
+  for (const file of checkpoint.files) {
+    if (file.skipped || file.afterExisted === undefined) continue
+    if (file.afterExisted && !file.afterHash) throw new Error(`Cannot undo: ${file.relativePath} has no post-agent snapshot`)
+    const target = path.resolve(checkpoint.workspace, file.relativePath)
+    const current = await fileHash(target)
+    if (current.existed !== file.afterExisted || current.hash !== file.afterHash) {
+      throw new Error(`Cannot undo: ${file.relativePath} changed after checkpoint`)
+    }
+  }
   for (const file of checkpoint.files) {
     const target = path.resolve(checkpoint.workspace, file.relativePath)
     if (!isPathInsideWorkspace(checkpoint.workspace, target) || !await resolvesInsideWorkspace(checkpoint.workspace, target)) {

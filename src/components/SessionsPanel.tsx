@@ -2,14 +2,37 @@
 import { useMemo, useState } from 'react'
 import { useStore } from '../store'
 import type { ChatSession } from '../types'
+import { buildSessionHandoff, buildSessionStatusSummary } from '../lib/sessionSummary'
 
 export default function SessionsPanel() {
   const {
     sessions, loadSession, deleteSession, currentSessionId, newChat, setActivePanel,
     renameSession, toggleSessionPin, reloadSessions, addMessage, setAllFiles,
+    workspacePath, tasks, lastVerification, settings, selectedFile, latestCheckpoint,
   } = useStore()
   const [query, setQuery] = useState('')
   const [busy, setBusy] = useState('')
+  const [handoffCopied, setHandoffCopied] = useState(false)
+  const activeSession = sessions.find((session) => session.id === currentSessionId) || null
+  const activeProvider = settings.providers.find((provider) => provider.id === settings.activeProvider)
+  const statusSummary = buildSessionStatusSummary(activeSession, {
+    workspacePath,
+    providerName: activeProvider?.name,
+    model: activeProvider?.model,
+    tasks,
+    verification: lastVerification,
+    selectedFile,
+    checkpointFiles: latestCheckpoint?.files.length,
+  })
+
+  const copyHandoff = async () => {
+    await navigator.clipboard.writeText(buildSessionHandoff(activeSession, {
+      workspacePath, providerName: activeProvider?.name, model: activeProvider?.model,
+      tasks, verification: lastVerification, selectedFile, checkpointFiles: latestCheckpoint?.files.length,
+    }))
+    setHandoffCopied(true)
+    window.setTimeout(() => setHandoffCopied(false), 1800)
+  }
 
   const shown = useMemo(() => {
     const needle = query.trim().toLowerCase()
@@ -38,7 +61,7 @@ export default function SessionsPanel() {
   const restore = async (session: ChatSession) => {
     const checkpoint = session.resume?.checkpoint
     if (!checkpoint) return
-    if (!window.confirm(`Restore ${checkpoint.files.length} file checkpoint from ${new Date(checkpoint.createdAt).toLocaleString()}? Current versions of those files will be replaced.`)) return
+    if (!window.confirm(`Undo the last agent change for ${checkpoint.files.length} file(s) from ${new Date(checkpoint.createdAt).toLocaleString()}? User edits made afterward will be preserved by refusing an ambiguous restore.`)) return
     setBusy(session.id)
     try {
       const result = await window.api.restoreCheckpoint(session.id, checkpoint.id)
@@ -93,6 +116,18 @@ export default function SessionsPanel() {
         />
       </div>
 
+      <div className="card" style={{ margin: '10px 14px 4px', padding: '10px 12px' }} aria-label="Current session status">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+          <strong style={{ fontSize: 12 }}>Current session context</strong>
+          <button className="btn btn-sm" onClick={() => { void copyHandoff() }} title="Copy a local handoff summary without secrets">
+            {handoffCopied ? 'Copied' : 'Copy handoff'}
+          </button>
+        </div>
+        <div style={{ display: 'grid', gap: 3, marginTop: 7, fontSize: 11, color: 'var(--text-secondary)' }}>
+          {statusSummary.map((line) => <div key={line}>{line}</div>)}
+        </div>
+      </div>
+
       <div className="panel-body" style={{ flex: 1, overflowY: 'auto' }}>
         {shown.length === 0 ? (
           <div className="empty-state">
@@ -133,6 +168,7 @@ export default function SessionsPanel() {
                       )}
                       <div style={{ display: 'flex', gap: 6, marginTop: 7, flexWrap: 'wrap' }}>
                         {currentSessionId === session.id && <span className="badge badge-blue" style={{ fontSize: 10 }}>Active</span>}
+                        {session.recovered && <span className="badge" style={{ fontSize: 10 }}>Recovered</span>}
                         {resume?.lastVerification && (
                           <span className={`badge ${resume.lastVerification.ok ? 'badge-green' : ''}`} style={{ fontSize: 10 }}>
                             Last check {resume.lastVerification.ok ? 'passed' : 'failed'}
@@ -142,12 +178,13 @@ export default function SessionsPanel() {
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                      <button className="btn btn-sm" title="Resume this saved session" onClick={(event) => { event.stopPropagation(); void open(session.id) }}>Resume</button>
                       <button className="btn btn-sm" title={session.pinned ? 'Unpin' : 'Pin'} onClick={(event) => { event.stopPropagation(); void toggleSessionPin(session.id) }}>Pin</button>
                       <button className="btn btn-sm" title="Rename" onClick={(event) => { event.stopPropagation(); rename(session) }}>Rename</button>
                       <button className="btn btn-sm" title="Export" onClick={(event) => { event.stopPropagation(); void window.api.exportConversation(session.id) }}>Export</button>
                       {resume?.checkpoint && (
-                        <button className="btn btn-sm" disabled={busy === session.id} title="Restore files to the last pre-edit checkpoint" onClick={(event) => { event.stopPropagation(); void restore(session) }}>
-                          Restore
+                        <button className="btn btn-sm" disabled={busy === session.id} title="Undo the last agent change without overwriting later user edits" onClick={(event) => { event.stopPropagation(); void restore(session) }}>
+                          Undo last agent change
                         </button>
                       )}
                       <button className="btn btn-sm" aria-label={`Delete chat ${session.title}`} title="Delete from disk" onClick={(event) => { event.stopPropagation(); remove(session.id) }} style={{ color: 'var(--error)' }}>Delete</button>

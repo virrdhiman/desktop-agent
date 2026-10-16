@@ -355,6 +355,8 @@ describe('unverified claims', () => {
 
 describe('provider failure messages', () => {
   it.each([
+    ['API error (401): Invalid API Key', 'auth'],
+    ['HTTP 401: expired API key', 'auth'],
     ['API error (429): Rate limit reached', 'rate'],
     ['fetch failed', 'network'],
     ['IPC timeout: ai:chat did not respond in 600s', 'network'],
@@ -396,6 +398,8 @@ describe('provider failure messages', () => {
   it('tells the user which provider actually answered', () => {
     expect(describeFallback([{ name: 'Groq', error: '429 rate limit' }], 'Google Gemini'))
       .toBe('Groq (rate limited) failed, so this answer came from Google Gemini.')
+    expect(describeFallback([{ name: 'Groq', error: 'API error (401): Invalid API Key' }], 'Google Gemini'))
+      .toBe('Groq (API key rejected) failed, so this answer came from Google Gemini.')
   })
 
   it('gives next steps for setup problems and the tool-round limit', () => {

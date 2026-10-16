@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { buildRepoIndex, buildRepoMap, searchRepo, startRepoIndexWatcher, stopRepoIndexWatchers } from '../repoIndex'
+import { buildRepoIndex, buildRepoMap, buildRepoSymbolGraph, findRepoUsages, goToRepoDefinition, onRepoIndexStatus, searchCode, searchRepo, startRepoIndexWatcher, stopRepoIndexWatchers } from '../repoIndex'
 
 let root: string
 
@@ -18,6 +18,7 @@ beforeEach(() => {
     '  return queryQueue.length',
     '}',
   ].join('\n'))
+  fs.writeFileSync(path.join(root, 'src', 'agentLoop.ts'), 'export function runAgent() { return true }\n')
   fs.writeFileSync(path.join(root, 'src', 'AgentChat.test.tsx'), 'import { AgentChat } from "./AgentChat"\n')
   fs.writeFileSync(path.join(root, 'src', 'GitPanel.tsx'), 'export const ReviewBundle = () => null\n')
   fs.writeFileSync(path.join(root, 'node_modules', 'ignored', 'bad.ts'), 'queryQueue should not be indexed\n')
@@ -47,6 +48,26 @@ describe('repoIndex', () => {
     expect(hits[0].reason).toContain('semantic')
     expect(hits[0].snippet).toContain('queryQueue')
     expect(hits[0].line).toBeGreaterThan(0)
+  })
+
+  it('resolves local imports to definitions and records bounded references', async () => {
+    const graph = await buildRepoSymbolGraph(root)
+    const definition = graph.definitions.find((item) => item.symbol === 'runAgent')
+    expect(definition?.path).toBe('src/agentLoop.ts')
+    expect(graph.edges).toContainEqual({
+      from: 'src/AgentChat.tsx',
+      to: 'src/agentLoop.ts',
+      kind: 'import',
+      symbols: ['runAgent'],
+    })
+    expect(graph.references.filter((item) => item.symbol === 'runAgent')).toContainEqual({
+      path: 'src/AgentChat.tsx',
+      line: 1,
+      symbol: 'runAgent',
+      definition: 'src/agentLoop.ts',
+    })
+    const agentLoop = (await buildRepoMap(root)).find((entry) => entry.path === 'src/agentLoop.ts')
+    expect(agentLoop?.referencedBy).toContain('src/AgentChat.tsx')
   })
 
   it('reuses the semantic cache until files change', async () => {
@@ -79,5 +100,48 @@ describe('repoIndex', () => {
     expect(stats.watching).toBe(true)
     const second = await buildRepoIndex(root)
     expect(second.watching).toBe(true)
+  })
+
+  it('honors gitignore patterns, skips binary and oversized files, and stays bounded', async () => {
+    fs.writeFileSync(path.join(root, '.gitignore'), 'ignored/\n*.secret\n')
+    fs.mkdirSync(path.join(root, 'ignored'), { recursive: true })
+    fs.writeFileSync(path.join(root, 'ignored', 'hidden.ts'), 'export const Hidden = true\n')
+    fs.writeFileSync(path.join(root, 'src', 'ignored.secret'), 'should not be indexed\n')
+    fs.writeFileSync(path.join(root, 'src', 'binary.json'), Buffer.from('x\0y'))
+    fs.writeFileSync(path.join(root, 'src', 'oversized.ts'), 'x'.repeat(500_001))
+
+    const stats = await buildRepoIndex(root, true)
+    const map = await buildRepoMap(root)
+    const paths = map.map((entry) => entry.path)
+    expect(paths).not.toContain('ignored/hidden.ts')
+    expect(paths).not.toContain('src/ignored.secret')
+    expect(paths).not.toContain('src/binary.json')
+    expect(paths).not.toContain('src/oversized.ts')
+    expect(stats.files).toBeLessThanOrEqual(2_500)
+  })
+
+  it('searches code and resolves bounded definition/usages from the same index', async () => {
+    const hits = await searchCode(root, 'queryQueue')
+    expect(hits[0]).toMatchObject({ path: 'src/AgentChat.tsx', line: 3 })
+
+    const definition = await goToRepoDefinition(root, 'src/AgentChat.tsx', 1, 11)
+    expect(definition).toEqual({ symbol: 'runAgent', path: 'src/agentLoop.ts', line: 1 })
+
+    const usages = await findRepoUsages(root, 'src/AgentChat.tsx', 1, 11)
+    expect(usages).toContainEqual({ path: 'src/AgentChat.tsx', line: 1, symbol: 'runAgent', definition: 'src/agentLoop.ts' })
+    expect(usages.length).toBeLessThanOrEqual(250)
+  })
+
+  it('reports indexing progress and completion timing', async () => {
+    const events: string[] = []
+    const unsubscribe = onRepoIndexStatus((status) => events.push(status.state))
+    try {
+      await buildRepoIndex(root, true)
+      expect(events[0]).toBe('indexing')
+      expect(events).toContain('idle')
+      expect((await buildRepoIndex(root)).durationMs).toBeGreaterThanOrEqual(0)
+    } finally {
+      unsubscribe()
+    }
   })
 })

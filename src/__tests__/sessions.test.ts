@@ -196,4 +196,25 @@ describe('hydrateSessions (startup)', () => {
     expect(state.latestCheckpoint?.id).toBe('cp-1')
     expect(state.lastVerification?.ok).toBe(false)
   })
+
+  it('marks a restored session as recovered and restores checklist state without starting work', () => {
+    useStore.getState().hydrateSessions(
+      [{
+        id: 'recovered', title: 'Recovered', createdAt: 1, updatedAt: 2, messages: [user('1', 'continue')],
+        resume: {
+          workspacePath: 'C:\\repo', providerId: 'groq', model: 'model-1',
+          checklistState: { setupChecklistDismissed: true },
+          terminalTabs: [{ id: 'term-1', name: 'Terminal 1', cwd: 'C:\\repo' }],
+        },
+      }],
+      { restoreLatest: true }
+    )
+
+    const state = useStore.getState()
+    expect(state.sessions[0].recovered).toBe(true)
+    expect(state.settings.setupChecklistDismissed).toBe(true)
+    expect(state.settings.activeProvider).toBe('groq')
+    expect(api.aiChat).not.toHaveBeenCalled()
+    expect(api.terminalCreate).not.toHaveBeenCalled()
+  })
 })
