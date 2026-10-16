@@ -31,6 +31,7 @@ import SessionsPanel from './components/SessionsPanel'
 import SearchResults from './components/SearchResults'
 import CommandPalette from './components/CommandPalette'
 import VsCodeBridgePanel from './components/VsCodeBridgePanel'
+import WorkspaceSplit from './components/WorkspaceSplit'
 
 export default function App() {
   const {
@@ -142,33 +143,23 @@ export default function App() {
       <Sidebar />
 
       {/* Main content */}
-      <div className="main-content" style={{ display: 'flex', flexDirection: 'column' }}>
+      <div className="main-content">
         {/* Top area: context-dependent panel + editor */}
-        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-          {/* Left panel */}
-          <div style={{
-            width: activePanel === 'chat' ? '40%' : '100%',
-            display: activePanel === 'settings' ? 'block' : 'flex',
-            flexDirection: 'column',
-            borderRight: activePanel === 'chat' && showEditor ? '1px solid var(--border)' : 'none',
-            overflow: 'hidden',
-          }}>
-            {activePanel === 'chat' && <AgentChat />}
-            {activePanel === 'files' && <FileBrowser />}
-            {activePanel === 'git' && <GitPanel />}
-            {activePanel === 'branches' && <BranchManager />}
-            {activePanel === 'tasks' && <TaskPanel />}
-            {activePanel === 'sessions' && <SessionsPanel />}
-            {activePanel === 'vscode' && <VsCodeBridgePanel />}
-            {activePanel === 'search' && <SearchResults />}
-            {activePanel === 'terminal' && <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}><MultiTerminal /></div>}
-            {activePanel === 'settings' && <SettingsPanel />}
-          </div>
-
-          {/* Right panel: Editor (visible in chat mode) */}
-          {activePanel === 'chat' && showEditor && (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-              <CodeEditor />
+        <div className="workspace-main-row">
+          {activePanel === 'chat' && showEditor ? (
+            <WorkspaceSplit primary={<AgentChat />} secondary={<CodeEditor />} />
+          ) : (
+            <div className={`workspace-panel ${activePanel === 'settings' ? 'workspace-panel-settings' : ''}`}>
+              {activePanel === 'chat' && <AgentChat />}
+              {activePanel === 'files' && <FileBrowser />}
+              {activePanel === 'git' && <GitPanel />}
+              {activePanel === 'branches' && <BranchManager />}
+              {activePanel === 'tasks' && <TaskPanel />}
+              {activePanel === 'sessions' && <SessionsPanel />}
+              {activePanel === 'vscode' && <VsCodeBridgePanel />}
+              {activePanel === 'search' && <SearchResults />}
+              {activePanel === 'terminal' && <MultiTerminal />}
+              {activePanel === 'settings' && <SettingsPanel />}
             </div>
           )}
         </div>

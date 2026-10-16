@@ -88,6 +88,85 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+}
+
+.workspace-main-row {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.workspace-panel {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.workspace-panel-settings {
+  display: block;
+  overflow: auto;
+}
+
+.workspace-split {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.workspace-pane {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.workspace-pane-primary {
+  width: var(--workspace-split);
+  flex: 0 1 var(--workspace-split);
+}
+
+.workspace-pane-secondary {
+  flex: 1 1 0;
+}
+
+.workspace-split-handle {
+  width: 9px;
+  flex: 0 0 9px;
+  padding: 0;
+  border: 0;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  background: var(--bg-secondary);
+  cursor: col-resize;
+  position: relative;
+  z-index: 1;
+}
+
+.workspace-split-handle:hover,
+.workspace-split-handle:focus-visible {
+  background: rgba(59, 130, 246, 0.25);
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.workspace-split-handle span {
+  position: absolute;
+  inset: 50% 2px auto;
+  height: 30px;
+  transform: translateY(-50%);
+  border-radius: 3px;
+  background: var(--text-muted);
+  opacity: 0.65;
 }
 
 .panel-header {
@@ -278,4 +357,63 @@ kbd {
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 900px) {
+  .sidebar {
+    width: 48px;
+  }
+
+  .sidebar-button {
+    width: 36px;
+    height: 36px;
+  }
+
+  .workspace-split {
+    flex-direction: column;
+  }
+
+  .workspace-pane-primary {
+    width: auto;
+    flex: 0 1 var(--workspace-split);
+  }
+
+  .workspace-pane-secondary {
+    flex: 1 1 0;
+  }
+
+  .workspace-split-handle {
+    width: 100%;
+    height: 9px;
+    flex: 0 0 9px;
+    border: 0;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    cursor: row-resize;
+  }
+
+  .workspace-split-handle span {
+    inset: 2px 50% auto;
+    width: 30px;
+    height: 5px;
+    transform: translateX(-50%);
+  }
+}
+
+@media (max-width: 560px) {
+  .sidebar {
+    width: 44px;
+    padding-top: 6px;
+  }
+
+  .sidebar-button {
+    width: 34px;
+    height: 34px;
+    font-size: 16px;
+  }
+
+  .panel-header {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
 }
