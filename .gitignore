@@ -2,6 +2,10 @@ node_modules/
 dist/
 dist-electron/
 release/
+release-updater-qa/
+.work/
+.omnirush/
+screenshots/
 evals/hosted/
 .vd-agent/
 local-certs/
@@ -30,6 +34,14 @@ __pycache__/
 # Build (build/ is electron-builder's resources folder for icons, so it is tracked)
 *.tgz
 *.tar.gz
+*.exe
+*.dll
+*.pdb
+*.pfx
+*.p12
+*.pem
+*.key
+*.credentials
 
 # OS
 classic

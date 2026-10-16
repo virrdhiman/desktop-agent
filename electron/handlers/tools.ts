@@ -220,6 +220,7 @@ export function registerToolHandlers() {
             return {
               result: [
                 `Repo index ${stats.cached ? 'reused' : 'built'}: ${stats.files} files, ${stats.bytes} bytes.`,
+                stats.truncated ? 'Index bounds reached; some eligible files were omitted.' : 'Index bounds not reached.',
                 `Background watcher: ${stats.watching ? 'on' : 'off'}`,
                 `Updated: ${new Date(stats.updatedAt).toISOString()}`,
                 `Fingerprint: ${stats.fingerprint.slice(0, 12)}`,
