@@ -99,6 +99,36 @@ describe('session auto-save', () => {
       lastVerification: { command: 'npm test', ok: true },
     })
   })
+
+  it('flushes a submitted marker before restart and lists it after hydration', async () => {
+    let persisted: any
+    let releaseWrite!: () => void
+    const writeFinished = new Promise<void>((resolve) => { releaseWrite = resolve })
+    api.saveConversation.mockImplementation(async (session) => {
+      persisted = session
+      await writeFinished
+      return { success: true, id: session.id, updatedAt: Date.now() }
+    })
+    api.listConversations.mockImplementation(async () => persisted ? [persisted] : [])
+
+    useStore.getState().addMessage(user('submitted-marker', 'QA resume marker'))
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY_MS + 10)
+    let flushCompleted = false
+    const flush = useStore.getState().flushSessionSave().then(() => { flushCompleted = true })
+    await Promise.resolve()
+    const completedBeforeWriteFinished = flushCompleted
+    releaseWrite()
+    await flush
+
+    expect(completedBeforeWriteFinished).toBe(false)
+    expect(persisted.messages[0]).toMatchObject({ id: 'submitted-marker', content: 'QA resume marker' })
+
+    useStore.setState({ messages: [], sessions: [], currentSessionId: null })
+    await useStore.getState().reloadSessions()
+    expect(useStore.getState().sessions[0].messages[0].content).toBe('QA resume marker')
+    api.saveConversation.mockResolvedValue({ success: true })
+    api.listConversations.mockResolvedValue([])
+  })
 })
 
 describe('new chat, load, delete', () => {
