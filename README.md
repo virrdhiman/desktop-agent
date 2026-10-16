@@ -137,6 +137,7 @@ Your prompts and code go **only** to the AI provider you choose, plus any servic
 | [docs/MULTI_AGENT.md](./docs/MULTI_AGENT.md) | Agentic environments, custom roles, safety boundaries, provider use, and limits |
 | [docs/VSCODE_BRIDGE.md](./docs/VSCODE_BRIDGE.md) | Optional VS Code extension bridge for active editor, selection, and open-file context |
 | [docs/RESUME_AND_RECOVERY.md](./docs/RESUME_AND_RECOVERY.md) | Restart resume state, local project memory, checkpoints, and rollback limits |
+| [docs/CHAT_UI_LAYOUT.md](./docs/CHAT_UI_LAYOUT.md) | Resizable chat/editor layout and narrow-window behavior |
 | [docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) | Fixes for common problems |
 | [TOOLS.md](./TOOLS.md) | Reference for every agent tool |
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | How the code is organized |
