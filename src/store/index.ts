@@ -33,6 +33,16 @@ export const AUTOSAVE_DELAY_MS = 800
 export const MAX_SESSIONS_IN_MEMORY = 100
 
 let autosaveTimer: ReturnType<typeof setTimeout> | null = null
+let autosaveInFlight: Promise<void> | null = null
+
+function trackAutosave(pending: Promise<void>): Promise<void> {
+  autosaveInFlight = pending
+  void pending.then(
+    () => { if (autosaveInFlight === pending) autosaveInFlight = null },
+    () => { if (autosaveInFlight === pending) autosaveInFlight = null },
+  )
+  return pending
+}
 
 function newSessionId() {
   return `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -438,12 +448,16 @@ export const useStore = create<AppState>((set, get) => ({
     if (autosaveTimer) clearTimeout(autosaveTimer)
     autosaveTimer = setTimeout(() => {
       autosaveTimer = null
-      void get().saveSession()
+      trackAutosave(get().saveSession())
     }, AUTOSAVE_DELAY_MS)
   },
   flushSessionSave: async () => {
-    if (!autosaveTimer) return
-    await get().saveSession()
+    if (autosaveTimer) {
+      clearTimeout(autosaveTimer)
+      autosaveTimer = null
+      trackAutosave(get().saveSession())
+    }
+    if (autosaveInFlight) await autosaveInFlight
   },
   loadSession: async (id) => {
     if (get().chatLoading) get().stopGeneration()
