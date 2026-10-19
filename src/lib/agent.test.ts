@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest'
 import {
   MAX_CONTEXT_FILE_CHARS, MAX_TOOL_RESULT_CHARS, TOOL_SYSTEM_PROMPT,
   assessResponse, buildContext, buildHistory, buildSystemPrompt, classifyProviderError, cleanResponse,
-  correctionMessage, describeAuthFailure, describeFallback, describeProviderFailure, followUpMessage,
+  agentTurnTimeoutNotice, correctionMessage, describeAuthFailure, describeFallback, describeProviderFailure, followUpMessage,
   formatToolResult, hasToolBlock, maxRoundsNotice, missingKeyNotice, noProviderNotice, parseToolCalls,
-  resolveWorkspacePath, toolFailureHint, unusableResponseNotice, unverifiedClaims, unverifiedClaimsMessage,
+  resolveWorkspacePath, needsToolContinuation, toolContinuationMessage, toolFailureHint, unusableResponseNotice, unverifiedClaims, unverifiedClaimsMessage,
   unverifiedClaimsNotice,
 } from './agent'
 
@@ -231,6 +231,21 @@ describe('followUpMessage', () => {
     const msg = followUpMessage('Tool x FAILED.')
     expect(msg).toContain('Tool x FAILED.')
     expect(msg).toMatch(/If a tool failed, say so in one line and adapt instead of repeating the same call/)
+  })
+})
+
+describe('agent loop stall recovery', () => {
+  it('recognizes prose that promises another action after a tool run', () => {
+    expect(needsToolContinuation('I created the file. Next, I need your approval to run pytest.', [{ name: 'create_file', ok: true }])).toBe(true)
+    expect(needsToolContinuation('The tests passed and the task is complete.', [{ name: 'run_command', ok: true }])).toBe(false)
+    expect(needsToolContinuation('I will summarize the result now.', [])).toBe(false)
+  })
+
+  it('builds a tool-only recovery prompt and a visible timeout notice', () => {
+    expect(toolContinuationMessage()).toMatch(/continue the unfinished task/i)
+    expect(toolContinuationMessage()).toContain('```tool')
+    expect(agentTurnTimeoutNotice('IPC timeout: ai:chat did not respond in 600s')).toMatch(/per-turn timeout/i)
+    expect(agentTurnTimeoutNotice('API error (429)')).toBeNull()
   })
 })
 

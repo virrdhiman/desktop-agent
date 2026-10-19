@@ -401,6 +401,32 @@ export function followUpMessage(toolResults: string): string {
   ].join('\n\n')
 }
 
+/** Detects a tool-backed turn that stopped at prose instead of taking its next action. */
+export function needsToolContinuation(text: string, toolRuns: Array<{ name: string; ok: boolean }> = []): boolean {
+  if (toolRuns.length === 0) return false
+  const prose = cleanResponse(text)
+  if (!prose) return false
+  if (/\b(?:done|completed|finished|verified|passed|no further action)\b/i.test(prose)
+    && !/\b(?:next|need|still|not yet|approval|run|execute|verify)\b/i.test(prose)) return false
+  return /\b(?:next (?:step|command|action)|need(?:s)? (?:your|user) approval|please approve|waiting for approval|approve (?:the|this)|I(?:'ll| will) (?:now|next)|I need to (?:run|execute|read|inspect|verify)|still need(?: to)?|not yet|once you approve|then I(?:'ll| will)|continue with (?:a )?(?:tool|command))\b/i.test(prose)
+}
+
+export function toolContinuationMessage(): string {
+  return [
+    'Continue the unfinished task now.',
+    'Use one of the available tools and emit exactly one valid tool call in this schema:',
+    '```tool',
+    '{"name":"tool_name","args":{}}',
+    '```',
+    'Do not describe a command, ask for approval in prose, or claim work is complete. If no action remains, say DONE.',
+  ].join('\n')
+}
+
+export function agentTurnTimeoutNotice(error: string): string | null {
+  if (!/IPC timeout:\s*ai:chat/i.test(error)) return null
+  return 'Agent stopped: per-turn timeout. The provider did not respond before the turn limit. Retry with a smaller request or a different model.'
+}
+
 // ─── Response quality ───────────────────────────────────────────────────────
 
 const LEADING_FILLER = [

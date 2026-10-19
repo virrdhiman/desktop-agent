@@ -34,9 +34,9 @@ import { toolActivityArgs, toolActivityResult } from '../lib/toolActivity'
 import { AUTHOR_NAME, AUTHOR_URL, REPO_URL } from '../lib/brand'
 import {
   MAX_TOOL_ROUNDS, assessResponse, buildContext, buildHistory, buildSystemPrompt, cleanResponse,
-  correctionMessage, describeAuthFailure, describeFallback, describeProviderFailure, followUpMessage,
+  agentTurnTimeoutNotice, correctionMessage, describeAuthFailure, describeFallback, describeProviderFailure, followUpMessage,
   formatToolResult, hasToolBlock, maxRoundsNotice, missingKeyNotice, noProviderNotice, parseToolCalls,
-  resolveWorkspacePath, unusableResponseNotice, unverifiedClaims, unverifiedClaimsMessage, unverifiedClaimsNotice,
+  needsToolContinuation, resolveWorkspacePath, toolContinuationMessage, unusableResponseNotice, unverifiedClaims, unverifiedClaimsMessage, unverifiedClaimsNotice,
   type ProviderAttempt, type ToolRun,
 } from '../lib/agent'
 import {
@@ -801,7 +801,7 @@ export default function AgentChat() {
     const call = async (): Promise<Extract<ChatOutcome, { content: string }> | null> => {
       const outcome = await callWithFallback(apiMessages, answeredBy, taskKind, false)
       if ('error' in outcome) {
-        finish('error', outcome.cancelled ? 'Generation stopped.' : outcome.error)
+        finish('error', outcome.cancelled ? 'Generation stopped.' : agentTurnTimeoutNotice(outcome.error) || outcome.error)
         return null
       }
       if (outcome.failed.length > 0 && !fallbackNoticeShown) {
@@ -907,6 +907,7 @@ export default function AgentChat() {
 
     let round = 0
     let retried = false
+    let stalledRetried = false
     let reviewPass = 0
     let repairAttempted = false
     let latestReview: TeamReview = { verdict: 'approve', score: 0, issues: [], repairInstructions: '', usable: false }
@@ -918,6 +919,25 @@ export default function AgentChat() {
       if (!hasToolBlock(responseContent)) {
         const problems = assessResponse(responseContent, userContent, historyMessages.some((message) => message.role === 'user' || message.role === 'assistant'))
         const claims = problems.length === 0 ? unverifiedClaims(responseContent, toolRuns) : []
+        const unfinished = needsToolContinuation(responseContent, toolRuns)
+        if (unfinished && stalledRetried) {
+          const cleaned = cleanResponse(responseContent)
+          if (cleaned) addMessage({ id: `${Date.now()}-a${round}`, role: 'assistant', content: cleaned, timestamp: Date.now() })
+          finish('error', 'Agent stopped: needs your input. The model did not provide the next tool call after one recovery prompt.')
+          return
+        }
+        if (unfinished && !stalledRetried) {
+          stalledRetried = true
+          apiMessages = [
+            ...apiMessages,
+            ...(responseContent.trim() ? [{ role: 'assistant', content: responseContent }] : []),
+            { role: 'user', content: toolContinuationMessage() },
+          ]
+          outcome = await call()
+          if (!outcome) return
+          addTokens(0, Math.ceil(outcome.content.length / 4))
+          continue
+        }
         if ((problems.length > 0 || claims.length > 0) && !retried) {
           retried = true
           apiMessages = [

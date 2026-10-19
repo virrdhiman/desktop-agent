@@ -21,7 +21,9 @@ import type { RepoIndexStatus } from '../src/types'
 /** Invoke with a timeout — prevents renderer from hanging if main process stalls */
 function invokeWithTimeout(channel: string, ...args: any[]): Promise<any> {
   // tool:execute outlives run_command's own 30 s limit so its clearer timeout message wins.
-  const ms = channel === 'ollama:pullSmallModel' ? 15 * 60_000 : channel === 'ai:chat' ? 10 * 60_000 : channel === 'tool:execute' ? 60_000 : 30_000
+  const configuredAiTimeout = Number(process.env.VD_AGENT_CHAT_TIMEOUT_MS)
+  const aiTimeout = Number.isFinite(configuredAiTimeout) && configuredAiTimeout > 0 ? configuredAiTimeout : 10 * 60 * 1000
+  const ms = channel === 'ollama:pullSmallModel' ? 15 * 60_000 : channel === 'ai:chat' ? aiTimeout : channel === 'tool:execute' ? 60_000 : 30_000
   return Promise.race([
     ipcRenderer.invoke(channel, ...args),
     new Promise((_, reject) => setTimeout(() => reject(new Error(`IPC timeout: ${channel} did not respond in ${ms / 1000}s`)), ms)),
