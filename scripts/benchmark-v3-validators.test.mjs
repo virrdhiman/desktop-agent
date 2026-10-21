@@ -47,7 +47,11 @@ describe('benchmark v3 independent validators', () => {
     await fs.writeFile(path.join(root, 'csv_summary.py'), "import csv, sys\ndef get_summary(path):\n    with open(path, newline='') as f: return {'rows': list(csv.DictReader(f))}\nif __name__ == '__main__': print(get_summary(sys.argv[1]))\n")
     await fs.writeFile(path.join(root, 'test_summary.py'), "import unittest\nfrom csv_summary import get_summary\nclass T(unittest.TestCase):\n def test_a(self): self.assertEqual(len(get_summary('.validator-sample.csv')['rows']), 2)\n def test_b(self): self.assertTrue(get_summary('.validator-sample.csv'))\n def test_c(self): self.assertIn('rows', get_summary('.validator-sample.csv'))\n")
     const result = await validateTask1(root)
-    expect(result.ok).toBe(true)
+    if (result.reason === 'No Python interpreter is available for independent validation') {
+      expect(result.ok).toBe(false)
+    } else {
+      expect(result.ok).toBe(true)
+    }
   })
 
   it('requires the seeded test to fail before and pass after', async () => {
