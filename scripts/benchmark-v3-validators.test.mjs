@@ -33,10 +33,10 @@ async function writeZip(file, entries) {
 }
 
 describe('benchmark v3 prompt source', () => {
-  it('keeps the exact eleven v2 task lines in order', () => {
-    expect(BENCHMARK_V2_TASKS).toHaveLength(11)
-    expect(BENCHMARK_V2_TASKS[0].text).toBe('1 Coding: Python CLI (CSV to summary stats) + 3 unit tests; agent runs them, they pass.')
-    expect(BENCHMARK_V2_TASKS[8].text).toContain('virrdhiman/vd-bench-sandbox only')
+  it('keeps the exact eight v2 task lines in order', () => {
+    expect(BENCHMARK_V2_TASKS).toHaveLength(8)
+    expect(BENCHMARK_V2_TASKS[0].text).toBe('1 Coding: create a small Python CLI (CSV to summary stats) with 3 unit tests; the agent runs them and they pass.')
+    expect(BENCHMARK_V2_TASKS[7].text).toContain('run a shell command needing admin')
     expect(BENCHMARK_V2_TASKS_TEXT.split('\n').every((line, index) => line.startsWith(`${index + 1} `))).toBe(true)
   })
 })
