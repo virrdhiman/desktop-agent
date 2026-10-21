@@ -102,6 +102,14 @@ async function runPythonTests(root, python = 'python') {
   return { ok: false, attempts, testCount: 0 }
 }
 
+async function resolvePythonCommand() {
+  for (const candidate of process.platform === 'win32' ? ['python', 'py'] : ['python3', 'python']) {
+    const probe = await runCommand(candidate, ['--version'], { timeoutMs: 15_000 })
+    if (probe.ok) return candidate
+  }
+  return null
+}
+
 async function runNodeTests(root, command = ['node', ['calc.test.js']]) {
   const result = await runCommand(command[0], command[1], { cwd: root })
   return { ...result, testCount: extractTestCount(`${result.stdout}\n${result.stderr}`) }
@@ -115,9 +123,11 @@ export async function validateTask1(root) {
   const sample = path.join(workdir, '.validator-sample.csv')
   await fs.writeFile(sample, 'name,value\na,2\nb,4\n', 'utf8')
   try {
-    const importCheck = await runCommand('python', ['-c', "from csv_summary import get_summary; assert get_summary(' .validator-sample.csv'.strip())",], { cwd: workdir })
-    const cliRun = await runCommand('python', [path.basename(cli), path.basename(sample)], { cwd: workdir })
-    const tests = await runPythonTests(workdir)
+    const python = await resolvePythonCommand()
+    if (!python) return { ok: false, reason: 'No Python interpreter is available for independent validation', evidence: { files } }
+    const importCheck = await runCommand(python, ['-c', "from csv_summary import get_summary; assert get_summary('.validator-sample.csv')",], { cwd: workdir })
+    const cliRun = await runCommand(python, [path.basename(cli), path.basename(sample)], { cwd: workdir })
+    const tests = await runPythonTests(workdir, python)
     const ok = importCheck.ok && cliRun.ok && tests.ok && tests.testCount >= 3
     return { ok, reason: ok ? '' : 'CLI/import/tests did not all pass independently', evidence: { importCheck, cliRun, tests } }
   } finally {
