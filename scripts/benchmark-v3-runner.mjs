@@ -56,6 +56,10 @@ function isRetryableProviderError(body) {
   return /\b(?:provider|api|server)\s+error\b|\b(?:rate[ -]?limit|too many requests)\b|\b5\d\d\b|\b(?:temporarily|transient|unavailable)\b/i.test(body)
 }
 
+function providerErrorStatus(body, reason) {
+  return isRetryableProviderError(`${body}\n${reason}`) ? 'provider error' : null
+}
+
 async function writeSettings(userData, workspace, provider) {
   await fs.mkdir(userData, { recursive: true })
   await fs.writeFile(path.join(userData, 'settings.json'), JSON.stringify({
@@ -166,6 +170,7 @@ async function runOne(provider, task) {
       provider: provider.name,
       task: task.id,
       ok: validation.ok,
+      status: validation.ok ? 'pass' : (providerErrorStatus(body, validation.reason) || 'fail'),
       elapsedMs: Date.now() - started,
       retries: Math.max(0, attempts - 1),
       hallucinatedSuccess,
@@ -175,7 +180,7 @@ async function runOne(provider, task) {
       bodyTail: redact(body.slice(-4000)),
     }
   } catch (error) {
-    return { provider: provider.name, task: task.id, ok: false, elapsedMs: Date.now() - started, retries: Math.max(0, attempts - 1), hallucinatedSuccess: false, reason: redact(error.message || String(error)), evidence: {}, files: await listFiles(prepared.workspace).catch(() => []), bodyTail: redact(body.slice(-4000)) }
+    return { provider: provider.name, task: task.id, ok: false, status: providerErrorStatus(body, error.message) || 'fail', elapsedMs: Date.now() - started, retries: Math.max(0, attempts - 1), hallucinatedSuccess: false, reason: redact(error.message || String(error)), evidence: {}, files: await listFiles(prepared.workspace).catch(() => []), bodyTail: redact(body.slice(-4000)) }
   } finally {
     await app?.close().catch(() => {})
   }
