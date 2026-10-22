@@ -142,7 +142,7 @@ async function runOne(provider, task) {
         }
         validation = await taskEvidence(task.id, prepared.workspace, context).catch((error) => ({ ok: false, reason: error.message }))
         if (validation.ok) break
-        if (/\bOutcome:\s*/i.test(body)) break
+        if (/\bOutcome:\s*/i.test(body) || /The request to .* failed|rate limited|API error/i.test(body)) break
         await new Promise((resolve) => setTimeout(resolve, 2_000))
       }
       await app.close().catch(() => {})
