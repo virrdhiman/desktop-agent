@@ -47,3 +47,24 @@ The failing regression test reproduced that contract. `4b60299` now searches
 the task workspace for a nested VD Agent `package.json`/`src` clone and returns
 the discovered path in evidence. The rerun must therefore distinguish “model
 never cloned” from “clone existed but tests/no-push evidence failed.”
+
+## Isolated rerun record
+
+The affected cells were rerun in per-provider roots under `C:\vd-vms\bench2`,
+with a 10-minute cell cap. The runner's final status is used below; provider
+labels from earlier output that only said `API error` were not treated as an
+outage after `444f2ae` tightened the classifier.
+
+| Provider | Rerun cells and outcome | Evidence |
+|---|---|---|
+| Gemini | `2=fail`, `7=timeout`, `11=fail` | `Seeded JavaScript regression test is still failing`; `README, script, tests, or ZIP missing`; `VD Agent clone path missing`. |
+| Mistral | `1=fail`, `2=pass`, `7=timeout`, `10=timeout`, `11=fail` | Python CLI, seeded JS, artifact, clone/venv validator reasons; task 2 is the one passing cell. |
+| LLM7 DeepSeek | `7=fail`, `11=fail` | Artifact and clone validator reasons; no provider outage evidence. |
+| NVIDIA | `7=timeout`, `11=timeout` | Artifact and clone validator reasons reached the 10-minute cap. |
+| Ollama | `1=fail`, `2=fail`, `5=timeout`; `6=dependent skip` | Python CLI, seeded JS, and CSV validator reasons; task 6 was not independently runnable after task 5 failed. |
+
+No rerun produced an HTTP 429/5xx, quota, rate-limit, or explicit provider/server
+outage. The rerun class is therefore MODEL for task-specific output failures,
+HARNESS/timeout for bounded or dependent cells, and PROVIDER 0. The archived
+baseline remains the source for the complete 50-cell classification above;
+isolated reruns are the before-to-after evidence for the fixed task paths.
