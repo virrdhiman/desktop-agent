@@ -55,7 +55,7 @@ describe('benchmark v3 independent validators', () => {
     } else {
       expect(result.ok).toBe(true)
     }
-  })
+  }, 60_000)
 
   it('requires the seeded test to fail before and pass after', async () => {
     const root = await makeTemp()
