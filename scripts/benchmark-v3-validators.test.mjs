@@ -16,6 +16,7 @@ import {
   validateTask7,
   validateTask8,
   validateTask11,
+  benchmarkResultStatus,
 } from './benchmark-v3-validators.mjs'
 
 async function makeTemp() {
@@ -136,5 +137,9 @@ describe('benchmark v3 independent validators', () => {
   it('extracts counts without trusting narrative success text', () => {
     expect(extractTestCount('Tests 488 passed')).toBe(488)
     expect(extractTestCount('I completed all tests successfully')).toBe(0)
+  })
+
+  it('marks a bounded run that reaches its deadline as timeout', () => {
+    expect(benchmarkResultStatus({ ok: false, timedOut: true, body: '', reason: 'validation incomplete' })).toBe('timeout')
   })
 })

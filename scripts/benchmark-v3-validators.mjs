@@ -62,6 +62,12 @@ export function extractTestCount(text) {
   return best
 }
 
+export function benchmarkResultStatus({ ok, timedOut, providerStatus = null }) {
+  if (ok) return 'pass'
+  if (timedOut) return 'timeout'
+  return providerStatus || 'fail'
+}
+
 async function readText(file) {
   return fs.readFile(file, 'utf8')
 }

@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { BENCHMARK_V2_TASKS } from './benchmark-v3-prompts.mjs'
 import { taskUserDataPath, taskWorkspacePath } from './benchmark-v3-paths.mjs'
-import { extractTestCount, listFiles, runCommand, validateTask } from './benchmark-v3-validators.mjs'
+import { benchmarkResultStatus, extractTestCount, listFiles, runCommand, validateTask } from './benchmark-v3-validators.mjs'
 
 const root = path.resolve(process.env.VD_BENCH_ROOT || 'C:/vd-vms/bench')
 const appRoot = path.resolve(process.env.VD_BENCH_APP_ROOT || '.')
@@ -189,11 +189,12 @@ async function runOne(provider, task) {
        if (validation.ok || !isRetryableProviderError(body)) break
     }
     const hallucinatedSuccess = !validation.ok && /\b(done|completed|successfully|all tests pass|passed)\b/i.test(body.slice(-4000))
+    const timedOut = !validation.ok && Date.now() - started >= taskTimeoutMs
     return {
       provider: provider.name,
       task: task.id,
       ok: validation.ok,
-      status: validation.ok ? 'pass' : (providerErrorStatus(body, validation.reason) || 'fail'),
+      status: benchmarkResultStatus({ ok: validation.ok, timedOut, providerStatus: providerErrorStatus(body, validation.reason) }),
       elapsedMs: Date.now() - started,
       retries: Math.max(0, attempts - 1),
       hallucinatedSuccess,
@@ -203,7 +204,8 @@ async function runOne(provider, task) {
       bodyTail: redact(body.slice(-4000)),
     }
   } catch (error) {
-    return { provider: provider.name, task: task.id, ok: false, status: providerErrorStatus(body, error.message) || 'fail', elapsedMs: Date.now() - started, retries: Math.max(0, attempts - 1), hallucinatedSuccess: false, reason: redact(error.message || String(error)), evidence: {}, files: await listFiles(prepared.workspace).catch(() => []), bodyTail: redact(body.slice(-4000)) }
+    const timedOut = Date.now() - started >= taskTimeoutMs
+    return { provider: provider.name, task: task.id, ok: false, status: benchmarkResultStatus({ ok: false, timedOut, providerStatus: providerErrorStatus(body, error.message) }), elapsedMs: Date.now() - started, retries: Math.max(0, attempts - 1), hallucinatedSuccess: false, reason: redact(error.message || String(error)), evidence: {}, files: await listFiles(prepared.workspace).catch(() => []), bodyTail: redact(body.slice(-4000)) }
   } finally {
     await app?.close().catch(() => {})
   }
