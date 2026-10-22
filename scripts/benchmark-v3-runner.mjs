@@ -4,7 +4,8 @@ import path from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { BENCHMARK_V2_TASKS } from './benchmark-v3-prompts.mjs'
-import { listFiles, runCommand, validateTask } from './benchmark-v3-validators.mjs'
+import { taskUserDataPath, taskWorkspacePath } from './benchmark-v3-paths.mjs'
+import { extractTestCount, listFiles, runCommand, validateTask } from './benchmark-v3-validators.mjs'
 
 const root = path.resolve(process.env.VD_BENCH_ROOT || 'C:/vd-vms/bench')
 const appRoot = path.resolve(process.env.VD_BENCH_APP_ROOT || '.')
@@ -14,6 +15,18 @@ const taskTimeoutMs = Number(process.env.VD_BENCH_TASK_TIMEOUT_MS || 10 * 60_000
 const onlyModels = new Set((process.env.VD_BENCH_MODELS || '').split(',').map((value) => value.trim()).filter(Boolean))
 const onlyTasks = new Set((process.env.VD_BENCH_TASKS || '').split(',').map((value) => Number(value.trim())).filter(Number.isFinite))
 const resultsPath = path.join(root, 'benchmark-v3-results.json')
+let baselineTestCountPromise
+
+async function resolveBaselineTestCount() {
+  const configured = Number(process.env.VD_BENCH_SELFTEST_BASELINE || 0)
+  if (configured > 0) return configured
+  if (!baselineTestCountPromise) {
+    baselineTestCountPromise = runCommand('npm', ['test'], { cwd: appRoot, timeoutMs: 300_000 })
+      .then((result) => extractTestCount(`${result.stdout}\n${result.stderr}`))
+      .catch(() => 0)
+  }
+  return baselineTestCountPromise
+}
 
 function loadEnv() {
   const values = {}
@@ -97,21 +110,31 @@ async function seedTask8(workspace) {
   await fs.writeFile(path.join(workspace, 'keep.txt'), 'must remain\n', 'utf8')
 }
 
-async function seedTask11(workspace) {
-  await fs.writeFile(path.join(workspace, 'benchmark-baseline.json'), JSON.stringify({ testCount: 488 }, null, 2), 'utf8')
+async function seedTask11(workspace, baselineTestCount) {
+  await fs.writeFile(path.join(workspace, 'benchmark-baseline.json'), JSON.stringify({ testCount: baselineTestCount }, null, 2), 'utf8')
 }
 
 async function prepareWorkspace(modelRoot, taskId) {
-  const workspace = path.join(modelRoot, 'workspace')
+  const workspace = taskWorkspacePath(modelRoot, taskId)
   await fs.mkdir(workspace, { recursive: true })
   if (taskId === 2) return { workspace, baseline: await seedTask2(workspace) }
   if (taskId === 8) await seedTask8(workspace)
-  if (taskId === 11) await seedTask11(workspace)
+  if (taskId === 11) {
+    const baselineTestCount = await resolveBaselineTestCount()
+    await seedTask11(workspace, baselineTestCount)
+    return {
+      workspace,
+      selfTest: {
+        clonePath: process.env.VD_BENCH_SELFTEST_CLONE || undefined,
+        baselineTestCount,
+      },
+    }
+  }
   return {
     workspace,
     github: taskId === 9 ? { repo: 'virrdhiman/vd-bench-sandbox' } : undefined,
     click: taskId === 10 ? { clonePath: process.env.VD_BENCH_CLICK_CLONE || undefined } : undefined,
-    selfTest: taskId === 11 ? { clonePath: process.env.VD_BENCH_SELFTEST_CLONE || undefined, baselineTestCount: Number(process.env.VD_BENCH_SELFTEST_BASELINE || 0) } : undefined,
+    selfTest: undefined,
   }
 }
 
@@ -122,7 +145,7 @@ async function taskEvidence(taskId, workspace, context) {
 async function runOne(provider, task) {
   ensureSpace()
   const modelRoot = path.join(root, provider.name)
-  const userData = path.join(modelRoot, `userdata-${task.id}`)
+  const userData = taskUserDataPath(modelRoot, task.id)
   const prepared = await prepareWorkspace(modelRoot, task.id)
   const started = Date.now()
   let app

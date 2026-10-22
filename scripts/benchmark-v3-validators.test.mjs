@@ -4,6 +4,7 @@ import path from 'node:path'
 import yazl from 'yazl'
 import { describe, expect, it } from 'vitest'
 import { BENCHMARK_V2_TASKS, BENCHMARK_V2_TASKS_TEXT } from './benchmark-v3-prompts.mjs'
+import { taskWorkspacePath } from './benchmark-v3-paths.mjs'
 import {
   extractTestCount,
   validateTask1,
@@ -42,6 +43,11 @@ describe('benchmark v3 prompt source', () => {
 })
 
 describe('benchmark v3 independent validators', () => {
+  it('keeps every task in an isolated workspace', () => {
+    expect(path.normalize(taskWorkspacePath('C:/bench/gemini', 2))).toBe(path.normalize('C:/bench/gemini/task-2/workspace'))
+    expect(taskWorkspacePath('C:/bench/gemini', 7)).not.toBe(taskWorkspacePath('C:/bench/gemini', 2))
+  })
+
   it('requires a runnable CSV summary CLI and three passing tests', async () => {
     const root = await makeTemp()
     await fs.writeFile(path.join(root, 'summary_cli.py'), "import csv, sys\nif __name__ == '__main__':\n with open(sys.argv[1], newline='') as f: print(len(list(csv.DictReader(f))))\n")
