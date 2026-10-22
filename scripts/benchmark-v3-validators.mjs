@@ -53,6 +53,7 @@ export function extractTestCount(text) {
     /(?:Tests?|test cases?)\s+(\d+)\s+(?:passed|pass)/gi,
     /(?:^|\s)(\d+)\s+passed(?:\s|$)/gim,
     /(\d+)\s+passing(?:\s|$)/gim,
+    /Ran\s+(\d+)\s+tests?/gi,
   ]
   let best = 0
   for (const pattern of patterns) {
@@ -116,23 +117,22 @@ async function runNodeTests(root, command = ['node', ['calc.test.js']]) {
 }
 
 export async function validateTask1(root) {
-  const files = await findFiles(root, (file) => path.basename(file).toLowerCase() === 'csv_summary.py')
-  if (files.length !== 1) return { ok: false, reason: 'csv_summary.py was not found', evidence: { files } }
-  const cli = files[0]
-  const workdir = path.dirname(cli)
-  const sample = path.join(workdir, '.validator-sample.csv')
-  await fs.writeFile(sample, 'name,value\na,2\nb,4\n', 'utf8')
-  try {
+  const files = await findFiles(root, (file) => file.toLowerCase().endsWith('.py') && !/(^|[\\/])test[^\\/]*\.py$/i.test(file) && !file.includes(`${path.sep}tests${path.sep}`))
+  if (!files.length) return { ok: false, reason: 'No Python CLI candidate was found', evidence: { files } }
+  const candidates = []
+  for (const cli of files) {
+    const workdir = path.dirname(cli)
+    const sample = path.join(workdir, '.validator-sample.csv')
+    await fs.writeFile(sample, 'name,value\na,2\nb,4\n', 'utf8')
     const python = await resolvePythonCommand()
     if (!python) return { ok: false, reason: 'No Python interpreter is available for independent validation', evidence: { files } }
-    const importCheck = await runCommand(python, ['-c', "from csv_summary import get_summary; assert get_summary('.validator-sample.csv')",], { cwd: workdir })
-    const cliRun = await runCommand(python, [path.basename(cli), path.basename(sample)], { cwd: workdir })
+    const cliRun = await runCommand(python, [cli, sample], { cwd: root })
     const tests = await runPythonTests(workdir, python)
-    const ok = importCheck.ok && cliRun.ok && tests.ok && tests.testCount >= 3
-    return { ok, reason: ok ? '' : 'CLI/import/tests did not all pass independently', evidence: { importCheck, cliRun, tests } }
-  } finally {
+    candidates.push({ cli: path.relative(root, cli), cliRun, tests })
     await fs.rm(sample, { force: true })
+    if (cliRun.ok && tests.ok && tests.testCount >= 3) return { ok: true, reason: '', evidence: candidates.at(-1) }
   }
+  return { ok: false, reason: 'No Python CLI converted the sample CSV and passed three independent tests', evidence: { candidates } }
 }
 
 export async function validateTask2(root, baseline) {
@@ -278,6 +278,7 @@ async function ghJson(args) {
 }
 
 export async function validateTask9({ repo = 'virrdhiman/vd-bench-sandbox' } = {}) {
+  if (repo !== 'virrdhiman/vd-bench-sandbox') return { ok: false, reason: 'Task 9 is restricted to virrdhiman/vd-bench-sandbox', evidence: { repo } }
   const repoView = await ghJson(['repo', 'view', repo, '--json', 'nameWithOwner,isPrivate,defaultBranchRef'])
   if (!repoView?.nameWithOwner || repoView.isPrivate !== true) return { ok: false, reason: 'Disposable private repository is not verifiable through gh', evidence: { repoView } }
   const issues = await ghJson(['issue', 'list', '--repo', repo, '--state', 'all', '--limit', '100', '--json', 'number,state,title,body']) || []
@@ -294,15 +295,19 @@ export async function validateTask9({ repo = 'virrdhiman/vd-bench-sandbox' } = {
 export async function validateTask10(root, evidence = {}) {
   const clone = evidence.clonePath || (await findFiles(root, (file) => file.endsWith('pyproject.toml'))).map((file) => path.dirname(file))[0]
   if (!clone) return { ok: false, reason: 'Click clone not found', evidence }
+  const origin = await runCommand('git', ['remote', 'get-url', 'origin'], { cwd: clone })
+  if (!origin.ok || !/github\.com[/:]pallets\/click(?:\.git)?$/i.test(origin.stdout.trim())) return { ok: false, reason: 'Clone is not pallets/click', evidence: { origin: origin.stdout } }
   const venvPython = process.platform === 'win32' ? path.join(clone, '.venv', 'Scripts', 'python.exe') : path.join(clone, '.venv', 'bin', 'python')
   const python = fsSync.existsSync(venvPython) ? venvPython : 'python'
   const tests = await runCommand(python, ['-m', 'pytest', '-q'], { cwd: clone, timeoutMs: 300_000 })
   const diff = await runCommand('git', ['diff', '--name-only', evidence.baselineSha || 'HEAD'], { cwd: clone })
   const newTest = diff.stdout.split(/\r?\n/).some((file) => /test/i.test(file) && file.trim())
   const hasVenv = fsSync.existsSync(venvPython)
-  const testCount = extractTestCount(`${tests.stdout}\n${tests.stderr}`)
-  const ok = hasVenv && tests.ok && testCount > 0 && newTest
-  return { ok, reason: ok ? '' : 'Click venv/test/new-test evidence failed independent checks', evidence: { clone, hasVenv, tests, testCount, newTest, diff: diff.stdout } }
+  const output = `${tests.stdout}\n${tests.stderr}`
+  const testCount = extractTestCount(output)
+  const failed = Number(output.match(/(\d+)\s+failed/i)?.[1] || 0)
+  const ok = hasVenv && tests.ok && testCount > 0 && failed === 0 && newTest
+  return { ok, reason: ok ? '' : 'Click venv/test counts/new-test evidence failed independently', evidence: { clone, hasVenv, tests, testCount, failed, newTest, diff: diff.stdout } }
 }
 
 export async function validateTask11(root, evidence = {}) {
@@ -314,9 +319,10 @@ export async function validateTask11(root, evidence = {}) {
   const diff = await runCommand('git', ['diff', '--name-only'], { cwd: clone })
   const testChanged = diff.stdout.split(/\r?\n/).some((file) => /test/i.test(file) && file.trim())
   const log = await runCommand('git', ['log', '-1', '--format=%H'], { cwd: clone })
-  const remote = await runCommand('git', ['ls-remote', 'origin', 'HEAD'], { cwd: clone })
-  const ok = tests.ok && count > baseline && testChanged && log.ok && remote.ok
-  return { ok, reason: ok ? '' : 'VD Agent clone test-count or no-push evidence failed independently', evidence: { tests, count, baseline, testChanged, log: log.stdout.trim(), remote: remote.stdout.trim() } }
+  const remote = await runCommand('git', ['status', '--porcelain=v1', '-b'], { cwd: clone })
+  const pushed = /ahead \d+/i.test(remote.stdout)
+  const ok = tests.ok && count > baseline && testChanged && log.ok && !pushed
+  return { ok, reason: ok ? '' : 'VD Agent clone test-count or no-push evidence failed independently', evidence: { tests, count, baseline, testChanged, log: log.stdout.trim(), status: remote.stdout.trim(), pushed } }
 }
 
 export async function validateTask(taskId, root, context = {}) {

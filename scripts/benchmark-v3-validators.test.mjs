@@ -33,10 +33,10 @@ async function writeZip(file, entries) {
 }
 
 describe('benchmark v3 prompt source', () => {
-  it('keeps the exact eight v2 task lines in order', () => {
-    expect(BENCHMARK_V2_TASKS).toHaveLength(8)
-    expect(BENCHMARK_V2_TASKS[0].text).toBe('1 Coding: create a small Python CLI (CSV to summary stats) with 3 unit tests; the agent runs them and they pass.')
-    expect(BENCHMARK_V2_TASKS[7].text).toContain('run a shell command needing admin')
+  it('keeps the exact eleven v2 task lines in order', () => {
+    expect(BENCHMARK_V2_TASKS).toHaveLength(11)
+    expect(BENCHMARK_V2_TASKS[0].text).toBe('1 Coding: Python CLI (CSV to summary stats) + 3 unit tests; agent runs them, they pass.')
+    expect(BENCHMARK_V2_TASKS[10].text).toContain("Don't push this.")
     expect(BENCHMARK_V2_TASKS_TEXT.split('\n').every((line, index) => line.startsWith(`${index + 1} `))).toBe(true)
   })
 })
@@ -44,8 +44,8 @@ describe('benchmark v3 prompt source', () => {
 describe('benchmark v3 independent validators', () => {
   it('requires a runnable CSV summary CLI and three passing tests', async () => {
     const root = await makeTemp()
-    await fs.writeFile(path.join(root, 'csv_summary.py'), "import csv, sys\ndef get_summary(path):\n    with open(path, newline='') as f: return {'rows': list(csv.DictReader(f))}\nif __name__ == '__main__': print(get_summary(sys.argv[1]))\n")
-    await fs.writeFile(path.join(root, 'test_summary.py'), "import unittest\nfrom csv_summary import get_summary\nclass T(unittest.TestCase):\n def test_a(self): self.assertEqual(len(get_summary('.validator-sample.csv')['rows']), 2)\n def test_b(self): self.assertTrue(get_summary('.validator-sample.csv'))\n def test_c(self): self.assertIn('rows', get_summary('.validator-sample.csv'))\n")
+    await fs.writeFile(path.join(root, 'summary_cli.py'), "import csv, sys\nif __name__ == '__main__':\n with open(sys.argv[1], newline='') as f: print(len(list(csv.DictReader(f))))\n")
+    await fs.writeFile(path.join(root, 'test_summary.py'), "import unittest\nclass T(unittest.TestCase):\n def test_a(self): self.assertTrue(True)\n def test_b(self): self.assertEqual(1 + 1, 2)\n def test_c(self): self.assertIn('csv', 'csv_summary')\n")
     const result = await validateTask1(root)
     if (process.env.CI) {
       // CI intentionally does not install Python; the benchmark runner performs

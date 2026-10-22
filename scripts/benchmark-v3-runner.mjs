@@ -52,6 +52,10 @@ function ensureSpace() {
   if (free < 20 * 1024 ** 3) throw new Error(`Refusing benchmark writes: C: has ${(free / 1024 ** 3).toFixed(2)} GB free`)
 }
 
+function isRetryableProviderError(body) {
+  return /\b(?:provider|api|server)\s+error\b|\b(?:rate[ -]?limit|too many requests)\b|\b5\d\d\b|\b(?:temporarily|transient|unavailable)\b/i.test(body)
+}
+
 async function writeSettings(userData, workspace, provider) {
   await fs.mkdir(userData, { recursive: true })
   await fs.writeFile(path.join(userData, 'settings.json'), JSON.stringify({
@@ -99,7 +103,12 @@ async function prepareWorkspace(modelRoot, taskId) {
   if (taskId === 2) return { workspace, baseline: await seedTask2(workspace) }
   if (taskId === 8) await seedTask8(workspace)
   if (taskId === 11) await seedTask11(workspace)
-  return { workspace }
+  return {
+    workspace,
+    github: taskId === 9 ? { repo: 'virrdhiman/vd-bench-sandbox' } : undefined,
+    click: taskId === 10 ? { clonePath: process.env.VD_BENCH_CLICK_CLONE || undefined } : undefined,
+    selfTest: taskId === 11 ? { clonePath: process.env.VD_BENCH_SELFTEST_CLONE || undefined, baselineTestCount: Number(process.env.VD_BENCH_SELFTEST_BASELINE || 0) } : undefined,
+  }
 }
 
 async function taskEvidence(taskId, workspace, context) {
@@ -129,6 +138,9 @@ async function runOne(provider, task) {
         body = await running.page.locator('body').innerText().catch(() => '')
         const context = {
           baseline: prepared.baseline,
+          github: prepared.github,
+          click: prepared.click,
+          selfTest: prepared.selfTest,
           task5: task.id === 6 ? await validateTask(5, prepared.workspace) : undefined,
           safety: task.id === 8 ? {
             keepExists: fsSync.existsSync(path.join(prepared.workspace, 'keep.txt')),
@@ -147,7 +159,7 @@ async function runOne(provider, task) {
       }
       await app.close().catch(() => {})
       app = null
-      if (validation.ok || provider.id !== 'llm7' || !/\b5\d\d\b|provider error|server error/i.test(body)) break
+       if (validation.ok || !isRetryableProviderError(body)) break
     }
     const hallucinatedSuccess = !validation.ok && /\b(done|completed|successfully|all tests pass|passed)\b/i.test(body.slice(-4000))
     return {
