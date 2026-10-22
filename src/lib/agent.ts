@@ -521,12 +521,14 @@ export function unusableResponseNotice(problems: ResponseProblem[], providerName
 // ─── Unverified claims ──────────────────────────────────────────────────────
 
 export type ToolRun = { name: string; ok: boolean; summary?: string }
-export type UnverifiedClaim = 'edit' | 'command' | 'passing'
+export type UnverifiedClaim = 'edit' | 'command' | 'passing' | 'completion'
 
 const FILE_CHANGE_TOOLS = new Set(['write_file', 'edit_file', 'create_file', 'delete_file', 'multi_file_edit', 'archive_extract'])
+const VERIFICATION_TOOLS = new Set(['run_command', 'read_file', 'git_diff', 'git_status'])
 const EDIT_CLAIM = /\b(I|I've|I have|we)\s+(edited|modified|updated|changed|fixed|patched|rewrote|replaced|created|deleted)\b|^\s*(\d+\.|[-*])\s*(Edited|Modified|Updated|Changed|Fixed|Patched|Rewrote|Replaced|Created|Deleted)\s+`/im
 const COMMAND_CLAIM = /\b(I|I've|I have|we)\s+(ran|executed|re-ran)\b|^\s*(\d+\.|[-*])\s*(Ran|Executed|Re-ran)\b/im
 const PASSING_CLAIM = /\b(tests|test suite|the build|typecheck|lint)\s+(passed|now pass(es)?|are (now )?passing|succeeded)\b/i
+const COMPLETION_CLAIM = /(?:^|[.!?\n])\s*(?:done|completed|finished|all set)\b|\b(?:task|request|work|change|fix|implementation)\s+(?:is|was)\s+(?:done|complete|completed|finished|ready)\b|\bsuccessfully\s+(?:completed|implemented|fixed|updated)\b/i
 
 /**
  * Claims in a final reply that no tool call in this request backs up, e.g. "Edited `calc.js`",
@@ -537,10 +539,12 @@ export function unverifiedClaims(text: string, runs: ToolRun[]): UnverifiedClaim
   const edited = runs.some((r) => r.ok && FILE_CHANGE_TOOLS.has(r.name))
   const ranCommand = runs.some((r) => r.name === 'run_command')
   const commandPassed = runs.some((r) => r.ok && r.name === 'run_command')
+  const verified = runs.some((r) => r.ok && VERIFICATION_TOOLS.has(r.name) && Boolean(r.summary?.trim()))
   const claims: UnverifiedClaim[] = []
   if (!edited && EDIT_CLAIM.test(prose)) claims.push('edit')
   if (!ranCommand && COMMAND_CLAIM.test(prose)) claims.push('command')
   if (!commandPassed && PASSING_CLAIM.test(prose)) claims.push('passing')
+  if (!verified && COMPLETION_CLAIM.test(prose)) claims.push('completion')
   return claims
 }
 
@@ -548,6 +552,7 @@ const CLAIM_TEXT: Record<UnverifiedClaim, string> = {
   edit: 'changed files',
   command: 'ran commands',
   passing: 'confirmed that tests or a build pass',
+  completion: 'completed the task',
 }
 
 function claimList(claims: UnverifiedClaim[]) {
