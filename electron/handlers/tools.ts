@@ -17,12 +17,21 @@ import { confirmAgentAction } from '../approvalDialog'
 import { geminiGenerateContentRequest } from '../geminiRequest'
 import { COMMAND_TIMEOUT_MS, formatCommandResult, resolveToolArgs } from '../toolSupport'
 import { assessToolPolicy, checkpointTargets, resolvesInsideWorkspace, toolApprovalDetail, type PermissionMode } from '../toolPolicy'
-import { createCheckpoint } from '../checkpointStore'
+import { createCheckpoint, finalizeCheckpoint, listCheckpoints, type WorkspaceCheckpoint } from '../checkpointStore'
 import { archiveOutputPaths, extractZipArchive, inspectZipArchive, type ArchiveInspection } from '../archiveStore'
-import { buildRepoIndex, buildRepoMap, repoIndexStats, searchRepo, startRepoIndexWatcher } from '../repoIndex'
+import { buildRepoIndex, buildRepoMap, findRepoUsages, goToRepoDefinition, onRepoIndexStatus, repoIndexStats, searchCode, searchRepo, startRepoIndexWatcher } from '../repoIndex'
 import { planRepoChange } from '../repoPlanner'
 import { previewEdits } from '../patchPreview'
 import { formatVsCodeContext, installVsCodeBridge, openWorkspaceInVsCode, readVsCodeBridgeStatus, sendVsCodeBridgeCommand } from '../vscodeBridge'
+import { executeApiRequest } from '../apiTesting'
+import { closeBrowserSessions, executeBrowserTool } from '../browserTool'
+import { validateBrowserRequest } from '../browserToolValidation'
+import {
+  extractPdfTextFile, formatDataRows, readCsvFile, readExcelFile, runOfflineOcr,
+  validateWorkspaceDataPath, writeCsvFile, writeExcelFile, querySqlite, queryPostgres,
+  MAX_DATA_FILE_BYTES, MAX_DATA_RESULT_CHARS,
+} from '../dataTools'
+import { dataToolDisabledReason } from '../../src/lib/dataToolSettings'
 
 /** Git instances cache for tool execution */
 const toolGitInstances: Map<string, SimpleGit> = new Map()
@@ -38,7 +47,76 @@ async function loadToolSettings(): Promise<any> {
   return loadRuntimeSettings()
 }
 
+function boundedNumber(value: unknown, fallback: number, min: number, max: number): number {
+  const candidate = Number(value)
+  return Number.isFinite(candidate) ? Math.max(min, Math.min(max, Math.floor(candidate))) : fallback
+}
+
+async function validateDataTarget(workspace: string | undefined, target: unknown, write = false): Promise<string | null> {
+  const candidate = typeof target === 'string' ? target : ''
+  const validation = validateWorkspaceDataPath(workspace, candidate)
+  if (!validation.ok) return validation.error
+  if (!workspace || !await resolvesInsideWorkspace(workspace, candidate)) {
+    return `Blocked data tool: the real path must stay inside the open workspace: ${candidate}`
+  }
+  if (write) {
+    const parent = path.dirname(candidate)
+    if (!await resolvesInsideWorkspace(workspace, parent)) return `Blocked data tool: destination parent escapes the workspace: ${parent}`
+  }
+  return null
+}
+
+function dataToolError(name: string, settings: any): string | null {
+  return dataToolDisabledReason(name, settings) || null
+}
+
+async function indexRoot(tool: { workspace?: string; args: Record<string, any> }): Promise<string | { error: string }> {
+  const root = tool.args.path || tool.workspace || '.'
+  if (tool.workspace && !await resolvesInsideWorkspace(tool.workspace, root)) {
+    return { error: `Blocked index query: the index root must stay inside the open workspace: ${root}` }
+  }
+  return root
+}
+
+function bundledOcrLanguagePath(): string {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, 'tessdata')
+    : path.join(app.getAppPath(), 'assets', 'tessdata')
+}
+
+type AgentPreview = { detail: string; editable?: string }
+
+async function buildAgentPreview(tool: { name: string; args: Record<string, any> }): Promise<AgentPreview | undefined> {
+  if (tool.name === 'run_command') return { detail: `Exact command:\n${String(tool.args.command || '')}`, editable: String(tool.args.command || '') }
+  if (tool.name === 'write_file' || tool.name === 'create_file') {
+    let before = ''
+    try { before = await fs.promises.readFile(tool.args.path, 'utf-8') } catch {}
+    const after = String(tool.args.content || '')
+    return { detail: `Exact file preview: ${tool.args.path}\n\n--- before ---\n${before}\n--- after ---\n${after}`, editable: after }
+  }
+  if (tool.name === 'edit_file') {
+    const before = await fs.promises.readFile(tool.args.path, 'utf-8')
+    const after = before.replace(String(tool.args.old_string || ''), String(tool.args.new_string || ''))
+    return { detail: `Exact file preview: ${tool.args.path}\n\n--- before ---\n${before}\n--- after ---\n${after}`, editable: after }
+  }
+  if (tool.name === 'multi_file_edit') {
+    return { detail: await previewEdits(tool.args.path || '.', tool.args.edits), editable: JSON.stringify(tool.args.edits, null, 2) }
+  }
+  if (tool.name === 'vscode_apply_edit') {
+    const before = await fs.promises.readFile(tool.args.path, 'utf-8')
+    const after = before.replace(String(tool.args.old_string || ''), String(tool.args.new_string || ''))
+    return { detail: `Exact file preview: ${tool.args.path}\n\n--- before ---\n${before}\n--- after ---\n${after}`, editable: after }
+  }
+  return undefined
+}
+
 export function registerToolHandlers() {
+  onRepoIndexStatus((status) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) window.webContents.send('repo-index:status', status)
+    }
+  })
+
   ipcMain.handle('vscode:status', async (_event, workspace: string) => {
     try {
       return await readVsCodeBridgeStatus(workspace)
@@ -70,7 +148,26 @@ export function registerToolHandlers() {
         tool.args = resolveToolArgs(tool.name, tool.args, tool.workspace)
         const policySettings = await loadToolSettings()
         const permissionMode = (policySettings.permissionMode || 'ask-risky') as PermissionMode
-        const decision = assessToolPolicy(tool.name, tool.args, tool.workspace, permissionMode)
+        const decision = assessToolPolicy(tool.name, tool.args, tool.workspace, permissionMode, policySettings.restrictedCommandMode === true, policySettings.browserToolEnabled)
+
+        // Capability flags are checked before an approval prompt so an opt-out
+        // cannot accidentally turn into a confusing approval request.
+        const disabledDataTool = dataToolError(tool.name, policySettings)
+        if (disabledDataTool) return { error: disabledDataTool }
+
+        // This setting is independent of both Trusted mode and the QA approval override.
+        if (decision.browserToolBlocked) {
+          closeBrowserSessions()
+          return { error: 'The browser tool is disabled. Enable it in Settings > Tool permissions before using browser operations.' }
+        }
+        if (tool.name === 'browser') {
+          const validation = validateBrowserRequest(tool.args)
+          if (!validation.ok) return { error: validation.error }
+        }
+
+        if (decision.restrictedCommandBlocked) {
+          return { error: `Restricted command mode blocked this command: ${decision.restrictedCommandReason}. This is a command policy, not an OS sandbox.` }
+        }
 
         if (decision.risk !== 'read' && tool.name !== 'run_command' && !tool.workspace) {
           return { error: `Blocked ${tool.name}: open a workspace before allowing agent mutations.` }
@@ -86,14 +183,45 @@ export function registerToolHandlers() {
           }
         }
 
+        const preview = decision.previewRequired ? await buildAgentPreview(tool) : undefined
+        let approvedContent: string | undefined
         if (decision.needsApproval && process.env.VD_AGENT_AUTO_APPROVE_TOOLS !== '1') {
           const owner = BrowserWindow.fromWebContents(event.sender)
-          const allowed = await confirmAgentAction(
-            owner,
-            `Allow VD Agent to run ${tool.name}?`,
-            toolApprovalDetail(tool.name, tool.args, decision),
-          )
-          if (!allowed) return { error: `User declined ${tool.name}` }
+          let detail = preview?.detail || toolApprovalDetail(tool.name, tool.args, decision)
+          let editable = preview?.editable
+          while (true) {
+            const approval = await confirmAgentAction(owner, `Review VD Agent ${tool.name}`, detail, editable)
+            if (approval.action === 'reject') return { error: `User declined ${tool.name}` }
+            if (approval.action === 'approve') break
+            if (approval.payload === undefined) return { error: `User declined ${tool.name}` }
+            if (tool.name === 'run_command') {
+              tool.args.command = approval.payload
+              const commandCheck = assessToolPolicy(tool.name, tool.args, tool.workspace, permissionMode, policySettings.restrictedCommandMode === true, policySettings.browserToolEnabled)
+              if (commandCheck.restrictedCommandBlocked) return { error: `Restricted command mode blocked this edited command: ${commandCheck.restrictedCommandReason}` }
+              detail = `Exact command:\n${approval.payload}`
+              editable = approval.payload
+            } else if (tool.name === 'write_file' || tool.name === 'create_file' || tool.name === 'edit_file') {
+              approvedContent = approval.payload
+              detail = `${preview?.detail || ''}\n\n--- edited proposal ---\n${approval.payload}`
+              editable = approval.payload
+            } else if (tool.name === 'multi_file_edit') {
+              try {
+                const edits = JSON.parse(approval.payload)
+                if (!Array.isArray(edits) || edits.some((edit) => !edit || typeof edit.path !== 'string' || typeof edit.old_string !== 'string' || typeof edit.new_string !== 'string')) throw new Error('expected an array of file edits')
+                tool.args.edits = edits
+                detail = await previewEdits(tool.args.path || '.', edits)
+                editable = JSON.stringify(edits, null, 2)
+              } catch (error: any) {
+                return { error: `Edited file proposal is invalid: ${error?.message || String(error)}` }
+              }
+            } else if (tool.name === 'vscode_apply_edit') {
+              approvedContent = approval.payload
+              detail = `${preview?.detail || ''}\n\n--- edited proposal ---\n${approval.payload}`
+              editable = approval.payload
+            } else {
+              return { error: `Editing is not supported for ${tool.name}` }
+            }
+          }
         }
 
         let archiveInspection: ArchiveInspection | undefined
@@ -105,14 +233,16 @@ export function registerToolHandlers() {
           archiveInspection = await inspectZipArchive(tool.args.archive_path)
           targets = archiveOutputPaths(tool.args.output_path, archiveInspection)
         }
-        if (tool.workspace && tool.sessionId && targets.length > 0) {
-          const checkpoint = await createCheckpoint(path.join(app.getPath('userData'), 'checkpoints'), {
+        let checkpoint: WorkspaceCheckpoint | undefined
+        if (tool.workspace && tool.sessionId && targets.length > 0 && (await listCheckpoints(path.join(app.getPath('userData'), 'checkpoints'), tool.sessionId)).length === 0) {
+          const created = await createCheckpoint(path.join(app.getPath('userData'), 'checkpoints'), {
             sessionId: tool.sessionId,
             workspace: tool.workspace,
             label: `${tool.name}${tool.taskId ? ` for task ${tool.taskId}` : ''}`,
             paths: targets,
           })
-          if (checkpoint) {
+          if (created) {
+            checkpoint = created
             event.sender.send('checkpoint:created', {
               id: checkpoint.id,
               sessionId: checkpoint.sessionId,
@@ -129,7 +259,8 @@ export function registerToolHandlers() {
             return { result: content }
           }
           case 'write_file': {
-            await fs.promises.writeFile(tool.args.path, tool.args.content, 'utf-8')
+            await fs.promises.writeFile(tool.args.path, approvedContent ?? tool.args.content, 'utf-8')
+            if (checkpoint) await finalizeCheckpoint(path.join(app.getPath('userData'), 'checkpoints'), checkpoint)
             return { result: `File written: ${tool.args.path}` }
           }
           case 'edit_file': {
@@ -137,16 +268,19 @@ export function registerToolHandlers() {
             if (!content.includes(tool.args.old_string)) {
               return { error: `old_string not found in ${tool.args.path}` }
             }
-            const newContent = content.replace(tool.args.old_string, tool.args.new_string)
+            const newContent = approvedContent ?? content.replace(tool.args.old_string, tool.args.new_string)
             await fs.promises.writeFile(tool.args.path, newContent, 'utf-8')
+            if (checkpoint) await finalizeCheckpoint(path.join(app.getPath('userData'), 'checkpoints'), checkpoint)
             return { result: `Edited ${tool.args.path}: replaced ${tool.args.old_string.length} chars` }
           }
           case 'create_file': {
-            await fs.promises.writeFile(tool.args.path, tool.args.content || '', 'utf-8')
+            await fs.promises.writeFile(tool.args.path, approvedContent ?? (tool.args.content || ''), 'utf-8')
+            if (checkpoint) await finalizeCheckpoint(path.join(app.getPath('userData'), 'checkpoints'), checkpoint)
             return { result: `Created: ${tool.args.path}` }
           }
           case 'delete_file': {
             await fs.promises.unlink(tool.args.path)
+            if (checkpoint) await finalizeCheckpoint(path.join(app.getPath('userData'), 'checkpoints'), checkpoint)
             return { result: `Deleted: ${tool.args.path}` }
           }
           case 'list_files': {
@@ -177,32 +311,15 @@ export function registerToolHandlers() {
           }
           case 'search_code': {
             const searchPattern = tool.args.pattern
-            const searchDir = tool.args.path || '.'
-            const codeResults: string[] = []
-            const codeExts = ['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.rs', '.java', '.c', '.cpp', '.h', '.css', '.html', '.json', '.yaml', '.yml', '.md', '.sh', '.sql', '.rb', '.php', '.swift', '.kt']
-            async function doCodeSearch(dir: string, depth: number) {
-              if (depth > 6) return
-              const entries = await fs.promises.readdir(dir, { withFileTypes: true })
-              for (const entry of entries) {
-                if (entry.name.startsWith('.') || entry.name === 'node_modules' || entry.name === 'dist') continue
-                const fullPath = path.join(dir, entry.name)
-                if (entry.isDirectory()) { await doCodeSearch(fullPath, depth + 1) }
-                else if (codeExts.includes(path.extname(entry.name))) {
-                  try {
-                    const content = await fs.promises.readFile(fullPath, 'utf-8')
-                    const lines = content.split('\n')
-                    for (let i = 0; i < lines.length; i++) {
-                      if (lines[i].includes(searchPattern)) codeResults.push(`${fullPath}:${i + 1}: ${lines[i].trim()}`)
-                    }
-                  } catch {}
-                }
-              }
-            }
-            await doCodeSearch(searchDir, 0)
-            return { result: codeResults.length ? codeResults.slice(0, 100).join('\n') : 'No matches found' }
+            const root = await indexRoot(tool)
+            if (typeof root !== 'string') return root
+            const hits = await searchCode(root, String(searchPattern || ''), Number(tool.args.limit || 100))
+            return { result: hits.length ? hits.map((hit) => `${path.join(root, hit.path)}:${hit.line}:${hit.column}: ${hit.snippet}`).join('\n') : 'No matches found' }
           }
           case 'repo_map': {
-            const root = tool.args.path || tool.workspace || '.'
+            const rootValue = await indexRoot(tool)
+            if (typeof rootValue !== 'string') return rootValue
+            const root = rootValue
             const entries = await buildRepoMap(root, Number(tool.args.limit || 160))
             const lines = entries.map((entry) => {
               const symbols = entry.symbols.length ? ` — ${entry.symbols.join(', ')}` : ''
@@ -213,7 +330,9 @@ export function registerToolHandlers() {
             return { result: lines.length ? `Repo map (${lines.length} files):\n${lines.join('\n')}` : 'No indexable text files found.' }
           }
           case 'repo_index': {
-            const root = tool.args.path || tool.workspace || '.'
+            const rootValue = await indexRoot(tool)
+            if (typeof rootValue !== 'string') return rootValue
+            const root = rootValue
             const stats = tool.args.once
               ? tool.args.force ? await buildRepoIndex(root, true) : await repoIndexStats(root)
               : tool.args.force ? await buildRepoIndex(root, true) : await startRepoIndexWatcher(root)
@@ -222,19 +341,24 @@ export function registerToolHandlers() {
                 `Repo index ${stats.cached ? 'reused' : 'built'}: ${stats.files} files, ${stats.bytes} bytes.`,
                 `Background watcher: ${stats.watching ? 'on' : 'off'}`,
                 `Updated: ${new Date(stats.updatedAt).toISOString()}`,
+                `Duration: ${stats.durationMs ?? 0} ms (reused ${stats.reusedFiles ?? 0}, updated ${stats.updatedFiles ?? 0})`,
                 `Fingerprint: ${stats.fingerprint.slice(0, 12)}`,
                 `Root: ${stats.root}`,
               ].join('\n'),
             }
           }
           case 'repo_plan': {
-            const root = tool.args.path || tool.workspace || '.'
+            const rootValue = await indexRoot(tool)
+            if (typeof rootValue !== 'string') return rootValue
+            const root = rootValue
             const query = String(tool.args.query || '').trim()
             if (!query) return { error: 'repo_plan requires query' }
             return { result: await planRepoChange(root, query, Number(tool.args.limit || 12)) }
           }
           case 'repo_search': {
-            const root = tool.args.path || tool.workspace || '.'
+            const rootValue = await indexRoot(tool)
+            if (typeof rootValue !== 'string') return rootValue
+            const root = rootValue
             const query = String(tool.args.query || '').trim()
             if (!query) return { error: 'repo_search requires query' }
             const hits = await searchRepo(root, query, Number(tool.args.limit || 30))
@@ -243,6 +367,18 @@ export function registerToolHandlers() {
               hit.snippet,
             ].join('\n'))
             return { result: lines.length ? `Repo search for "${query}" (${lines.length} hits):\n\n${lines.join('\n\n')}` : 'No matches found.' }
+          }
+          case 'go_to_definition': {
+            const rootValue = await indexRoot(tool)
+            if (typeof rootValue !== 'string') return rootValue
+            const result = await goToRepoDefinition(rootValue, tool.args.path, Number(tool.args.line || 1), Number(tool.args.column || 1), tool.args.symbol)
+            return { result: result ? `${result.symbol}: ${path.join(rootValue, result.path)}:${result.line}` : 'No definition found.' }
+          }
+          case 'find_usages': {
+            const rootValue = await indexRoot(tool)
+            if (typeof rootValue !== 'string') return rootValue
+            const usages = await findRepoUsages(rootValue, tool.args.path, Number(tool.args.line || 1), Number(tool.args.column || 1), tool.args.symbol, Number(tool.args.limit || 250))
+            return { result: usages.length ? usages.map((usage) => `${path.join(rootValue, usage.path)}:${usage.line}: ${usage.symbol} (definition: ${usage.definition})`).join('\n') : 'No usages found.' }
           }
           case 'vscode_context': {
             const root = tool.args.path || tool.workspace || '.'
@@ -258,10 +394,12 @@ export function registerToolHandlers() {
           }
           case 'vscode_apply_edit': {
             const root = tool.workspace || path.dirname(tool.args.path || process.cwd())
+            if (approvedContent !== undefined) tool.args.new_string = approvedContent
             const result = await sendVsCodeBridgeCommand(root, {
               action: 'apply_edit',
               args: { path: tool.args.path, old_string: tool.args.old_string, new_string: tool.args.new_string },
             })
+            if (checkpoint) await finalizeCheckpoint(path.join(app.getPath('userData'), 'checkpoints'), checkpoint)
             return { result }
           }
           case 'vscode_show_diff': {
@@ -293,6 +431,133 @@ export function registerToolHandlers() {
                 resolve(formatCommandResult(tool.args.command, error, String(stdout), String(stderr)))
               })
             })
+          }
+          case 'api_request': {
+            return { result: await executeApiRequest(tool.args as any) }
+          }
+          case 'browser': {
+            // Settings can change while the approval dialog is open.
+            if ((await loadToolSettings()).browserToolEnabled !== true) {
+              closeBrowserSessions()
+              return { error: 'The browser tool was disabled before the operation started.' }
+            }
+            return { result: await executeBrowserTool(tool.args, tool.workspace, tool.sessionId) }
+          }
+
+          // ═══ OPTIONAL LOCAL DATA ════════════════════════════════════════════
+          // Every data tool is independently disabled by default. Database reads
+          // stay in a read-only transaction and file data never leaves this
+          // handler except as the bounded result returned to the model.
+          case 'sqlite_query': {
+            const disabled = dataToolError(tool.name, policySettings)
+            if (disabled) return { error: disabled }
+            const targetError = await validateDataTarget(tool.workspace, tool.args.path)
+            if (targetError) return { error: targetError }
+            const maxRows = boundedNumber(tool.args.maxRows, 100, 1, 500)
+            try {
+              const rows = await querySqlite(tool.args.path, String(tool.args.query || ''), tool.args.params)
+              return { result: formatDataRows(rows.slice(0, maxRows)) }
+            } catch (error: any) {
+              return { error: error?.message || String(error) }
+            }
+          }
+          case 'postgres_query': {
+            const disabled = dataToolError(tool.name, policySettings)
+            if (disabled) return { error: disabled }
+            if (!tool.workspace) return { error: 'An open workspace is required for Postgres tools.' }
+            const host = String(tool.args.host || '').trim()
+            const database = String(tool.args.database || '').trim()
+            const user = String(tool.args.user || '').trim()
+            const port = boundedNumber(tool.args.port, 5432, 1, 65535)
+            if (!host || !database || !user) return { error: 'Postgres requires host, database, and user. Passwords and connection strings are not accepted.' }
+            if (tool.args.password || tool.args.connection_string || tool.args.connectionString) {
+              return { error: 'Postgres passwords and connection strings are not accepted. Use a restricted passwordless role or local authentication.' }
+            }
+            if (!/^(?:localhost|127\.0\.0\.1|::1|[a-z0-9.-]+)$/i.test(host)) return { error: 'Postgres host must be a hostname or IP address.' }
+            const localHost = /^(?:localhost|127\.0\.0\.1|::1)$/i.test(host)
+            const connection = `postgresql://${encodeURIComponent(user)}@${host}:${port}/${encodeURIComponent(database)}${localHost ? '' : '?sslmode=require'}`
+            const maxRows = boundedNumber(tool.args.maxRows, 100, 1, 500)
+            try {
+              const rows = await queryPostgres(connection, String(tool.args.query || ''), tool.args.params)
+              return { result: formatDataRows(rows.slice(0, maxRows)) }
+            } catch (error: any) {
+              return { error: error?.message || String(error) }
+            }
+          }
+          case 'spreadsheet_read': {
+            const disabled = dataToolError(tool.name, policySettings)
+            if (disabled) return { error: disabled }
+            const targetError = await validateDataTarget(tool.workspace, tool.args.path)
+            if (targetError) return { error: targetError }
+            const extension = path.extname(tool.args.path).toLowerCase()
+            const startRow = boundedNumber(tool.args.startRow, 1, 1, 10_000) - 1
+            const maxRows = boundedNumber(tool.args.maxRows, 100, 1, 500)
+            try {
+              const rows = extension === '.csv'
+                ? await readCsvFile(tool.args.path, Math.min(10_000, startRow + maxRows), tool.args.delimiter || ',')
+                : ['.xlsx', '.xlsm', '.xls'].includes(extension)
+                  ? await readExcelFile(tool.args.path, tool.args.sheet, Math.min(10_000, startRow + maxRows))
+                  : (() => { throw new Error('Spreadsheet format unavailable. Use .csv or .xlsx.') })()
+              return { result: formatDataRows(rows.slice(startRow, startRow + maxRows)) }
+            } catch (error: any) {
+              return { error: error?.message || String(error) }
+            }
+          }
+          case 'spreadsheet_write': {
+            const disabled = dataToolError(tool.name, policySettings)
+            if (disabled) return { error: disabled }
+            if (policySettings.dataWriteEnabled !== true) return { error: 'Spreadsheet writes are disabled. Enable Allow spreadsheet writes in Settings > Tool permissions.' }
+            const targetError = await validateDataTarget(tool.workspace, tool.args.path, true)
+            if (targetError) return { error: targetError }
+            const extension = path.extname(tool.args.path).toLowerCase()
+            if (!Array.isArray(tool.args.rows)) return { error: 'spreadsheet_write requires rows as an array of scalar-cell arrays.' }
+            if (fs.existsSync(tool.args.path) && tool.args.overwrite !== true) return { error: 'Refusing to overwrite an existing spreadsheet without overwrite: true.' }
+            try {
+              const bytes = extension === '.csv'
+                ? await writeCsvFile(tool.args.path, tool.args.rows, tool.args.delimiter || ',')
+                : ['.xlsx', '.xlsm'].includes(extension)
+                  ? await writeExcelFile(tool.args.path, tool.args.rows, tool.args.sheet || 'Sheet1')
+                  : (() => { throw new Error('Spreadsheet format unavailable. Use .csv or .xlsx.') })()
+              return { result: `Wrote ${bytes} bytes to ${tool.args.path}.` }
+            } catch (error: any) {
+              return { error: error?.message || String(error) }
+            }
+          }
+          case 'pdf_extract_text': {
+            const disabled = dataToolError(tool.name, policySettings)
+            if (disabled) return { error: disabled }
+            const targetError = await validateDataTarget(tool.workspace, tool.args.path)
+            if (targetError) return { error: targetError }
+            if (path.extname(tool.args.path).toLowerCase() !== '.pdf') return { error: 'pdf_extract_text requires a .pdf file.' }
+            try {
+              const maxChars = boundedNumber(tool.args.maxChars, MAX_DATA_RESULT_CHARS, 1, MAX_DATA_RESULT_CHARS)
+              const text = await extractPdfTextFile(tool.args.path, maxChars)
+              return { result: text || '(No extractable text found. The PDF may be scanned, encrypted, or use unsupported text encoding.)' }
+            } catch (error: any) {
+              return { error: error?.message || String(error) }
+            }
+          }
+          case 'ocr_image': {
+            const disabled = dataToolError(tool.name, policySettings)
+            if (disabled) return { error: disabled }
+            const targetError = await validateDataTarget(tool.workspace, tool.args.path)
+            if (targetError) return { error: targetError }
+            const languagePath = typeof tool.args.language_path === 'string' && tool.args.language_path.trim()
+              ? tool.args.language_path
+              : bundledOcrLanguagePath()
+            if (tool.args.language_path) {
+              const languageError = await validateDataTarget(tool.workspace, tool.args.language_path)
+              if (languageError) return { error: languageError }
+            }
+            if (!/\.(?:png|jpe?g|webp)$/i.test(tool.args.path)) return { error: 'ocr_image supports PNG, JPEG, or WebP files.' }
+            try {
+              const stat = await fs.promises.stat(tool.args.path)
+              if (stat.size > MAX_DATA_FILE_BYTES) return { error: `OCR input is limited to ${MAX_DATA_FILE_BYTES} bytes.` }
+              const text = await runOfflineOcr(tool.args.path, String(tool.args.language || 'eng'), languagePath)
+              return { result: text || '(No text detected.)' }
+            } catch (error: any) {
+              return { error: error?.message || String(error) }
+            }
           }
 
           // ═══ GIT ════════════════════════════════════════════════════════════
@@ -361,6 +626,7 @@ export function registerToolHandlers() {
                 results.push(`${edit.path}: ✓ edited`)
               } catch (err: any) { results.push(`${edit.path}: ✕ ${err.message}`) }
             }
+            if (checkpoint) await finalizeCheckpoint(path.join(app.getPath('userData'), 'checkpoints'), checkpoint)
             return { result: results.join('\n') }
           }
           case 'preview_edits': {
@@ -403,6 +669,7 @@ export function registerToolHandlers() {
               overwrite: tool.args.overwrite === true,
               inspection: archiveInspection,
             })
+            if (checkpoint) await finalizeCheckpoint(path.join(app.getPath('userData'), 'checkpoints'), checkpoint)
             const shown = result.extracted.slice(0, 200)
             const omitted = result.extracted.length - shown.length
             return {

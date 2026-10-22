@@ -89,7 +89,7 @@ export async function externalDiagnostics(root: string, file: string): Promise<L
     const diagnostics = await session.waitForDiagnostics(900)
     return diagnostics.slice(0, 80)
   } finally {
-    session.close()
+    await session.close()
   }
 }
 
@@ -103,7 +103,7 @@ export async function externalDefinition(root: string, file: string, line: numbe
     }, 8_000)
     return session.firstLocation(result)
   } finally {
-    session.close()
+    await session.close()
   }
 }
 
@@ -118,7 +118,7 @@ export async function externalReferences(root: string, file: string, line: numbe
     }, 8_000)
     return session.locations(result).slice(0, 250)
   } finally {
-    session.close()
+    await session.close()
   }
 }
 
@@ -137,7 +137,7 @@ export async function externalRename(root: string, file: string, line: number, c
     }, 8_000)
     return await applyWorkspaceEdit(root, edit)
   } finally {
-    session.close()
+    await session.close()
   }
 }
 
@@ -152,7 +152,7 @@ async function openSession(root: string, file: string): Promise<LspSession | nul
     await session.start()
     return session
   } catch {
-    session.close()
+    await session.close()
     return null
   }
 }
@@ -289,11 +289,19 @@ class LspSession {
     })
   }
 
-  close() {
+  async close() {
     for (const pending of this.pending.values()) clearTimeout(pending.timer)
     this.pending.clear()
+    const child = this.child
+    if (!child) return
     try { this.notify('textDocument/didClose', { textDocument: { uri: this.fileUri } }) } catch {}
-    try { this.child?.kill() } catch {}
+    child.stdin.destroy()
+    const exited = child.exitCode !== null || child.signalCode !== null
+    if (!exited) {
+      const stopped = new Promise<void>((resolve) => child.once('exit', () => resolve()))
+      try { child.kill() } catch {}
+      await Promise.race([stopped, new Promise<void>((resolve) => setTimeout(resolve, 1_000))])
+    }
     this.child = null
   }
 

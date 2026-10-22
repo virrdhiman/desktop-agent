@@ -11,4 +11,13 @@ describe('approval page', () => {
     expect(html).not.toContain('<script>')
     expect(html).toContain('https://approve.vd-agent.invalid/allow')
   })
+
+  it('offers approve, edit, and reject for an exact editable preview', () => {
+    const html = buildApprovalHtml('Review agent change', 'diff --git a/a.txt b/a.txt', 'new content')
+    expect(html).toContain('Approve')
+    expect(html).toContain('Edit')
+    expect(html).toContain('Reject')
+    expect(html).toContain('new content')
+    expect(html).toContain('approve.vd-agent.invalid/edit')
+  })
 })

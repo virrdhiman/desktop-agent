@@ -141,6 +141,42 @@ Search the web and return text snippets.
 { "name": "web_search", "args": { "query": "React useEffect cleanup" } }
 ```
 
+### `api_request`
+Make a bounded HTTP request for lightweight API/browser-endpoint testing. Only `http` and `https` URLs and common HTTP methods are accepted; responses are capped at 100,000 characters and time out after 15 seconds. JSON responses are parsed, and `jsonPath` (for example `data.items`) returns a focused value. Every request is treated as dangerous by the policy and requires explicit approval unless trusted mode is enabled. This tool does not execute JavaScript in a browser.
+```json
+{ "name": "api_request", "args": { "url": "http://localhost:3000/health", "method": "GET", "expectedStatus": 200, "jsonPath": "status" } }
+```
+
+### `browser`
+Opt-in, hidden Electron browser for the current chat session and workspace. Enable **Settings → Tool permissions → Enable browser tool** first; it defaults to off, including in Trusted mode. All operations use the same dangerous-tool approval policy as `api_request` (Trusted mode skips dialogs only after opt-in).
+
+```json
+{ "name": "browser", "args": { "operation": "open_url", "url": "https://example.com" } }
+```
+```json
+{ "name": "browser", "args": { "operation": "read_page_text" } }
+```
+```json
+{ "name": "browser", "args": { "operation": "screenshot", "width": 1280, "height": 900 } }
+```
+
+Only HTTP/HTTPS URLs without embedded credentials are accepted. Reading or capturing with a `url` navigates first; otherwise the current session page is reused. Navigating calls time out after 15 seconds; other calls after 5 seconds. A timeout closes the page. DOM `textContent` is capped at 100,000 characters before the standard model-result budget is applied. Page content is untrusted and is sent to the active AI provider for the requested inspection; it may include hidden DOM text.
+
+Screenshots are viewport PNGs (320–1600 by 240–1200 pixels), saved to a unique workspace-relative `.vd-agent/browser-screenshots/*.png` path, with MIME type, dimensions, and byte count returned as JSON. Controlled `click`, `fill`, and `wait_for_text` operations are available with bounded CSS selectors; arbitrary script, sign-in, downloads, popups, and permission requests remain denied. Browser windows use isolated, in-memory storage; up to four session/workspace pages are retained until the app closes or the setting is disabled. URL arguments and page output are omitted from activity logs; screenshots remain in the workspace until the user removes them.
+
+## Optional local data
+
+These tools are independently **off by default** under **Settings → Tool permissions**. Data reads are marked dangerous and use the existing approval policy. Every local path must remain inside the open workspace, file inputs are bounded, and returned rows/text are truncated. CSV is built in; Excel support is dynamic and reports `Excel unavailable` when the optional `xlsx` package is absent. Spreadsheet writes require both the spreadsheet setting and the separate write setting, require `overwrite: true` for an existing file, and remain approval-gated.
+
+| Tool | What it does | Requirements / gaps |
+|---|---|---|
+| `sqlite_query` | One bounded `SELECT`/`WITH` query against a workspace SQLite file with scalar params | SQLite runtime must be available; opens read-only and rejects writes/maintenance SQL |
+| `postgres_query` | One bounded query in a `BEGIN READ ONLY` transaction | Optional `pg` package; host/database/user only, no passwords/connection URLs, a restricted passwordless role, and TLS requested for non-loopback hosts |
+| `spreadsheet_read` | Read bounded CSV or `.xlsx` rows with paging | CSV works without an add-on; `.xlsx` needs optional `xlsx` |
+| `spreadsheet_write` | Write bounded CSV or one-sheet `.xlsx` rows | Separate write opt-in plus approval; formula-like CSV strings are escaped; no overwrite by default |
+| `pdf_extract_text` | Extract text operators from an unencrypted PDF, including common Flate streams | No OCR or layout reconstruction; scanned/encrypted/complex PDFs may produce no text |
+| `ocr_image` | Offline Tesseract OCR for PNG/JPEG/WebP | English data is bundled; other languages need local uncompressed workspace data. Downloads and cache writes are disabled |
+
 ## Media
 
 | Tool | What it actually does | Requirements |

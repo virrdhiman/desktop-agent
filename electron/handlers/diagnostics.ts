@@ -1,13 +1,55 @@
-import { app, dialog, ipcMain } from 'electron'
+import { app, clipboard, dialog, ipcMain } from 'electron'
 import fs from 'fs'
-import { buildDiagnosticsReport } from '../diagnostics'
+import { appendDiagnosticsLog, buildDiagnosticsReport, formatDiagnosticsReport, readDiagnosticsLines, type DiagnosticsLogEvent, type DiagnosticsViewerPayload } from '../diagnostics'
 import { SETTINGS_PATH } from './settings'
 
+async function loadDiagnosticsSettings(): Promise<any> {
+  try { return JSON.parse(await fs.promises.readFile(SETTINGS_PATH, 'utf8')) } catch { return {} }
+}
+
+function validLogEvent(value: unknown): DiagnosticsLogEvent | null {
+  if (!value || typeof value !== 'object') return null
+  const event = value as Record<string, unknown>
+  const source = event.source === 'main' || event.source === 'renderer' || event.source === 'unhandled' ? event.source : null
+  const severity = event.severity === 'debug' || event.severity === 'info' || event.severity === 'warn' || event.severity === 'error' ? event.severity : null
+  if (!source || !severity || typeof event.message !== 'string') return null
+  return {
+    source,
+    severity,
+    message: event.message.slice(0, 8_000),
+    ...(typeof event.stack === 'string' ? { stack: event.stack.slice(0, 8_000) } : {}),
+  }
+}
+
 export function registerDiagnosticsHandlers() {
+  ipcMain.handle('diagnostics:copy', async (_event, value: unknown) => {
+    if (typeof value !== 'string' || value.length > 2 * 1024 * 1024) return { success: false, error: 'Diagnostics text is invalid or too large.' }
+    clipboard.writeText(value)
+    return { success: true }
+  })
+
+  ipcMain.handle('diagnostics:record', async (_event, value: unknown) => {
+    const event = validLogEvent(value)
+    if (!event) return { success: false, error: 'Invalid diagnostics event.' }
+    appendDiagnosticsLog(app.getPath('userData'), event)
+    return { success: true }
+  })
+
+  ipcMain.handle('diagnostics:read', async (): Promise<DiagnosticsViewerPayload> => {
+    const settings = await loadDiagnosticsSettings()
+    const report = await buildDiagnosticsReport({
+      userDataDir: app.getPath('userData'),
+      settings,
+      appVersion: app.getVersion(),
+      packaged: app.isPackaged,
+    })
+    const lines = await readDiagnosticsLines(app.getPath('userData'))
+    return { report, lines, reportText: formatDiagnosticsReport(report, lines) }
+  })
+
   ipcMain.handle('diagnostics:export', async () => {
     try {
-      let settings: any = {}
-      try { settings = JSON.parse(await fs.promises.readFile(SETTINGS_PATH, 'utf8')) } catch {}
+      const settings = await loadDiagnosticsSettings()
       const report = await buildDiagnosticsReport({
         userDataDir: app.getPath('userData'),
         settings,

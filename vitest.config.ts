@@ -12,7 +12,7 @@ export default defineConfig({
     fileParallelism: false,
     maxWorkers: 1,
     setupFiles: ['./src/__tests__/setup.ts'],
-    include: ['src/**/*.{test,spec}.{ts,tsx}', 'electron/**/*.{test,spec}.ts'],
+    include: ['src/**/*.{test,spec}.{ts,tsx}', 'electron/**/*.{test,spec}.ts', 'scripts/**/*.{test,spec}.mjs'],
     testTimeout: 15000,
     hookTimeout: 15000,
     coverage: {

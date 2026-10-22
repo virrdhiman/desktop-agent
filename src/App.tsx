@@ -31,12 +31,14 @@ import SessionsPanel from './components/SessionsPanel'
 import SearchResults from './components/SearchResults'
 import CommandPalette from './components/CommandPalette'
 import VsCodeBridgePanel from './components/VsCodeBridgePanel'
+import PrerequisiteSetup from './components/PrerequisiteSetup'
+import HelpPanel from './components/HelpPanel'
 
 export default function App() {
   const {
     setSettings, workspacePath, setWorkspacePath, setProjectMemory,
     selectedFile, showTerminal, activePanel,
-    setIsRepo, setGitStatus, setAllFiles, setActivePanel, toggleCommandPalette,
+    setIsRepo, setGitStatus, setAllFiles, setRepoIndexStatus, setActivePanel, toggleCommandPalette,
     showCommandPalette, setShowCommandPalette,
   } = useStore()
 
@@ -72,7 +74,9 @@ export default function App() {
         window.api.walkDirectory(activeWorkspace).then((files) => {
           setAllFiles(files)
         })
-        void window.api.toolExecute({ name: 'repo_index', args: {}, workspace: activeWorkspace }).catch(() => {})
+        if (settings.indexingEnabled === true) {
+          void window.api.toolExecute({ name: 'repo_index', args: {}, workspace: activeWorkspace }).catch(() => {})
+        }
       } catch (err: any) {
         console.warn(`Failed to initialize VD Agent: ${err?.message || err}`)
       }
@@ -83,6 +87,9 @@ export default function App() {
     const checkpointCleanup = window.api.onCheckpointCreated((checkpoint) => {
       useStore.getState().setLatestCheckpoint(checkpoint)
     })
+    const indexStatusCleanup = window.api.onRepoIndexStatus((status) => {
+      setRepoIndexStatus(status)
+    })
     const autosaveInterval = window.setInterval(flush, 5_000)
     const onVisibility = () => { if (document.visibilityState === 'hidden') flush() }
     window.addEventListener('beforeunload', flush)
@@ -92,6 +99,7 @@ export default function App() {
       document.removeEventListener('visibilitychange', onVisibility)
       window.clearInterval(autosaveInterval)
       checkpointCleanup()
+      indexStatusCleanup()
     }
   }, [])
 
@@ -137,6 +145,7 @@ export default function App() {
     <div className="app-layout" style={{ height: '100vh' }}>
       {/* Command Palette overlay */}
       <CommandPalette />
+      <PrerequisiteSetup />
 
       {/* Sidebar */}
       <Sidebar />
@@ -163,6 +172,7 @@ export default function App() {
             {activePanel === 'search' && <SearchResults />}
             {activePanel === 'terminal' && <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}><MultiTerminal /></div>}
             {activePanel === 'settings' && <SettingsPanel />}
+            {activePanel === 'help' && <HelpPanel />}
           </div>
 
           {/* Right panel: Editor (visible in chat mode) */}

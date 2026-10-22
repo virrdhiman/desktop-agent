@@ -16,7 +16,8 @@ import { fileURLToPath } from 'node:url'
 export function releaseSigningPlan({ os, env = {} }) {
   const link = String(env.CSC_LINK || '').trim()
   const password = String(env.CSC_KEY_PASSWORD || '').trim()
-  const hasCert = Boolean(link && password)
+  const hasKeychainIdentity = os === 'macOS' && Boolean(String(env.CSC_NAME || '').trim())
+  const hasCert = Boolean(link && password) || hasKeychainIdentity
   const notarize = Boolean(
     String(env.APPLE_ID || '').trim()
     && String(env.APPLE_APP_SPECIFIC_PASSWORD || '').trim()

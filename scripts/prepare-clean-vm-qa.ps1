@@ -29,9 +29,13 @@ function Required-File {
 $iso = Resolve-Path -LiteralPath $IsoPath
 Required-File -Path $iso -Label 'Windows ISO'
 
-$installer = Join-Path (Get-Location) 'release\VD Agent Setup 1.1.0.exe'
-$portable = Join-Path (Get-Location) 'release\VD Agent 1.1.0.exe'
-$vsix = Join-Path (Get-Location) 'vscode-extension\vd-agent-vscode-bridge-0.4.5.vsix'
+$package = Get-Content -LiteralPath (Join-Path (Get-Location) 'package.json') -Raw | ConvertFrom-Json
+$version = $package.version
+$bridge = @($package.build.extraResources | Where-Object { $_.to -match '\.vsix$' })[0]
+$vsixName = $bridge.to
+$installer = Join-Path (Get-Location) "release\VD Agent Setup $version.exe"
+$portable = Join-Path (Get-Location) "release\VD Agent $version.exe"
+$vsix = Join-Path (Get-Location) $bridge.from
 
 Write-Step "Checking release artifacts"
 Required-File -Path $installer -Label 'Windows installer'
@@ -58,11 +62,11 @@ Inside the clean Windows VM:
 2. Install VS Code.
 3. Copy this staging folder into the VM:
    $stage
-4. Install VD Agent Setup 1.1.0.exe.
+4. Install VD Agent Setup $version.exe.
 5. Launch VD Agent from Start Menu and desktop shortcut.
 6. Confirm chat opens, local history persists after restart, terminal starts, and provider settings are saved locally.
 7. In VS Code, run:
-   code --install-extension vd-agent-vscode-bridge-0.4.5.vsix
+   code --install-extension $vsixName
 8. Open a repo in VS Code, choose Trust Workspace, then run:
    VD Agent: Export Workspace Context
 9. In VD Agent, verify VS Code bridge status, active file, open file, diff preview, and one small edit/apply flow.

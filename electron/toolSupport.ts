@@ -13,10 +13,10 @@ import path from 'path'
 export const COMMAND_TIMEOUT_MS = 30_000
 const MAX_STREAM_CHARS = 20_000
 
-const PATH_KEYS = ['path', 'cwd', 'audio_path', 'archive_path', 'output_path']
+const PATH_KEYS = ['path', 'cwd', 'audio_path', 'archive_path', 'output_path', 'database_path', 'language_path']
 /** Tools whose `path` defaults to the current directory, which should mean the workspace. */
 const DIRECTORY_TOOLS = new Set([
-  'list_files', 'search_files', 'search_code', 'repo_map', 'repo_index', 'repo_plan', 'repo_search', 'read_directory_tree',
+  'list_files', 'search_files', 'search_code', 'repo_map', 'repo_index', 'repo_plan', 'repo_search', 'go_to_definition', 'find_usages', 'read_directory_tree',
   'vscode_context',
   'git_status', 'git_diff', 'git_commit', 'git_log', 'git_branch', 'git_stash',
   'git_generate_commit', 'git_undo_last', 'git_discard_changes',

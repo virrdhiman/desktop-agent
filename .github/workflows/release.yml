@@ -55,6 +55,10 @@ jobs:
           if [ "$REQUIRE_SIGNING" = "true" ]; then SIGNING_ARGS+=(--require-official); fi
           node scripts/signing-preflight.mjs "${SIGNING_ARGS[@]}"
           node scripts/release-signing.mjs >> "$GITHUB_ENV"
+      - name: Validate update readiness
+        run: npm run release:update
+      - name: Read-only packaging preflight
+        run: npm run release:preflight -- --output release
       - name: Run agent evaluations
         if: runner.os != 'Linux'
         run: npm run agent:evals
@@ -70,6 +74,19 @@ jobs:
         run: |
           if [ -z "$CSC_LINK" ]; then unset CSC_LINK CSC_KEY_PASSWORD; fi
           npm run electron:build -- ${{ env.BUILDER_ARGS }} --publish never
+      - name: Validate packaged capabilities (Windows)
+        if: runner.os == 'Windows'
+        run: node scripts/validate-packaged-capabilities.mjs --platform win32 --arch x64 --resources release/win-unpacked/resources
+      - name: Validate packaged capabilities (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          resources=$(find release -type d -path '*/VD Agent.app/Contents/Resources' -print -quit)
+          test -n "$resources"
+          node scripts/validate-packaged-capabilities.mjs --platform darwin --arch "$(node -p 'process.arch')" --resources "$resources"
+      - name: Validate packaged capabilities (Linux)
+        if: runner.os == 'Linux'
+        run: node scripts/validate-packaged-capabilities.mjs --platform linux --arch x64 --resources release/linux-unpacked/resources
       - name: Smoke packaged Windows app
         if: runner.os == 'Windows'
         run: node scripts/smoke.mjs --exe "release/win-unpacked/VD Agent.exe"

@@ -401,6 +401,32 @@ export function followUpMessage(toolResults: string): string {
   ].join('\n\n')
 }
 
+/** Detects a tool-backed turn that stopped at prose instead of taking its next action. */
+export function needsToolContinuation(text: string, toolRuns: Array<{ name: string; ok: boolean }> = []): boolean {
+  if (toolRuns.length === 0) return false
+  const prose = cleanResponse(text)
+  if (!prose) return false
+  if (/\b(?:done|completed|finished|verified|passed|no further action)\b/i.test(prose)
+    && !/\b(?:next|need|still|not yet|approval|run|execute|verify)\b/i.test(prose)) return false
+  return /\b(?:next (?:step|command|action)|need(?:s)? (?:your|user) approval|please approve|waiting for approval|approve (?:the|this)|I(?:'ll| will) (?:now|next)|I need to (?:run|execute|read|inspect|verify)|still need(?: to)?|not yet|once you approve|then I(?:'ll| will)|continue with (?:a )?(?:tool|command))\b/i.test(prose)
+}
+
+export function toolContinuationMessage(): string {
+  return [
+    'Continue the unfinished task now.',
+    'Use one of the available tools and emit exactly one valid tool call in this schema:',
+    '```tool',
+    '{"name":"tool_name","args":{}}',
+    '```',
+    'Do not describe a command, ask for approval in prose, or claim work is complete. If no action remains, say DONE.',
+  ].join('\n')
+}
+
+export function agentTurnTimeoutNotice(error: string): string | null {
+  if (!/IPC timeout:\s*ai:chat/i.test(error)) return null
+  return 'Agent stopped: per-turn timeout. The provider did not respond before the turn limit. Retry with a smaller request or a different model.'
+}
+
 // ─── Response quality ───────────────────────────────────────────────────────
 
 const LEADING_FILLER = [
@@ -544,9 +570,10 @@ export function unverifiedClaimsNotice(claims: UnverifiedClaim[]): string {
 // ─── Provider failures ──────────────────────────────────────────────────────
 
 export type ProviderAttempt = { name: string; error: string }
-type FailureKind = 'rate' | 'network' | 'server' | 'model' | 'context' | 'other'
+type FailureKind = 'auth' | 'rate' | 'network' | 'server' | 'model' | 'context' | 'other'
 
 export function classifyProviderError(error: string): FailureKind {
+  if (/\b401\b|\b403\b|invalid (?:api )?key|expired (?:api )?key|unauthorized|forbidden/i.test(error)) return 'auth'
   if (/\b429\b|rate[_ ]?limit|too many requests|quota|resource[_ ]exhausted/i.test(error)) return 'rate'
   if (/max_tokens.{0,60}(must be|less than or equal|exceeds?|too large)/i.test(error)) return 'model'
   if (/context|too long|maximum.*tokens|token limit|reduce the length/i.test(error)) return 'context'
@@ -557,6 +584,7 @@ export function classifyProviderError(error: string): FailureKind {
 }
 
 const KIND_LABEL: Record<FailureKind, string> = {
+  auth: 'API key rejected',
   rate: 'rate limited',
   network: 'network error',
   server: 'provider error',
@@ -566,6 +594,7 @@ const KIND_LABEL: Record<FailureKind, string> = {
 }
 
 const KIND_STEP: Record<FailureKind, string> = {
+  auth: 'Update or remove the rejected API key in Settings; Auto can still use another configured provider.',
   rate: 'Wait a minute and retry, or add a key for another free provider in Settings so VD Agent can fall back.',
   network: 'Check your internet connection, proxy, or firewall. For a local model, make sure its server is running.',
   server: 'The provider is having problems. Retry shortly or switch provider in Settings.',

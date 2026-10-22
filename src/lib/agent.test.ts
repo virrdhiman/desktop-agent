@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest'
 import {
   MAX_CONTEXT_FILE_CHARS, MAX_TOOL_RESULT_CHARS, TOOL_SYSTEM_PROMPT,
   assessResponse, buildContext, buildHistory, buildSystemPrompt, classifyProviderError, cleanResponse,
-  correctionMessage, describeAuthFailure, describeFallback, describeProviderFailure, followUpMessage,
+  agentTurnTimeoutNotice, correctionMessage, describeAuthFailure, describeFallback, describeProviderFailure, followUpMessage,
   formatToolResult, hasToolBlock, maxRoundsNotice, missingKeyNotice, noProviderNotice, parseToolCalls,
-  resolveWorkspacePath, toolFailureHint, unusableResponseNotice, unverifiedClaims, unverifiedClaimsMessage,
+  resolveWorkspacePath, needsToolContinuation, toolContinuationMessage, toolFailureHint, unusableResponseNotice, unverifiedClaims, unverifiedClaimsMessage,
   unverifiedClaimsNotice,
 } from './agent'
 
@@ -234,6 +234,21 @@ describe('followUpMessage', () => {
   })
 })
 
+describe('agent loop stall recovery', () => {
+  it('recognizes prose that promises another action after a tool run', () => {
+    expect(needsToolContinuation('I created the file. Next, I need your approval to run pytest.', [{ name: 'create_file', ok: true }])).toBe(true)
+    expect(needsToolContinuation('The tests passed and the task is complete.', [{ name: 'run_command', ok: true }])).toBe(false)
+    expect(needsToolContinuation('I will summarize the result now.', [])).toBe(false)
+  })
+
+  it('builds a tool-only recovery prompt and a visible timeout notice', () => {
+    expect(toolContinuationMessage()).toMatch(/continue the unfinished task/i)
+    expect(toolContinuationMessage()).toContain('```tool')
+    expect(agentTurnTimeoutNotice('IPC timeout: ai:chat did not respond in 600s')).toMatch(/per-turn timeout/i)
+    expect(agentTurnTimeoutNotice('API error (429)')).toBeNull()
+  })
+})
+
 describe('cleanResponse', () => {
   it('strips stock openers and closers', () => {
     const raw = 'Certainly! Great question.\n\nThe bug is in `parse()`: it ignores CRLF.\n\nI hope this helps! Let me know if you have any other questions.'
@@ -355,6 +370,8 @@ describe('unverified claims', () => {
 
 describe('provider failure messages', () => {
   it.each([
+    ['API error (401): Invalid API Key', 'auth'],
+    ['HTTP 401: expired API key', 'auth'],
     ['API error (429): Rate limit reached', 'rate'],
     ['fetch failed', 'network'],
     ['IPC timeout: ai:chat did not respond in 600s', 'network'],
@@ -396,6 +413,8 @@ describe('provider failure messages', () => {
   it('tells the user which provider actually answered', () => {
     expect(describeFallback([{ name: 'Groq', error: '429 rate limit' }], 'Google Gemini'))
       .toBe('Groq (rate limited) failed, so this answer came from Google Gemini.')
+    expect(describeFallback([{ name: 'Groq', error: 'API error (401): Invalid API Key' }], 'Google Gemini'))
+      .toBe('Groq (API key rejected) failed, so this answer came from Google Gemini.')
   })
 
   it('gives next steps for setup problems and the tool-round limit', () => {

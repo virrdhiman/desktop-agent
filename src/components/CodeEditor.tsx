@@ -83,7 +83,7 @@ export default function CodeEditor() {
   const {
     selectedFile, setSelectedFile, fileContent, setFileContent,
     fileDirty, setFileDirty, openFiles, addOpenFile, closeOpenFile,
-    allFiles, addTerminalEntry, workspacePath, fileEditHistory, removeFileEdit,
+    allFiles, addTerminalEntry, workspacePath, fileEditHistory, removeFileEdit, settings,
   } = useStore()
 
   const [editorContent, setEditorContent] = useState('')
@@ -96,6 +96,17 @@ export default function CodeEditor() {
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null)
   const completionProviderRef = useRef<Monaco.IDisposable | null>(null)
   const completionWordsRef = useRef<string[]>([])
+  const completionEnabledRef = useRef(false)
+  completionEnabledRef.current = settings.autocompleteEnabled === true
+
+  useEffect(() => {
+    editorRef.current?.updateOptions({
+      quickSuggestions: { other: settings.autocompleteEnabled === true, comments: false, strings: false },
+      suggestOnTriggerCharacters: settings.autocompleteEnabled === true,
+      tabCompletion: settings.autocompleteEnabled === true ? 'on' : 'off',
+      wordBasedSuggestions: settings.autocompleteEnabled === true ? 'matchingDocuments' : 'off',
+    })
+  }, [settings.autocompleteEnabled])
 
   const language = useMemo(() => selectedFile ? getLanguage(selectedFile) : 'plaintext', [selectedFile])
   const hasTsLanguageService = language === 'typescript' || language === 'javascript'
@@ -388,6 +399,7 @@ export default function CodeEditor() {
     completionProviderRef.current = monaco.languages.registerCompletionItemProvider(language, {
       triggerCharacters: ['.', '/', '-', '_'],
       provideCompletionItems(model, position) {
+        if (!completionEnabledRef.current) return { suggestions: [] }
         const word = model.getWordUntilPosition(position)
         const range = {
           startLineNumber: position.lineNumber,
@@ -706,10 +718,10 @@ export default function CodeEditor() {
             cursorSmoothCaretAnimation: 'on',
             folding: true,
             formatOnPaste: true,
-            quickSuggestions: { other: true, comments: false, strings: false },
-            suggestOnTriggerCharacters: true,
-            tabCompletion: 'on',
-            wordBasedSuggestions: 'matchingDocuments',
+            quickSuggestions: { other: settings.autocompleteEnabled === true, comments: false, strings: false },
+            suggestOnTriggerCharacters: settings.autocompleteEnabled === true,
+            tabCompletion: settings.autocompleteEnabled === true ? 'on' : 'off',
+            wordBasedSuggestions: settings.autocompleteEnabled === true ? 'matchingDocuments' : 'off',
             lineNumbers: 'on',
             glyphMargin: false,
             renderLineHighlight: 'all',

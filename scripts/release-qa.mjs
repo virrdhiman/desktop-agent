@@ -13,6 +13,7 @@
  * or clean-machine QA step.
  */
 import fs from 'node:fs'
+import crypto from 'node:crypto'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -73,6 +74,16 @@ function vscodeBridgeResource() {
   return resources.find((item) => typeof item?.to === 'string' && /^vd-agent-vscode-bridge-.*\.vsix$/i.test(item.to))
 }
 
+function englishOcrResource() {
+  const resources = Array.isArray(pkg.build?.extraResources) ? pkg.build.extraResources : []
+  return resources.find((item) => typeof item?.to === 'string' && /(?:^|[\\/])eng\.traineddata$/i.test(item.to))
+}
+
+function resourceWithTarget(target) {
+  const resources = Array.isArray(pkg.build?.extraResources) ? pkg.build.extraResources : []
+  return resources.find((item) => typeof item?.to === 'string' && item.to.replaceAll('\\', '/').toLowerCase() === target.toLowerCase())
+}
+
 function envSet(name) {
   return Boolean(process.env[name])
 }
@@ -89,6 +100,9 @@ function reportSigning(label, names) {
 }
 
 function checkPackageConfig() {
+  if (/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(pkg.version || '')) pass('package version', pkg.version)
+  else fail('package version', 'package.json version must be a semver-like x.y.z value')
+
   if (pkg.private === true) pass('package is private')
   else warn('package is private', 'Set package.json private:true for private/internal builds')
 
@@ -123,6 +137,29 @@ function checkPackageConfig() {
   } else {
     fail('VS Code bridge packaged resource', 'extraResources must include a non-empty vd-agent-vscode-bridge VSIX')
   }
+
+  const ocr = englishOcrResource()
+  if (ocr?.from && ocr?.to && nonEmpty(ocr.from)) {
+    pass('English OCR packaged resource', `${ocr.from} -> ${ocr.to}`)
+  } else {
+    fail('English OCR packaged resource', 'extraResources must include a non-empty eng.traineddata asset')
+  }
+  const ocrManifest = resourceWithTarget('tessdata/manifest.json')
+  const ocrLicense = resourceWithTarget('tessdata/LICENSE.apache-2.0.txt')
+  if (ocrManifest?.from && nonEmpty(ocrManifest.from)) pass('English OCR manifest resource', `${ocrManifest.from} -> ${ocrManifest.to}`)
+  else fail('English OCR manifest resource', 'A non-empty tessdata/manifest.json extraResource is required')
+  if (ocrLicense?.from && nonEmpty(ocrLicense.from)) pass('English OCR Apache-2.0 license', `${ocrLicense.from} -> ${ocrLicense.to}`)
+  else fail('English OCR Apache-2.0 license', 'A non-empty Apache-2.0 license extraResource is required')
+  if (ocr?.from && ocrManifest?.from && nonEmpty(ocr.from) && nonEmpty(ocrManifest.from)) {
+    try {
+      const manifest = JSON.parse(fs.readFileSync(path.join(repo, ocrManifest.from), 'utf8'))
+      const actual = crypto.createHash('sha256').update(fs.readFileSync(path.join(repo, ocr.from))).digest('hex')
+      if (actual === String(manifest.sha256 || '').toLowerCase()) pass('English OCR pinned SHA-256', actual)
+      else fail('English OCR pinned SHA-256', `expected ${manifest.sha256 || '(missing)'}; actual ${actual}`)
+    } catch (error) {
+      fail('English OCR pinned SHA-256', error.message)
+    }
+  }
 }
 
 function checkScriptsAndDocs() {
@@ -135,9 +172,15 @@ function checkScriptsAndDocs() {
     'checksums',
     'release:notes',
     'release:qa',
+    'release:preflight',
+    'release:package',
+    'release:update-fixture',
+    'release:vm-harness',
+    'release:mac-template',
     'release:local-cert',
     'release:secrets',
     'release:signing',
+    'release:update',
     'release:vm-prepare',
     'electron:build',
   ]) {
@@ -148,7 +191,7 @@ function checkScriptsAndDocs() {
     requiredFile(file, `platform build script: ${file}`)
   }
 
-  for (const file of ['README.md', 'docs/INSTALL.md', 'docs/RELEASE_CHECKLIST.md', 'docs/SIGNING.md', 'CHANGELOG.md', 'LICENSE']) {
+  for (const file of ['README.md', 'docs/INSTALL.md', 'docs/RELEASE_CHECKLIST.md', 'docs/SIGNING.md', 'docs/mac-test-template.md', 'docs/vm-qa-harness.md', 'CHANGELOG.md', 'LICENSE']) {
     requiredFile(file, `release doc: ${file}`)
   }
 
@@ -229,6 +272,24 @@ function checkReleaseArtifacts() {
       fail('packaged VS Code bridge resource', `${rel(packagedBridge)} is missing or empty`)
     }
   }
+
+  const ocr = englishOcrResource()
+  if (ocr?.to) {
+    const packagedOcr = path.join(releaseDir, 'win-unpacked', 'resources', ocr.to)
+    if (fs.existsSync(packagedOcr) && fs.statSync(packagedOcr).size > 0) {
+      pass('packaged English OCR resource', rel(packagedOcr))
+    } else {
+      fail('packaged English OCR resource', `${rel(packagedOcr)} is missing or empty`)
+    }
+  }
+  for (const [target, label] of [
+    ['tessdata/manifest.json', 'packaged English OCR manifest'],
+    ['tessdata/LICENSE.apache-2.0.txt', 'packaged English OCR license'],
+  ]) {
+    const packaged = path.join(releaseDir, 'win-unpacked', 'resources', ...target.split('/'))
+    if (fs.existsSync(packaged) && fs.statSync(packaged).size > 0) pass(label, rel(packaged))
+    else fail(label, `${rel(packaged)} is missing or empty`)
+  }
 }
 
 checkPackageConfig()
@@ -250,4 +311,3 @@ if (warnings.length > 0) {
   console.log('Warnings are expected for unsigned private builds and clean-device checks.')
 }
 if (failures.length > 0) process.exit(1)
-

@@ -9,6 +9,10 @@
 
 VD Agent talks to AI providers with API keys that you create on the provider's website. The full catalog, with counts per category, is in **Settings**. It is defined in `electron/handlers/settings.ts`, and new entries are added to existing installs automatically.
 
+See [Packaged capabilities and prerequisites](PACKAGED_CAPABILITIES.md) for the
+boundary between bundled provider support and software, models, keys, and
+network access that must be supplied separately.
+
 Free tiers, credits, and rate limits are set by each provider and change often. Check the provider's site for current terms.
 
 ## Categories
@@ -55,6 +59,12 @@ To add a key: **Settings →** select the provider **→ Get API Key →** paste
 | llama.cpp | `http://localhost:8080/v1` | Run [`llama-server`](https://github.com/ggml-org/llama.cpp) |
 
 Set the model name in Settings to a model you have installed. Local models keep prompts on your machine. Coding quality depends on the model size your hardware can run.
+
+For a local provider, the placeholder key and URL mean **Configured · not
+verified** only. Saving Settings does not check whether the runtime is
+installed, the server is running, or the selected model exists. Settings shows
+local health evidence only after a successful request; that is evidence of a
+previous request, not a continuous health check.
 
 ## How model selection works
 

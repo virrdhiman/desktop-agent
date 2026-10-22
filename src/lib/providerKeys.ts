@@ -39,3 +39,12 @@ export function nextStoredApiKey(
   if (!typed) return storedApiKey || ''
   return encrypt(typed)
 }
+
+/** Never persist a secret in plaintext, including keys from older settings files. */
+export function secureStoredApiKey(incoming: KeyedProvider, storedApiKey: string | undefined, encrypt: (plain: string) => string): string {
+  if (incoming.clearKey) return ''
+  const typed = typeof incoming.apiKey === 'string' ? incoming.apiKey.trim() : ''
+  const key = typed || storedApiKey || ''
+  if (!key || isLocalPlaceholderKey(key) || (!typed && key.startsWith('enc:'))) return key
+  return encrypt(key)
+}

@@ -34,6 +34,12 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: any) {
     console.error('VD Agent ErrorBoundary caught:', error, errorInfo)
+    void window.api.recordDiagnostics({
+      source: 'renderer',
+      severity: 'error',
+      message: error.message || 'Unhandled renderer error',
+      stack: [error.stack, errorInfo?.componentStack].filter(Boolean).join('\n'),
+    }).catch(() => {})
   }
 
   render() {

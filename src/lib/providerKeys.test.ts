@@ -5,7 +5,7 @@
  * @license Proprietary. See LICENSE.
  */
 import { describe, expect, it } from 'vitest'
-import { maskProviderForRenderer, nextStoredApiKey } from './providerKeys'
+import { maskProviderForRenderer, nextStoredApiKey, secureStoredApiKey } from './providerKeys'
 
 describe('provider key masking', () => {
   it('hides a real key and leaves local placeholders', () => {
@@ -22,5 +22,13 @@ describe('provider key masking', () => {
     expect(nextStoredApiKey({ apiKey: '' }, 'enc:old', encrypt)).toBe('enc:old')
     expect(nextStoredApiKey({ apiKey: 'new-key' }, 'enc:old', encrypt)).toBe('enc:new-key')
     expect(nextStoredApiKey({ apiKey: 'ignored', clearKey: true }, 'enc:old', encrypt)).toBe('')
+  })
+
+  it('migrates legacy plaintext keys, preserves encrypted keys and rejects unavailable secure storage', () => {
+    const encrypt = (value: string) => `enc:${value}`
+    expect(secureStoredApiKey({ apiKey: '' }, 'old-key', encrypt)).toBe('enc:old-key')
+    expect(secureStoredApiKey({ apiKey: '' }, 'enc:old', encrypt)).toBe('enc:old')
+    expect(secureStoredApiKey({ apiKey: 'ollama' }, '', () => { throw new Error('unavailable') })).toBe('ollama')
+    expect(() => secureStoredApiKey({ apiKey: 'new-key' }, '', () => { throw new Error('unavailable') })).toThrow('unavailable')
   })
 })

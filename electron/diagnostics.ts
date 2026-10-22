@@ -4,6 +4,91 @@ import path from 'path'
 import os from 'os'
 import { redactSecrets } from './conversationStore'
 
+export const DIAGNOSTICS_LOG_DIRECTORY = 'logs'
+export const DIAGNOSTICS_LOG_BASENAME = 'diagnostics.log'
+export const DIAGNOSTICS_LOG_MAX_BYTES = 256 * 1024
+export const DIAGNOSTICS_LOG_MAX_FILES = 3
+export const DIAGNOSTICS_LOG_MAX_LINES = 200
+
+export type DiagnosticsLogEvent = {
+  source: 'main' | 'renderer' | 'unhandled'
+  severity: 'debug' | 'info' | 'warn' | 'error'
+  message: string
+  stack?: string
+}
+
+export type DiagnosticsLogOptions = {
+  maxBytes?: number
+  maxFiles?: number
+}
+
+/** Redact credentials and request metadata before a diagnostic ever reaches disk or the UI. */
+export function redactDiagnosticText(text: string): string {
+  let redacted = redactSecrets(text)
+  redacted = redacted
+    .replace(/((?:authorization|proxy-authorization)\s*[:=]\s*)(?:bearer|basic)\s+[^\s,;}]+/gi, '$1[redacted-secret]')
+    .replace(/((?:^|[\s,])(?:authorization|proxy-authorization)\s*[:=]\s*)[^\s,;}]+/gi, '$1[redacted-secret]')
+    .replace(/("(?:authorization|proxy-authorization|cookie|set-cookie)"\s*:\s*")[^"]*(")/gi, '$1[redacted-secret]$2')
+    .replace(/((?:cookie|set-cookie)\s*[:=]\s*["']?)[^\s,;}"']+/gi, '$1[redacted-secret]')
+    .replace(/("(?:api[_-]?key|provider[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|password|secret)"\s*:\s*")[^"]*(")/gi, '$1[redacted-secret]$2')
+    .replace(/((?:api[_-]?key|provider[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|password|secret)\s*[:=]\s*["']?)[^\s,;}"']+/gi, '$1[redacted-secret]')
+  return redacted
+}
+
+function diagnosticsLogPath(userDataDir: string, index = 0): string {
+  const suffix = index === 0 ? '' : `.${index}`
+  return path.join(userDataDir, DIAGNOSTICS_LOG_DIRECTORY, `${DIAGNOSTICS_LOG_BASENAME}${suffix}`)
+}
+
+function rotateDiagnosticsLogs(userDataDir: string, maxFiles: number): void {
+  for (let index = maxFiles - 1; index >= 1; index--) {
+    const source = diagnosticsLogPath(userDataDir, index - 1)
+    const target = diagnosticsLogPath(userDataDir, index)
+    try { fs.unlinkSync(target) } catch {}
+    try { fs.renameSync(source, target) } catch {}
+  }
+}
+
+/** Append one redacted JSON-line event and rotate the small local log set when capped. */
+export function appendDiagnosticsLog(userDataDir: string, event: DiagnosticsLogEvent, options: DiagnosticsLogOptions = {}): void {
+  const maxBytes = Math.max(1, Math.floor(options.maxBytes ?? DIAGNOSTICS_LOG_MAX_BYTES))
+  const maxFiles = Math.max(1, Math.floor(options.maxFiles ?? DIAGNOSTICS_LOG_MAX_FILES))
+  const directory = path.join(userDataDir, DIAGNOSTICS_LOG_DIRECTORY)
+  try { fs.mkdirSync(directory, { recursive: true }) } catch { return }
+  const serialized = redactDiagnosticText(JSON.stringify({
+    timestamp: new Date().toISOString(),
+    source: event.source,
+    severity: event.severity,
+    message: event.message,
+    ...(event.stack ? { stack: event.stack } : {}),
+  }))
+  let bounded = serialized.slice(0, Math.max(1, maxBytes - 1))
+  while (Buffer.byteLength(bounded, 'utf8') > Math.max(1, maxBytes - 1)) bounded = bounded.slice(0, -1)
+  const line = `${bounded}\n`
+  const currentPath = diagnosticsLogPath(userDataDir)
+  let currentBytes = 0
+  try { currentBytes = fs.statSync(currentPath).size } catch {}
+  if (currentBytes + Buffer.byteLength(line, 'utf8') > maxBytes) {
+    if (maxFiles === 1) {
+      try { fs.truncateSync(currentPath, 0) } catch {}
+    } else rotateDiagnosticsLogs(userDataDir, maxFiles)
+  }
+  try { fs.appendFileSync(currentPath, line, { encoding: 'utf8', mode: 0o600 }) } catch {}
+}
+
+/** Read the newest bounded set in chronological order; missing/unreadable logs are an empty state. */
+export async function readDiagnosticsLines(userDataDir: string, limit = DIAGNOSTICS_LOG_MAX_LINES, options: DiagnosticsLogOptions = {}): Promise<string[]> {
+  const maxFiles = Math.max(1, Math.floor(options.maxFiles ?? DIAGNOSTICS_LOG_MAX_FILES))
+  const lines: string[] = []
+  for (let index = maxFiles - 1; index >= 0; index--) {
+    try {
+      const content = await fs.promises.readFile(diagnosticsLogPath(userDataDir, index), 'utf8')
+      lines.push(...content.split(/\r?\n/).filter(Boolean).map(redactDiagnosticText))
+    } catch {}
+  }
+  return lines.slice(-Math.max(0, Math.floor(limit)))
+}
+
 type ProviderLike = {
   id?: unknown
   apiKey?: unknown
@@ -70,6 +155,25 @@ export type DiagnosticsReport = {
     checkpoints: StorageStats
     projectMemory: StorageStats
   }
+}
+
+export type DiagnosticsViewerPayload = {
+  report: DiagnosticsReport
+  lines: string[]
+  reportText: string
+}
+
+export function formatDiagnosticsReport(report: DiagnosticsReport, lines: string[]): string {
+  const boundedLines = lines.slice(-DIAGNOSTICS_LOG_MAX_LINES).map(redactDiagnosticText)
+  return redactDiagnosticText([
+    'VD Agent diagnostics',
+    `Application: ${report.application.name} ${report.application.version}`,
+    `OS: ${report.application.platform} ${report.application.osRelease} (${report.application.architecture})`,
+    `Electron: ${report.application.electron} · Node: ${report.application.node}`,
+    `Settings: ${JSON.stringify(report.settings)}`,
+    'Logs:',
+    ...(boundedLines.length ? boundedLines : ['No diagnostic events recorded.']),
+  ].join('\n'))
 }
 
 function finiteNumber(value: unknown): number {

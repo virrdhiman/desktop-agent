@@ -210,9 +210,9 @@ describe('error classification', () => {
     expect(classifyModelError('API error (400): this model does not support image input')).toBe('retry-model')
   })
 
-  it('does not retry models for request-level errors', () => {
+  it('retries transient transport errors but not malformed requests', () => {
     expect(classifyModelError('API error (400): context length exceeded')).toBe('other')
-    expect(classifyModelError('fetch failed')).toBe('other')
+    expect(classifyModelError('fetch failed')).toBe('retry-model')
   })
 
   it('cools down retired models longer than temporary rate limits', () => {

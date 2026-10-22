@@ -84,9 +84,12 @@ function run(label, command, args, opts = {}) {
   console.log(`${command} ${args.join(' ')}`)
   let executable = command
   let finalArgs = args
-  if (process.platform === 'win32' && command === 'npm' && process.env.npm_execpath) {
-    executable = process.execPath
-    finalArgs = [process.env.npm_execpath, ...args]
+  if (command === 'npm') {
+    const npmScript = process.env.npm_execpath || path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js')
+    if (process.platform === 'win32' || fs.existsSync(npmScript)) {
+      executable = process.execPath
+      finalArgs = [npmScript, ...args]
+    }
   }
   return new Promise((resolve) => {
     const child = spawn(executable, finalArgs, {

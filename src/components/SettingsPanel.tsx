@@ -11,7 +11,7 @@
  * - Provider catalog grouped by category (free, local, image/video, paid)
  * - Category filter tabs with counts
  * - Provider search
- * - API key input (encrypted at rest when the OS keychain is available)
+ * - API key input (save requires secure OS key storage)
  * - Base URL and model configuration
  * - Sign-up links for each provider
  * - Custom Rules editor (appended to the system prompt)
@@ -26,6 +26,8 @@ import { getProviderCategory, mergeImportedSettings, providerIsConfigured, provi
 import { maskProviderForRenderer } from '../lib/providerKeys'
 import { APP_NAME, APP_VERSION, AUTHOR_NAME, AUTHOR_URL, COPYRIGHT, LICENSE_URL, REPO_URL } from '../lib/brand'
 import { TEAM_PRESET_LABELS } from '../lib/multiAgent'
+import { DATA_TOOL_SETTINGS } from '../lib/dataToolSettings'
+import { SMALL_OLLAMA_MODEL, SMALL_OLLAMA_SIZE } from '../../electron/ollamaModels'
 
 type Category = 'all' | 'free' | 'local' | 'community' | 'image_video' | 'paid'
 
@@ -40,6 +42,20 @@ const CATEGORY_LABELS: Record<Category, { label: string; icon: string; color: st
 
 const stripEmoji = (name: string) => name.replace(/[^\p{L}\p{N}\s().&-]/gu, '').trim()
 
+/**
+ * A local provider's placeholder key only means that the provider entry exists.
+ * A successful request is the only health evidence currently recorded here.
+ * This is deliberately not treated as a current health check.
+ */
+function localProviderHasHealthEvidence(provider: ProviderConfig): boolean {
+  return getProviderCategory(provider) === 'local' && (provider.performance?.successes || 0) > 0
+}
+
+function providerStatusLabel(provider: ProviderConfig): string {
+  if (getProviderCategory(provider) !== 'local') return 'API key set'
+  return localProviderHasHealthEvidence(provider) ? 'Local provider verified' : 'Configured · not verified'
+}
+
 export default function SettingsPanel() {
   const { settings, setSettings, workspacePath, setWorkspacePath, setCurrentDirectory, projectMemory, setProjectMemory } = useStore()
   const [editing, setEditing] = useState<ProviderConfig | null>(null)
@@ -50,6 +66,56 @@ export default function SettingsPanel() {
   const [refreshMessage, setRefreshMessage] = useState('')
   const [updateStatus, setUpdateStatus] = useState<Awaited<ReturnType<typeof window.api.updateStatus>> | null>(null)
   const [diagnosticsMessage, setDiagnosticsMessage] = useState('')
+  const [advanced, setAdvanced] = useState(false)
+  const [installedModels, setInstalledModels] = useState<string[]>([])
+  const [localModelMessage, setLocalModelMessage] = useState('')
+  const [pullConsent, setPullConsent] = useState(false)
+  const [pulling, setPulling] = useState(false)
+  const advancedSettingsRequested = useStore((state) => state.advancedSettingsRequested)
+  const requestAdvancedSettings = useStore((state) => state.requestAdvancedSettings)
+
+  useEffect(() => {
+    if (!advancedSettingsRequested) return
+    setAdvanced(true)
+    requestAdvancedSettings(false)
+  }, [advancedSettingsRequested, requestAdvancedSettings])
+
+  const savePreference = useCallback(async (change: Partial<typeof settings>) => {
+    const next = { ...settings, ...change }
+    try {
+      const saved = await window.api.saveSettings(next)
+      if ('error' in saved) { setRefreshMessage(saved.error); return }
+      setSettings(next)
+      setRefreshMessage('Settings saved.')
+    } catch { setRefreshMessage('Could not save settings.') }
+  }, [settings, setSettings])
+
+  const detectOllama = useCallback(async () => {
+    setLocalModelMessage('Checking installed Ollama models…')
+    try {
+      const result = await window.api.ollamaModels()
+      if ('error' in result) { setLocalModelMessage(result.error); return }
+      setInstalledModels(result.models)
+      setLocalModelMessage(result.models.length ? `${result.models.length} installed model(s) found.` : 'No local models found. Nothing was downloaded.')
+    } catch { setLocalModelMessage('Could not reach Ollama on localhost.') }
+  }, [])
+
+  useEffect(() => {
+    if (editing?.id === 'ollama') void detectOllama()
+  }, [editing?.id, detectOllama])
+
+  const pullSmallModel = useCallback(async () => {
+    if (!pullConsent) return
+    setPullConsent(false)
+    setPulling(true)
+    setLocalModelMessage('Downloading the small model from Ollama…')
+    try {
+      const result = await window.api.ollamaPullSmallModel({ model: SMALL_OLLAMA_MODEL, consent: true })
+      if ('error' in result) setLocalModelMessage(result.error)
+      else await detectOllama()
+    } catch { setLocalModelMessage('Model download failed.') }
+    finally { setPulling(false) }
+  }, [pullConsent, detectOllama])
 
   const saveTeamProfile = useCallback((role: keyof TeamRoleProfile, value: string) => {
     const nextProfile = { ...(settings.teamProfile || {}), [role]: value }
@@ -108,11 +174,12 @@ export default function SettingsPanel() {
         ...toSave,
         providers: toSave.providers.map((p) => (p.id === provider.id ? maskProviderForRenderer({ ...outgoing, hasKey: !clear && (Boolean(typed) || provider.hasKey) }) : p)),
       }
+      const result = await window.api.saveSettings(toSave)
+      if ('error' in result) { setRefreshMessage(result.error); return }
       setSettings(view)
       setEditing(null)
       setApiKeyInput('')
-      await window.api.saveSettings(toSave)
-    } catch (err) { console.error('Failed to save provider:', err) }
+    } catch { setRefreshMessage('Could not save provider settings.') }
   }, [settings, apiKeyInput])
 
   const addCustomProvider = useCallback(() => {
@@ -170,10 +237,11 @@ export default function SettingsPanel() {
       const saved = next || pendingSettings
       const masked = { ...saved, providers: saved.providers.map((p) => maskProviderForRenderer(p)) }
       const updated = masked.providers.find((p) => p.id === editing.id)
+      const result = await window.api.saveSettings(saved)
+      if ('error' in result) { setRefreshMessage(result.error); return }
       setSettings(masked)
       if (updated) setEditing(updated)
       setApiKeyInput('')
-      await window.api.saveSettings(saved)
       setRefreshMessage(`Synced ${ids.length} live chat models. Using ${updated?.model || ids[0]}.`)
     } catch (err: any) {
       setRefreshMessage(`Refresh failed: ${err?.message || err}`)
@@ -202,6 +270,13 @@ export default function SettingsPanel() {
     paid: settings.providers.filter((p) => getProviderCategory(p) === 'paid').length,
   }), [settings.providers])
 
+  const activeProvider = settings.providers.find((provider) => provider.id === settings.activeProvider)
+  const configuredProviders = settings.providers.filter(providerIsConfigured)
+  const configuredFallbacks = configuredProviders.filter((provider) => provider.id !== settings.activeProvider && getProviderCategory(provider) !== 'image_video')
+  const activeProviderConfigured = Boolean(activeProvider && providerIsConfigured(activeProvider))
+  const activeProviderLocal = Boolean(activeProvider && getProviderCategory(activeProvider) === 'local')
+  const activeProviderVerified = Boolean(activeProvider && localProviderHasHealthEvidence(activeProvider))
+
   return (
     <div style={{ display: 'flex', height: '100%' }}>
       {/* Left: Provider list */}
@@ -210,7 +285,7 @@ export default function SettingsPanel() {
           <h2>⚙️ Settings</h2>
           <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{settings.providers.length} providers</span>
         </div>
-        <div className="panel-body">
+          <div className="panel-body">
           {/* Workspace */}
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 6 }}>
@@ -241,13 +316,45 @@ export default function SettingsPanel() {
             {projectMemory && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 5 }}>Local project context ready ({projectMemory.length.toLocaleString()} characters)</div>}
           </div>
 
-          <div className="divider" />
+            <div className="divider" />
 
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: 10 }}>
+            {/* First-use guidance and runtime state */}
+            <div
+              role="status"
+              aria-label="Provider setup status"
+              style={{
+               marginBottom: 12, padding: 12, borderRadius: 'var(--radius)',
+                 background: activeProviderConfigured && (!activeProviderLocal || activeProviderVerified) ? 'rgba(34,197,94,0.07)' : 'rgba(245,158,11,0.08)',
+                 border: `1px solid ${activeProviderConfigured && (!activeProviderLocal || activeProviderVerified) ? 'rgba(34,197,94,0.25)' : 'rgba(245,158,11,0.3)'}`,
+               }}
+             >
+               <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
+                 {!activeProvider
+                   ? 'Finish provider setup'
+                   : !activeProviderConfigured
+                     ? 'Finish provider setup'
+                     : activeProviderLocal && !activeProviderVerified
+                       ? 'Configured · not verified'
+                     : activeProviderLocal
+                         ? '✓ Local provider verified'
+                         : '✓ API key configured'}
+               </div>
+               <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                 {activeProvider
+                   ? <>Active: <strong>{stripEmoji(activeProvider.name)}</strong> · {!activeProviderConfigured ? 'needs setup' : activeProviderLocal ? (activeProviderVerified ? 'verified by a successful request' : 'configured, not verified') : 'configured'}. {configuredFallbacks.length > 0 ? `${configuredFallbacks.length} fallback${configuredFallbacks.length === 1 ? '' : 's'} available.` : 'Add another configured provider for automatic fallback.'}</>
+                   : 'Choose a provider below to get started.'}
+               </div>
+               <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5, marginTop: 6 }}>
+                 <strong>Local Ollama:</strong> the saved placeholder key only records the local provider. Install the Ollama runtime separately, start it, and download the selected model; saving this entry does not test the server or model. <strong>API providers:</strong> need a key from the provider and send requests to that provider.
+               </div>
+             </div>
+
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: 10 }}>
             Paste an API key. VD lists the models that key can call, drops expired IDs, and saves the best working chat model for the selected budget. Pick a specific model in the Agent header to pin it instead.
           </div>
 
           <button className="btn btn-sm" onClick={addCustomProvider} style={{ marginBottom: 10 }}>+ Add compatible provider</button>
+          <button className="btn btn-sm" onClick={() => { setEditing(null); setAdvanced(true) }} style={{ marginBottom: 10, marginLeft: 8 }}>Advanced</button>
 
           {/* Search */}
           <div style={{ margin: '10px 0 8px' }}>
@@ -282,7 +389,7 @@ export default function SettingsPanel() {
               return (
                 <div
                   key={provider.id}
-                  onClick={() => { selectProvider(provider.id); setEditing(provider); setApiKeyInput(getProviderCategory(provider) === 'local' ? provider.apiKey : ''); setRefreshMessage('') }}
+                  onClick={() => { selectProvider(provider.id); setEditing(provider); setApiKeyInput(getProviderCategory(provider) === 'local' ? provider.apiKey : ''); setRefreshMessage(''); setInstalledModels([]); setPullConsent(false); setLocalModelMessage('') }}
                   style={{
                     padding: '8px 10px',
                     borderRadius: 'var(--radius)',
@@ -309,10 +416,10 @@ export default function SettingsPanel() {
                       </span>
                     </div>
                   </div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                    {providerIsConfigured(provider) ? `✓ Key set · ${provider.model}${provider.models?.length ? ` · ${provider.models.length} live models` : ''}` :
-                     provider.notes?.slice(0, 80) + (provider.notes && provider.notes.length > 80 ? '...' : '') || `Model: ${provider.model}`}
-                  </div>
+                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                     {providerIsConfigured(provider) ? `${cat === 'local' && !localProviderHasHealthEvidence(provider) ? '⚠' : '✓'} ${providerStatusLabel(provider)} · ${provider.model}${provider.models?.length ? ` · ${provider.models.length} live models` : ''}` :
+                       provider.notes?.slice(0, 80) + (provider.notes && provider.notes.length > 80 ? '...' : '') || `Model: ${provider.model}`}
+                   </div>
                   {provider.performance && (
                     <div style={{ fontSize: 11, marginTop: 3, color: (provider.performance.cooldownUntil || 0) > Date.now() ? 'var(--error)' : 'var(--text-muted)' }}>
                       {(provider.performance.cooldownUntil || 0) > Date.now()
@@ -386,7 +493,7 @@ export default function SettingsPanel() {
                     </button>
                   )}
                   <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                    🔒 Stored on this machine, encrypted with the OS keychain when available, and sent only to this provider's base URL.
+                    🔒 Saved only when secure OS key storage is available, and sent only to this provider's base URL.
                   </div>
                 </div>
               )}
@@ -400,8 +507,8 @@ export default function SettingsPanel() {
                 />
               </div>
 
-              <div className="input-group">
-                <label className="input-label">Model</label>
+               <div className="input-group">
+                 <label className="input-label">Model</label>
                 <input
                   className="input"
                   value={editing.model}
@@ -409,10 +516,39 @@ export default function SettingsPanel() {
                 />
                 <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                   Fallback model. Refreshing live models makes VD drop stale IDs and use the best accessible chat model for your budget.
-                </div>
-              </div>
+                 </div>
+               </div>
 
-              {editing.models?.length ? (
+              {getProviderCategory(editing) === 'local' && (
+                <div
+                  role="note"
+                  style={{
+                    padding: '10px 12px', borderRadius: 'var(--radius)',
+                    background: 'rgba(245,158,11,0.08)',
+                    border: '1px solid rgba(245,158,11,0.25)',
+                    fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5,
+                  }}
+                >
+                  <strong>Configured is not verified.</strong> This entry stores the local URL and model name only. Ollama, its runtime, and the selected model must be installed separately. A successful request is recorded as evidence; saving changes does not check whether the server or model is available.
+                </div>
+              )}
+
+              {editing.id === 'ollama' && (
+                <div className="input-group">
+                  <button className="btn" type="button" onClick={() => void detectOllama()}>Detect installed models</button>
+                  {installedModels.length > 0 && <div>Installed models: {installedModels.map((model) => <button className="btn btn-sm" type="button" key={model} onClick={() => setEditing({ ...editing, model })}>{model}</button>)}</div>}
+                  <div role="status">{localModelMessage}</div>
+                  <label style={{ display: 'flex', gap: 8, fontSize: 12 }}>
+                    <input type="checkbox" checked={pullConsent} onChange={(event) => setPullConsent(event.target.checked)} />
+                    I agree to download {SMALL_OLLAMA_MODEL} ({SMALL_OLLAMA_SIZE}; network and disk use) from my local Ollama server
+                  </label>
+                  <button className="btn" type="button" disabled={!pullConsent || pulling} onClick={() => void pullSmallModel()}>
+                    {pulling ? 'Downloading…' : `Pull small model (${SMALL_OLLAMA_SIZE})`}
+                  </button>
+                </div>
+              )}
+
+               {editing.models?.length ? (
                 <div className="input-group">
                   <label className="input-label">Live Models</label>
                   <select
@@ -463,6 +599,31 @@ export default function SettingsPanel() {
               {refreshMessage && <div role="status" style={{ fontSize: 11, color: 'var(--text-muted)' }}>{refreshMessage}</div>}
             </div>
           </div>
+        ) : advanced ? (
+          <div style={{ padding: 24, maxWidth: 680, display: 'grid', gap: 16 }}>
+            <h2>Advanced</h2>
+            <p>All optional capabilities start off. Existing provider entries and custom OpenAI-compatible endpoints are available in the list on the left.</p>
+            <button className="btn" onClick={() => { const provider = settings.providers.find((p) => p.id === settings.activeProvider); if (provider) setEditing(provider) }}>Edit active model and provider</button>
+            {([
+              ['autocompleteEnabled', 'Autocomplete'],
+              ['ocrToolEnabled', 'Offline OCR'],
+              ['indexingEnabled', 'Automatic indexing'],
+              ['telemetryEnabled', 'Telemetry'],
+              ['autoUpdate', 'Check for verified release updates after launch'],
+            ] as const).map(([key, label]) => (
+              <label key={key} style={{ display: 'flex', gap: 8 }}>
+                <input type="checkbox" checked={settings[key] === true} onChange={(event) => void savePreference({ [key]: event.target.checked })} />{label}
+              </label>
+            ))}
+            <label>Update channel
+              <select className="input" aria-label="Update channel" value={settings.updateChannel === 'beta' ? 'beta' : 'stable'} onChange={(event) => void savePreference({ updateChannel: event.target.value as 'stable' | 'beta' })}>
+                <option value="stable">Stable</option><option value="beta">Beta</option>
+              </select>
+            </label>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Update checks remain off until enabled above. Telemetry is not transmitted by this build.</p>
+            {refreshMessage && <div role="status">{refreshMessage}</div>}
+            <button className="btn" onClick={() => setAdvanced(false)}>Back to Settings</button>
+          </div>
         ) : (
           <div style={{ padding: 24, maxWidth: 680 }}>
             <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 8 }}>
@@ -493,17 +654,32 @@ export default function SettingsPanel() {
               ))}
             </div>
 
-            {/* Quick start */}
-            <div className="card" style={{ marginBottom: 16, padding: 16 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>🚀 Quick Start</div>
-              <ol style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 2, paddingLeft: 20 }}>
-                <li>Select a provider (Groq or Gemini are good free starting points)</li>
-                <li>Click "Get API Key" to open the provider's website</li>
-                <li>Create an account and copy the key</li>
-                <li>Paste it in the API Key field and click Save</li>
-                <li>Open the <strong>🤖 Agent</strong> panel and send a message</li>
-              </ol>
-            </div>
+             {/* Quick start */}
+             <div className="card" style={{ marginBottom: 16, padding: 16 }}>
+               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>🚀 Quick Start</div>
+                <ol style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 2, paddingLeft: 20 }}>
+                  <li>Choose <strong>Local</strong> for Ollama (private, no API key) or an API provider (requires a key)</li>
+                  <li>For Ollama, install the runtime, start the local server, and download the model separately; for an API provider, click "Get API Key"</li>
+                  <li>Open the provider here and confirm its local URL or paste the API key</li>
+                  <li>Save changes, then open the <strong>🤖 Agent</strong> panel and send a message</li>
+                  <li>Configured official free providers are tried automatically if the active provider is unavailable</li>
+                </ol>
+             </div>
+
+             <div
+               className="card"
+               aria-label="Bundled support and external prerequisites"
+               style={{ marginBottom: 16, padding: 16 }}
+             >
+               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>📦 Bundled support vs separate installs</div>
+               <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                 These prerequisites are separate on Windows, macOS, and Linux. VD Agent bundles integration support; it does not install the external applications or local model files for you.
+                 <ul style={{ margin: '8px 0 0', paddingLeft: 20 }}>
+                   <li><strong>VS Code:</strong> the VD Agent Bridge VSIX and bridge support are bundled in packaged builds. Install the VS Code application separately, then use the <strong>VS Code Bridge</strong> panel to load the bridge and open your workspace.</li>
+                   <li><strong>Ollama:</strong> the provider entry and OpenAI-compatible support are bundled. Install the Ollama runtime separately, start it, and pull the model named in Settings. A placeholder key means configured, not verified.</li>
+                 </ul>
+               </div>
+             </div>
 
             <button
               className="btn btn-primary"
@@ -689,10 +865,53 @@ export default function SettingsPanel() {
                   void window.api.saveSettings(next)
                 }}
               >
-                <option value="ask-risky">Ask for commands, deletes, and Git changes</option>
-                <option value="ask-all-writes">Ask before every write</option>
-                <option value="trusted">Trusted workspace (no approval dialogs)</option>
+                 <option value="always">Always ask with exact previews</option>
+                 <option value="ask-risky">Ask for risky commands and changes</option>
+                 <option value="auto">Auto-approve safe actions; always ask risky actions</option>
               </select>
+              <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 14, fontSize: 12 }}>
+                <input
+                  type="checkbox"
+                  checked={settings.restrictedCommandMode === true}
+                  onChange={(event) => {
+                    const next = { ...settings, restrictedCommandMode: event.target.checked }
+                    setSettings(next)
+                    void window.api.saveSettings(next)
+                  }}
+                />
+                <span><strong>Restricted command mode</strong><br /><span style={{ color: 'var(--text-muted)' }}>Opt in to workspace-only command cwd and block shell escape/redirection, network access, and package installs. This is a command policy, not OS sandboxing.</span></span>
+              </label>
+              <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 14, fontSize: 12 }}>
+                <input
+                  type="checkbox"
+                  checked={settings.browserToolEnabled === true}
+                  onChange={(event) => {
+                    const next = { ...settings, browserToolEnabled: event.target.checked }
+                    setSettings(next)
+                    void window.api.saveSettings(next)
+                  }}
+                />
+                <span>
+                  <strong>Enable browser tool (off by default)</strong><br />
+                  <span style={{ color: 'var(--text-muted)' }}>
+                    Allows the agent to open http/https pages in an isolated hidden Electron window, send page text (including hidden DOM text) to your AI provider, and save viewport screenshots under .vd-agent/browser-screenshots in the workspace. Pages are untrusted. Browser actions use the dangerous-tool approval policy; Trusted mode skips dialogs only after this setting is enabled. Turning it off closes all browser pages.
+                  </span>
+                </span>
+              </label>
+            </div>
+
+            <div style={{ marginTop: 18, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Data tools — off by default</div>
+              {DATA_TOOL_SETTINGS.map(({ key, label, detail }) => (
+                <label key={key} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 14, fontSize: 12 }}>
+                  <input type="checkbox" checked={settings[key] === true} onChange={(event) => {
+                    const next = { ...settings, [key]: event.target.checked }
+                    setSettings(next)
+                    void window.api.saveSettings(next)
+                  }} />
+                  <span><strong>{label}</strong><br /><span style={{ color: 'var(--text-muted)' }}>{detail} Uses the dangerous-tool approval policy.</span></span>
+                </label>
+              ))}
             </div>
 
             <div style={{ marginTop: 18, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
