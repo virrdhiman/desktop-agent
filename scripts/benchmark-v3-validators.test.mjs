@@ -17,6 +17,7 @@ import {
   validateTask8,
   validateTask11,
   benchmarkResultStatus,
+  providerErrorStatus,
 } from './benchmark-v3-validators.mjs'
 
 async function makeTemp() {
@@ -141,5 +142,10 @@ describe('benchmark v3 independent validators', () => {
 
   it('marks a bounded run that reaches its deadline as timeout', () => {
     expect(benchmarkResultStatus({ ok: false, timedOut: true, body: '', reason: 'validation incomplete' })).toBe('timeout')
+  })
+
+  it('does not classify assistant prose containing API error as a provider outage', () => {
+    expect(providerErrorStatus('The assistant mentioned an API error in its explanation.', '')).toBeNull()
+    expect(providerErrorStatus('API error (503): overloaded', '')).toBe('provider error')
   })
 })

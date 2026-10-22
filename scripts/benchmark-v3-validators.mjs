@@ -68,6 +68,13 @@ export function benchmarkResultStatus({ ok, timedOut, providerStatus = null }) {
   return providerStatus || 'fail'
 }
 
+export function providerErrorStatus(body, reason = '') {
+  const text = `${body}\n${reason}`
+  return /\b(?:provider|server)\s+error\b|\b(?:api|http)\s+error\s*(?:\(|:)?\s*(?:429|5\d\d)\b|\b(?:rate[ -]?limit|too many requests|quota|resource[_ ]exhausted)\b|\b(?:temporarily|transient|unavailable)\b/i.test(text)
+    ? 'provider error'
+    : null
+}
+
 async function readText(file) {
   return fs.readFile(file, 'utf8')
 }

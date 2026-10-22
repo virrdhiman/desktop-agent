@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { BENCHMARK_V2_TASKS } from './benchmark-v3-prompts.mjs'
 import { taskUserDataPath, taskWorkspacePath } from './benchmark-v3-paths.mjs'
-import { benchmarkResultStatus, extractTestCount, listFiles, runCommand, validateTask } from './benchmark-v3-validators.mjs'
+import { benchmarkResultStatus, extractTestCount, listFiles, providerErrorStatus, runCommand, validateTask } from './benchmark-v3-validators.mjs'
 
 const root = path.resolve(process.env.VD_BENCH_ROOT || 'C:/vd-vms/bench')
 const appRoot = path.resolve(process.env.VD_BENCH_APP_ROOT || '.')
@@ -63,14 +63,6 @@ function freeSpaceBytes() {
 function ensureSpace() {
   const free = freeSpaceBytes()
   if (free < 20 * 1024 ** 3) throw new Error(`Refusing benchmark writes: C: has ${(free / 1024 ** 3).toFixed(2)} GB free`)
-}
-
-function isRetryableProviderError(body) {
-  return /\b(?:provider|api|server)\s+error\b|\b(?:rate[ -]?limit|too many requests)\b|\b5\d\d\b|\b(?:temporarily|transient|unavailable)\b/i.test(body)
-}
-
-function providerErrorStatus(body, reason) {
-  return isRetryableProviderError(`${body}\n${reason}`) ? 'provider error' : null
 }
 
 async function writeSettings(userData, workspace, provider) {
@@ -186,7 +178,7 @@ async function runOne(provider, task) {
       }
       await app.close().catch(() => {})
       app = null
-       if (validation.ok || !isRetryableProviderError(body)) break
+       if (validation.ok || providerErrorStatus(body, validation.reason) !== 'provider error') break
     }
     const hallucinatedSuccess = !validation.ok && /\b(done|completed|successfully|all tests pass|passed)\b/i.test(body.slice(-4000))
     const timedOut = !validation.ok && Date.now() - started >= taskTimeoutMs
