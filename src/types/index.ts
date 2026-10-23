@@ -100,6 +100,7 @@ export interface Settings extends DataToolSettings {
   workspacePath: string
   customRules?: string
   planMode?: boolean
+  composerGoal?: string
   teamMode?: TeamMode
   teamPreset?: TeamPreset
   teamTokenBudget?: TeamTokenBudget

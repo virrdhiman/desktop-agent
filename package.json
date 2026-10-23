@@ -49,6 +49,7 @@
     "test:reliability": "vitest run electron/__tests__/reliability.test.ts electron/__tests__/archiveStore.test.ts electron/__tests__/diagnostics.test.ts",
     "lint": "tsc --noEmit",
     "smoke": "npm run build && node scripts/smoke.mjs",
+    "test:composer-e2e": "node tests/human/composer-add-menu.mjs",
     "agent:evals": "node scripts/agent-evals.mjs",
     "agent:evals:export": "node scripts/hosted-eval-export.mjs",
     "agent:evals:import": "node scripts/hosted-eval-import.mjs",
