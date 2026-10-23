@@ -12,6 +12,22 @@ import { ipcMain, dialog, BrowserWindow } from 'electron'
 import path from 'path'
 import fs from 'fs'
 
+function normalizedPath(value: string): string {
+  return path.resolve(value).replace(/\\/g, '/').replace(/\/$/, '').toLocaleLowerCase()
+}
+
+function isProtectedContextPath(filePath: string): boolean {
+  const normalized = normalizedPath(filePath)
+  const name = path.basename(filePath).toLocaleLowerCase()
+  return normalized === 'd:/pit' || normalized.startsWith('d:/pit/') || name.startsWith('.env') || name.includes('key') || name.endsWith('.pem')
+}
+
+function isWithinWorkspace(filePath: string, workspacePath: string): boolean {
+  const target = normalizedPath(filePath)
+  const workspace = normalizedPath(workspacePath)
+  return target === workspace || target.startsWith(`${workspace}/`)
+}
+
 export function registerFsHandlers(getMainWindow: () => BrowserWindow | null) {
   ipcMain.handle('fs:openDirectory', async () => {
     const result = await dialog.showOpenDialog(getMainWindow()!, {
@@ -19,6 +35,16 @@ export function registerFsHandlers(getMainWindow: () => BrowserWindow | null) {
     })
     if (result.canceled) return null
     return result.filePaths[0]
+  })
+
+  ipcMain.handle('fs:pickContext', async (_event, workspacePath: string) => {
+    if (!workspacePath || isProtectedContextPath(workspacePath)) return { error: 'Open a safe workspace before attaching context.' }
+    const result = await dialog.showOpenDialog(getMainWindow()!, {
+      defaultPath: workspacePath,
+      properties: ['openFile', 'openDirectory', 'multiSelections'],
+    })
+    if (result.canceled) return []
+    return result.filePaths.filter((filePath) => isWithinWorkspace(filePath, workspacePath) && !isProtectedContextPath(filePath))
   })
 
   ipcMain.handle('fs:readDirectory', async (_event, dirPath: string) => {
