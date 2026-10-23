@@ -352,6 +352,13 @@ describe('unverified claims', () => {
     expect(unverifiedClaims('I ran `npm test` and it failed with exit code 1.', runs)).toEqual([])
   })
 
+  it('requires a successful verification tool before a completion claim', () => {
+    expect(unverifiedClaims('Done — the change is complete.', [{ name: 'edit_file', ok: true }])).toEqual(['completion'])
+    expect(unverifiedClaims('Done — the change is complete.', [
+      { name: 'run_command', ok: true, summary: 'npm test: 499 passed' },
+    ])).toEqual([])
+  })
+
   it('ignores advice, plans, and code', () => {
     const text = 'The bug is in `add`: it subtracts.\n\nNext steps:\n1. Change `a - b` to `a + b`.\n2. Run `node calc.test.js` and make sure the tests pass.'
     expect(unverifiedClaims(text, [])).toEqual([])

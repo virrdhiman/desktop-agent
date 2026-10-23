@@ -4,6 +4,7 @@ import path from 'node:path'
 import yazl from 'yazl'
 import { describe, expect, it } from 'vitest'
 import { BENCHMARK_V2_TASKS, BENCHMARK_V2_TASKS_TEXT } from './benchmark-v3-prompts.mjs'
+import { taskWorkspacePath } from './benchmark-v3-paths.mjs'
 import {
   extractTestCount,
   validateTask1,
@@ -14,6 +15,9 @@ import {
   validateTask6,
   validateTask7,
   validateTask8,
+  validateTask11,
+  benchmarkResultStatus,
+  providerErrorStatus,
 } from './benchmark-v3-validators.mjs'
 
 async function makeTemp() {
@@ -42,6 +46,11 @@ describe('benchmark v3 prompt source', () => {
 })
 
 describe('benchmark v3 independent validators', () => {
+  it('keeps every task in an isolated workspace', () => {
+    expect(path.normalize(taskWorkspacePath('C:/bench/gemini', 2))).toBe(path.normalize('C:/bench/gemini/task-2/workspace'))
+    expect(taskWorkspacePath('C:/bench/gemini', 7)).not.toBe(taskWorkspacePath('C:/bench/gemini', 2))
+  })
+
   it('requires a runnable CSV summary CLI and three passing tests', async () => {
     const root = await makeTemp()
     await fs.writeFile(path.join(root, 'summary_cli.py'), "import csv, sys\nif __name__ == '__main__':\n with open(sys.argv[1], newline='') as f: print(len(list(csv.DictReader(f))))\n")
@@ -116,8 +125,27 @@ describe('benchmark v3 independent validators', () => {
     expect(validateTask8({ keepExists: true }).ok).toBe(false)
   })
 
+  it('discovers a nested VD Agent clone when no path was preconfigured', async () => {
+    const root = await makeTemp()
+    const clone = path.join(root, 'vd-agent-copy')
+    await fs.mkdir(path.join(clone, 'src'), { recursive: true })
+    await fs.writeFile(path.join(clone, 'package.json'), JSON.stringify({ name: 'vd-agent' }))
+    const result = await validateTask11(root)
+    expect(result.evidence.clone).toBe(clone)
+    expect(result.reason).not.toBe('VD Agent clone path missing')
+  })
+
   it('extracts counts without trusting narrative success text', () => {
     expect(extractTestCount('Tests 488 passed')).toBe(488)
     expect(extractTestCount('I completed all tests successfully')).toBe(0)
+  })
+
+  it('marks a bounded run that reaches its deadline as timeout', () => {
+    expect(benchmarkResultStatus({ ok: false, timedOut: true, body: '', reason: 'validation incomplete' })).toBe('timeout')
+  })
+
+  it('does not classify assistant prose containing API error as a provider outage', () => {
+    expect(providerErrorStatus('The assistant mentioned an API error in its explanation.', '')).toBeNull()
+    expect(providerErrorStatus('API error (503): overloaded', '')).toBe('provider error')
   })
 })

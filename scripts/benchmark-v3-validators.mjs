@@ -62,6 +62,19 @@ export function extractTestCount(text) {
   return best
 }
 
+export function benchmarkResultStatus({ ok, timedOut, providerStatus = null }) {
+  if (ok) return 'pass'
+  if (timedOut) return 'timeout'
+  return providerStatus || 'fail'
+}
+
+export function providerErrorStatus(body, reason = '') {
+  const text = `${body}\n${reason}`
+  return /\b(?:provider|server)\s+error\b|\b(?:api|http)\s+error\s*(?:\(|:)?\s*(?:429|5\d\d)\b|\b(?:rate[ -]?limit|too many requests|quota|resource[_ ]exhausted)\b|\b(?:temporarily|transient|unavailable)\b/i.test(text)
+    ? 'provider error'
+    : null
+}
+
 async function readText(file) {
   return fs.readFile(file, 'utf8')
 }
@@ -69,6 +82,19 @@ async function readText(file) {
 async function findFiles(root, predicate) {
   const files = await listFiles(root)
   return files.filter(predicate).map((relative) => path.join(root, relative))
+}
+
+async function findNestedPackageClone(root) {
+  const packages = await findFiles(root, (file) => path.basename(file).toLowerCase() === 'package.json')
+  for (const file of packages) {
+    const candidate = path.dirname(file)
+    if (path.resolve(candidate) === path.resolve(root)) continue
+    try {
+      const packageJson = JSON.parse(await readText(file))
+      if (packageJson?.name === 'vd-agent' || (await fs.stat(path.join(candidate, 'src')).catch(() => null))?.isDirectory()) return candidate
+    } catch {}
+  }
+  return null
 }
 
 async function readZipEntries(file) {
@@ -311,7 +337,7 @@ export async function validateTask10(root, evidence = {}) {
 }
 
 export async function validateTask11(root, evidence = {}) {
-  const clone = evidence.clonePath
+  const clone = evidence.clonePath || await findNestedPackageClone(root)
   if (!clone) return { ok: false, reason: 'VD Agent clone path missing', evidence }
   const tests = await runCommand('npm', ['test', '--', '--pool=forks'], { cwd: clone, timeoutMs: 300_000 })
   const count = extractTestCount(`${tests.stdout}\n${tests.stderr}`)
@@ -322,7 +348,7 @@ export async function validateTask11(root, evidence = {}) {
   const remote = await runCommand('git', ['status', '--porcelain=v1', '-b'], { cwd: clone })
   const pushed = /ahead \d+/i.test(remote.stdout)
   const ok = tests.ok && count > baseline && testChanged && log.ok && !pushed
-  return { ok, reason: ok ? '' : 'VD Agent clone test-count or no-push evidence failed independently', evidence: { tests, count, baseline, testChanged, log: log.stdout.trim(), status: remote.stdout.trim(), pushed } }
+  return { ok, reason: ok ? '' : 'VD Agent clone test-count or no-push evidence failed independently', evidence: { clone, tests, count, baseline, testChanged, log: log.stdout.trim(), status: remote.stdout.trim(), pushed } }
 }
 
 export async function validateTask(taskId, root, context = {}) {
