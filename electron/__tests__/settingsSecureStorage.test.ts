@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
   handlers: new Map<string, (...args: any[]) => Promise<any>>(),
   available: vi.fn(() => false),
   encrypt: vi.fn(() => Buffer.from('encrypted-by-os')),
-  read: vi.fn(async () => { throw new Error('no saved settings') }),
+  read: vi.fn(async (): Promise<any> => { throw new Error('no saved settings') }),
   write: vi.fn(async (_path: string, _value: string) => {}),
   rename: vi.fn(async () => {}),
 }))
@@ -19,7 +19,7 @@ vi.mock('electron', () => ({
 vi.mock('fs', () => ({ default: { promises: { readFile: mocks.read, writeFile: mocks.write, rename: mocks.rename }, existsSync: () => false } }))
 vi.mock('../browserTool', () => ({ closeBrowserSessions: vi.fn() }))
 
-import { registerSettingsHandlers } from '../handlers/settings'
+import { loadRuntimeSettings, registerSettingsHandlers } from '../handlers/settings'
 
 describe('settings IPC secure storage', () => {
   beforeEach(() => {
@@ -28,11 +28,16 @@ describe('settings IPC secure storage', () => {
     registerSettingsHandlers()
   })
 
-  it('refuses plaintext persistence when secure storage is unavailable', async () => {
+  it('uses an encrypted machine-bound fallback when secure storage is unavailable', async () => {
     const save = mocks.handlers.get('settings:save')!
     const result = await save(null, { providers: [{ id: 'groq', apiKey: 'synthetic-example-key' }] })
-    expect(result).toEqual({ error: expect.stringContaining('Secure OS key storage is unavailable') })
-    expect(mocks.write).not.toHaveBeenCalled()
+    expect(result).toEqual({ success: true })
+    const serialized = mocks.write.mock.calls[0][1]
+    expect(serialized).not.toContain('synthetic-example-key')
+    expect(JSON.parse(serialized).providers[0].apiKey).toMatch(/^enc:local:v1:/)
+    mocks.read.mockResolvedValue(serialized)
+    const loaded = await loadRuntimeSettings()
+    expect(loaded.providers[0].apiKey).toBe('synthetic-example-key')
   })
 
   it('encrypts a key before writing settings', async () => {

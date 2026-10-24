@@ -69,6 +69,7 @@ export interface ProviderConfig {
 }
 
 export type AgentTaskKind = 'coding' | 'analysis' | 'documentation' | 'quick'
+export type TaskRoutingDefaults = Partial<Record<AgentTaskKind, string[]>>
 export type TeamMode = 'off' | 'auto' | 'always'
 export type TeamPreset = 'default' | 'coding' | 'research' | 'csv' | 'security'
 export type TeamTokenBudget = 'cheap' | 'balanced' | 'strong'
@@ -98,6 +99,8 @@ export interface Settings extends DataToolSettings {
   providers: ProviderConfig[]
   activeProvider: string
   workspacePath: string
+  /** Benchmark-informed fallback provider order; the active provider remains first. */
+  taskRouting?: TaskRoutingDefaults
   customRules?: string
   planMode?: boolean
   teamMode?: TeamMode

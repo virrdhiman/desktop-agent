@@ -20,6 +20,7 @@ The system prompt tells the agent to inspect before acting and to ask before des
 - **Read tool calls** in the agent's replies, and check the **Tasks** panel for what ran.
 - **Watch for prompt injection.** File contents, web pages, and command output go to the model and can contain instructions aimed at it. Be careful with untrusted repositories and web content.
 - **Keep secrets out of the workspace**, or use a local model. Anything the agent reads may be sent to your AI provider.
+- Provider keys are encrypted with the OS keychain when available. On Linux without a usable keyring, new saves use an AES-256-GCM machine-bound fallback instead of plaintext; moving the settings file to another machine will not decrypt those keys.
 - The provider list is limited to official APIs and local servers. Unofficial proxies are not offered, and a saved settings file cannot keep them as fallbacks.
 
 ## How the app is hardened
