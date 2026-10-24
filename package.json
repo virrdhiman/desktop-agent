@@ -57,6 +57,7 @@
     "bundle:budget": "node scripts/bundle-budget.mjs",
     "security:audit": "npm audit --omit=dev --audit-level=high",
     "checksums": "node scripts/checksums.mjs",
+    "checksums:verify": "node scripts/checksums.mjs --verify",
     "release:notes": "node scripts/release-notes.mjs",
     "release:qa": "node scripts/release-qa.mjs",
     "release:preflight": "node scripts/package-preflight.mjs",

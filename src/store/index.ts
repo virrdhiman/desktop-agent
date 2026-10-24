@@ -614,6 +614,12 @@ export const useStore = create<AppState>((set, get) => ({
     providers: [],
     activeProvider: 'groq',
     workspacePath: '',
+    taskRouting: {
+      coding: ['nvidia', 'mistral', 'gemini', 'groq', 'ollama'],
+      analysis: ['gemini', 'mistral', 'nvidia', 'groq', 'ollama'],
+      documentation: ['mistral', 'gemini', 'groq', 'ollama', 'nvidia'],
+      quick: ['groq', 'gemini', 'ollama', 'mistral', 'nvidia'],
+    },
     restrictedCommandMode: false,
     browserToolEnabled: false,
     setupChecklistDismissed: false,
