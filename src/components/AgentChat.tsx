@@ -1075,6 +1075,14 @@ export default function AgentChat() {
 
     const provider = getActiveProvider()
     if (!providerIsConfigured(provider)) {
+      // Keep a submitted prompt in local history even when execution cannot start.
+      // This preserves the user's work for resume after configuring a provider.
+      addMessage({
+        id: `${Date.now()}-user`,
+        role: 'user',
+        content: text,
+        timestamp: Date.now(),
+      })
       addMessage({
         id: Date.now().toString(),
         role: 'system',
