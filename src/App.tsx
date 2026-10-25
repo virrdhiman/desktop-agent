@@ -18,6 +18,7 @@ import MultiTerminal from './components/MultiTerminal'
 import SettingsPanel from './components/SettingsPanel'
 import TaskPanel from './components/TaskPanel'
 import BranchManager from './components/BranchManager'
+import SessionsPanel from './components/SessionsPanel'
 import VsCodeBridgePanel from './components/VsCodeBridgePanel'
 import SearchResults from './components/SearchResults'
 import CommandPalette from './components/CommandPalette'
@@ -137,6 +138,7 @@ export default function App() {
     if (activePanel === 'git') return <GitPanel />
     if (activePanel === 'branches') return <BranchManager />
     if (activePanel === 'tasks') return <TaskPanel />
+    if (activePanel === 'sessions') return <SessionsPanel />
     if (activePanel === 'vscode') return <VsCodeBridgePanel />
     if (activePanel === 'terminal') return <MultiTerminal />
     if (activePanel === 'settings') return <SettingsPanel />
