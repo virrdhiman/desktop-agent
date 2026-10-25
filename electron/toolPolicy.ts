@@ -8,6 +8,7 @@ import { normalizeBrowserOperation, safeBrowserUrlLabel } from './browserToolVal
 
 export type PermissionMode = 'always' | 'ask-risky' | 'auto' | 'ask-all-writes' | 'trusted'
 export type ToolRisk = 'read' | 'write' | 'dangerous'
+export type WorkingMode = 'plan' | 'build' | 'multitask' | 'ask' | 'review' | 'debug'
 
 export type ToolPolicyDecision = {
   risk: ToolRisk
@@ -102,7 +103,8 @@ export function assessToolPolicy(
   workspace: string | undefined,
   mode: PermissionMode = 'ask-risky',
   restrictedCommandMode = false,
-  browserToolEnabled: unknown = false
+  browserToolEnabled: unknown = false,
+  workingMode: WorkingMode = 'build'
 ): ToolPolicyDecision {
   const targets = toolTargets(name, args)
   const outsideWorkspace = workspace ? targets.filter((target) => !isPathInsideWorkspace(workspace, target)) : []
@@ -121,6 +123,10 @@ export function assessToolPolicy(
   const restricted = name === 'run_command' && restrictedCommandMode
     ? assessRestrictedCommand(args.command, workspace, args.cwd)
     : { blocked: false }
+
+  if ((workingMode === 'plan' || workingMode === 'ask' || workingMode === 'review') && risk !== 'read') {
+    return { risk, needsApproval: false, reason: workingMode[0].toUpperCase() + workingMode.slice(1) + ' mode is read-only and cannot run ' + risk + '-risk tools.', targets, outsideWorkspace, previewRequired }
+  }
 
   const reason = outsideWorkspace.length > 0
     ? `Accesses ${outsideWorkspace.length} path${outsideWorkspace.length === 1 ? '' : 's'} outside the open workspace.`

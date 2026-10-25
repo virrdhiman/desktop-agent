@@ -143,12 +143,12 @@ export function registerToolHandlers() {
 
   ipcMain.handle(
     'tool:execute',
-    async (event, tool: { name: string; args: Record<string, any>; workspace?: string; sessionId?: string; taskId?: string }) => {
+    async (event, tool: { name: string; args: Record<string, any>; workspace?: string; sessionId?: string; taskId?: string; workingMode?: 'plan' | 'build' | 'multitask' | 'ask' | 'review' | 'debug' }) => {
       try {
         tool.args = resolveToolArgs(tool.name, tool.args, tool.workspace)
         const policySettings = await loadToolSettings()
         const permissionMode = (policySettings.permissionMode || 'ask-risky') as PermissionMode
-        const decision = assessToolPolicy(tool.name, tool.args, tool.workspace, permissionMode, policySettings.restrictedCommandMode === true, policySettings.browserToolEnabled)
+        const decision = assessToolPolicy(tool.name, tool.args, tool.workspace, permissionMode, policySettings.restrictedCommandMode === true, policySettings.browserToolEnabled, tool.workingMode)
 
         // Capability flags are checked before an approval prompt so an opt-out
         // cannot accidentally turn into a confusing approval request.

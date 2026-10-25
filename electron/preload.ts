@@ -82,7 +82,7 @@ contextBridge.exposeInMainWorld('api', {
 
   // ═══ Agent Tools ══════════════════════════════════════════════════════════════
   // Tools the agent calls autonomously (definitions in src/types AGENT_TOOLS)
-  toolExecute: (tool: { name: string; args: Record<string, any>; workspace?: string; sessionId?: string; taskId?: string }) => invokeWithTimeout('tool:execute', tool),
+  toolExecute: (tool: { name: string; args: Record<string, any>; workspace?: string; sessionId?: string; taskId?: string; workingMode?: 'plan' | 'build' | 'multitask' | 'ask' | 'review' | 'debug' }) => invokeWithTimeout('tool:execute', tool),
   onRepoIndexStatus: (cb: (status: RepoIndexStatus) => void) => {
     const listener = (_e: unknown, status: RepoIndexStatus) => cb(status)
     ipcRenderer.on('repo-index:status', listener)
@@ -297,7 +297,7 @@ export type ElectronAPI = {
   terminalKill: (termId: string) => Promise<void>
   onTerminalData: (cb: (termId: string, data: string) => void) => void
   onTerminalExit: (cb: (termId: string, exitCode: number) => void) => void
-  toolExecute: (tool: { name: string; args: Record<string, any>; workspace?: string; sessionId?: string; taskId?: string }) => Promise<{ result?: string; error?: string }>
+  toolExecute: (tool: { name: string; args: Record<string, any>; workspace?: string; sessionId?: string; taskId?: string; workingMode?: 'plan' | 'build' | 'multitask' | 'ask' | 'review' | 'debug' }) => Promise<{ result?: string; error?: string }>
   onRepoIndexStatus: (cb: (status: RepoIndexStatus) => void) => () => void
   vscodeStatus: (workspace: string) => Promise<VsCodeBridgeStatus | { error: string }>
   vscodeInstallBridge: () => Promise<{ result?: string; error?: string }>
