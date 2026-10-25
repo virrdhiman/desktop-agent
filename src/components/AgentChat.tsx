@@ -23,6 +23,8 @@
  */
 import { useState, useRef, useEffect, useCallback } from 'react'
 import DiffViewer from './DiffViewer'
+import WorkingModeSelector from './WorkingModeSelector'
+import MultiTerminal from './MultiTerminal'
 import { buildConversationSummary, useStore } from '../store'
 import type { AgentTaskKind, ChatMessage, AgentStep, ProviderConfig } from '../types'
 import {
@@ -423,6 +425,7 @@ export default function AgentChat() {
     projectMemory, latestCheckpoint, lastVerification,
     toolExecutions, tasks,
     openFiles, fileEditHistory,
+    showTerminal,
   } = useStore()
 
   const [input, setInput] = useState('')
@@ -544,6 +547,7 @@ export default function AgentChat() {
         args,
         workspace,
         sessionId: useStore.getState().currentSessionId || undefined,
+        workingMode: useStore.getState().settings.layout?.workingMode || (useStore.getState().planMode ? 'plan' : 'build'),
         taskId,
       }).then(async (result) => {
         if (result && !result.error && beforeEdit !== null && typeof args.path === 'string') {
@@ -1265,6 +1269,7 @@ export default function AgentChat() {
             ))}
           </select>
 
+          <WorkingModeSelector settings={appSettings} onChange={(next) => { setAppSettings(next); void window.api.saveSettings(next) }} />
           {/* Plan mode toggle */}
           <button
             className={`btn btn-sm ${planMode ? 'btn-success' : ''}`}
@@ -1609,6 +1614,13 @@ export default function AgentChat() {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {showTerminal && (
+        <div className="vd-chat-terminal" aria-label="Terminal above composer">
+          <div className="vd-chat-terminal-header"><span>Terminal</span><span className="vd-sidebar-subtitle">Ctrl+` to toggle</span></div>
+          <MultiTerminal />
         </div>
       )}
 

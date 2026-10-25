@@ -4,21 +4,12 @@
  * @project VD Agent
  * @license Proprietary. See LICENSE.
  */
-/**
- * VD Agent — Root Application Component
- *
- * The main layout orchestrator. Manages:
- * - Settings initialization on startup
- * - Git status detection
- * - File indexing for search
- * - Global keyboard shortcuts (Ctrl+P, Ctrl+G, Ctrl+B, Ctrl+Shift+A, Ctrl+`)
- * - Panel routing (chat, files, git, branches, tasks, sessions, terminal, settings)
- * - Editor split view (chat + editor side by side)
- * - Bottom terminal panel
- */
-import { useEffect } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStore } from './store'
-import Sidebar from './components/Sidebar'
+import LeftRail from './components/LeftRail'
+import WorkspaceSidebar from './components/WorkspaceSidebar'
+import HistoryPane from './components/HistoryPane'
+import LauncherRail from './components/LauncherRail'
 import AgentChat from './components/AgentChat'
 import FileBrowser from './components/FileBrowser'
 import GitPanel from './components/GitPanel'
@@ -27,27 +18,34 @@ import MultiTerminal from './components/MultiTerminal'
 import SettingsPanel from './components/SettingsPanel'
 import TaskPanel from './components/TaskPanel'
 import BranchManager from './components/BranchManager'
-import SessionsPanel from './components/SessionsPanel'
+import VsCodeBridgePanel from './components/VsCodeBridgePanel'
 import SearchResults from './components/SearchResults'
 import CommandPalette from './components/CommandPalette'
-import VsCodeBridgePanel from './components/VsCodeBridgePanel'
 import PrerequisiteSetup from './components/PrerequisiteSetup'
 import HelpPanel from './components/HelpPanel'
+import SurfaceSwitch from './components/SurfaceSwitch'
+import { mergeLayoutPreferences, normalizeLayoutPreferences, type LayoutPreferences } from './lib/layoutPersistence'
+import type { Panel } from './types'
 
 export default function App() {
   const {
-    setSettings, workspacePath, setWorkspacePath, setProjectMemory,
+    setSettings, settings, workspacePath, setWorkspacePath, setProjectMemory,
     selectedFile, showTerminal, activePanel,
     setIsRepo, setGitStatus, setAllFiles, setRepoIndexStatus, setActivePanel, toggleCommandPalette,
     showCommandPalette, setShowCommandPalette,
   } = useStore()
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [historyCollapsed, setHistoryCollapsed] = useState(false)
+  const [launcherCollapsed, setLauncherCollapsed] = useState(false)
+  const resizeCleanup = useRef<(() => void) | null>(null)
+  const layout = normalizeLayoutPreferences(settings.layout)
 
   useEffect(() => {
     const initialize = async () => {
       try {
-        const settings = await window.api.loadSettings()
-        setSettings(settings)
-
+        const loadedSettings = await window.api.loadSettings()
+        const normalizedSettings = { ...loadedSettings, layout: normalizeLayoutPreferences(loadedSettings.layout) }
+        setSettings(normalizedSettings)
         try {
           const records = await window.api.listConversations()
           if (Array.isArray(records)) useStore.getState().hydrateSessions(records, { restoreLatest: true })
@@ -57,39 +55,24 @@ export default function App() {
         }
 
         const restoredState = useStore.getState()
-        const activeWorkspace = restoredState.workspacePath || settings.workspacePath
+        const activeWorkspace = restoredState.workspacePath || loadedSettings.workspacePath
         if (!activeWorkspace) return
         if (!restoredState.workspacePath) setWorkspacePath(activeWorkspace)
-        window.api.projectMemoryLoad(activeWorkspace)
-          .then((memory) => { if (!('error' in memory)) setProjectMemory(memory.content) })
-          .catch(() => {})
+        window.api.projectMemoryLoad(activeWorkspace).then((memory) => { if (!('error' in memory)) setProjectMemory(memory.content) }).catch(() => {})
         window.api.gitIsRepo(activeWorkspace).then((isRepo) => {
           setIsRepo(isRepo)
-          if (isRepo) {
-            window.api.gitStatus(activeWorkspace).then((status) => {
-              if (!('error' in status)) setGitStatus(status as any)
-            })
-          }
+          if (isRepo) window.api.gitStatus(activeWorkspace).then((status) => { if (!('error' in status)) setGitStatus(status as any) })
         })
-        window.api.walkDirectory(activeWorkspace).then((files) => {
-          setAllFiles(files)
-        })
-        if (settings.indexingEnabled === true) {
-          void window.api.toolExecute({ name: 'repo_index', args: {}, workspace: activeWorkspace }).catch(() => {})
-        }
+        window.api.walkDirectory(activeWorkspace).then((files) => setAllFiles(files))
+        if (loadedSettings.indexingEnabled === true) void window.api.toolExecute({ name: 'repo_index', args: {}, workspace: activeWorkspace }).catch(() => {})
       } catch (err: any) {
         console.warn(`Failed to initialize VD Agent: ${err?.message || err}`)
       }
     }
     void initialize()
-
     const flush = () => { void useStore.getState().flushSessionSave() }
-    const checkpointCleanup = window.api.onCheckpointCreated((checkpoint) => {
-      useStore.getState().setLatestCheckpoint(checkpoint)
-    })
-    const indexStatusCleanup = window.api.onRepoIndexStatus((status) => {
-      setRepoIndexStatus(status)
-    })
+    const checkpointCleanup = window.api.onCheckpointCreated((checkpoint) => useStore.getState().setLatestCheckpoint(checkpoint))
+    const indexStatusCleanup = window.api.onRepoIndexStatus((status) => setRepoIndexStatus(status))
     const autosaveInterval = window.setInterval(flush, 5_000)
     const onVisibility = () => { if (document.visibilityState === 'hidden') flush() }
     window.addEventListener('beforeunload', flush)
@@ -103,98 +86,119 @@ export default function App() {
     }
   }, [])
 
-  // Global keyboard shortcuts
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'p' && !e.shiftKey) {
-        e.preventDefault()
-        toggleCommandPalette()
-      }
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'P') {
-        e.preventDefault()
-        toggleCommandPalette()
-      }
-      if ((e.metaKey || e.ctrlKey) && e.key === '`') {
-        e.preventDefault()
-        useStore.getState().toggleTerminal()
-      }
-      if ((e.metaKey || e.ctrlKey) && e.key === 'g') {
-        e.preventDefault()
-        setActivePanel('git')
-      }
-      if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
-        e.preventDefault()
-        setActivePanel('files')
-      }
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'A') {
-        e.preventDefault()
-        setActivePanel('chat')
-      }
-      // Escape to close command palette
-      if (e.key === 'Escape' && showCommandPalette) {
-        setShowCommandPalette(false)
-      }
+    const handler = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === 'p' && !event.shiftKey) { event.preventDefault(); toggleCommandPalette() }
+      if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key === 'P') { event.preventDefault(); toggleCommandPalette() }
+      if ((event.metaKey || event.ctrlKey) && event.key === '`') { event.preventDefault(); useStore.getState().toggleTerminal() }
+      if ((event.metaKey || event.ctrlKey) && event.key === 'g') { event.preventDefault(); setActivePanel('git') }
+      if ((event.metaKey || event.ctrlKey) && event.key === 'b') { event.preventDefault(); setActivePanel('files') }
+      if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key === 'A') { event.preventDefault(); setActivePanel('chat') }
+      if ((event.metaKey || event.ctrlKey) && event.key === 'n') { event.preventDefault(); void useStore.getState().newChat() }
+      if (event.key === 'Escape' && showCommandPalette) setShowCommandPalette(false)
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [showCommandPalette])
 
-  const showEditor = selectedFile || (workspacePath && activePanel === 'chat')
+  useEffect(() => () => { resizeCleanup.current?.() }, [])
+
+  const updateLayout = useCallback((patch: Partial<LayoutPreferences>, persist = false) => {
+    const next = mergeLayoutPreferences(useStore.getState().settings.layout, patch)
+    const nextSettings = { ...useStore.getState().settings, layout: next }
+    setSettings(nextSettings)
+    if (persist) void window.api.saveSettings(nextSettings)
+  }, [setSettings])
+
+  const beginResize = useCallback((kind: 'sidebarWidth' | 'historyWidth' | 'terminalHeight', event: React.PointerEvent) => {
+    event.preventDefault()
+    resizeCleanup.current?.()
+    const startX = event.clientX
+    const startY = event.clientY
+    const start = normalizeLayoutPreferences(useStore.getState().settings.layout)
+    const onMove = (moveEvent: PointerEvent) => {
+      if (kind === 'sidebarWidth') updateLayout({ sidebarWidth: start.sidebarWidth + moveEvent.clientX - startX })
+      if (kind === 'historyWidth') updateLayout({ historyWidth: start.historyWidth - (moveEvent.clientX - startX) })
+      if (kind === 'terminalHeight') updateLayout({ terminalHeight: start.terminalHeight - (moveEvent.clientY - startY) })
+    }
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      resizeCleanup.current = null
+      void window.api.saveSettings(useStore.getState().settings)
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp, { once: true })
+    resizeCleanup.current = () => { window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp) }
+  }, [updateLayout])
+
+  const renderPanel = () => {
+    if (activePanel === 'files') return <FileBrowser />
+    if (activePanel === 'git') return <GitPanel />
+    if (activePanel === 'branches') return <BranchManager />
+    if (activePanel === 'tasks') return <TaskPanel />
+    if (activePanel === 'vscode') return <VsCodeBridgePanel />
+    if (activePanel === 'terminal') return <MultiTerminal />
+    if (activePanel === 'settings') return <SettingsPanel />
+    if (activePanel === 'search') return <SearchResults />
+    if (activePanel === 'help') return <HelpPanel />
+    return <AgentChat />
+  }
+
+  const showEditor = Boolean(selectedFile) || Boolean(workspacePath && activePanel === 'chat')
+  const menuActions: Record<string, () => void> = {
+    File: () => setActivePanel('files'),
+    Edit: () => toggleCommandPalette(),
+    View: () => useStore.getState().toggleTerminal(),
+    Help: () => setActivePanel('help'),
+  }
 
   return (
-    <div className="app-layout" style={{ height: '100vh' }}>
-      {/* Command Palette overlay */}
+    <div className="app-layout vd-app-shell">
       <CommandPalette />
       <PrerequisiteSetup />
-
-      {/* Sidebar */}
-      <Sidebar />
-
-      {/* Main content */}
-      <div className="main-content" style={{ display: 'flex', flexDirection: 'column' }}>
-        {/* Top area: context-dependent panel + editor */}
-        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-          {/* Left panel */}
-          <div style={{
-            width: activePanel === 'chat' ? '40%' : '100%',
-            display: activePanel === 'settings' ? 'block' : 'flex',
-            flexDirection: 'column',
-            borderRight: activePanel === 'chat' && showEditor ? '1px solid var(--border)' : 'none',
-            overflow: 'hidden',
-          }}>
-            {activePanel === 'chat' && <AgentChat />}
-            {activePanel === 'files' && <FileBrowser />}
-            {activePanel === 'git' && <GitPanel />}
-            {activePanel === 'branches' && <BranchManager />}
-            {activePanel === 'tasks' && <TaskPanel />}
-            {activePanel === 'sessions' && <SessionsPanel />}
-            {activePanel === 'vscode' && <VsCodeBridgePanel />}
-            {activePanel === 'search' && <SearchResults />}
-            {activePanel === 'terminal' && <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}><MultiTerminal /></div>}
-            {activePanel === 'settings' && <SettingsPanel />}
-            {activePanel === 'help' && <HelpPanel />}
+      <LeftRail activePanel={activePanel} collapsed={layout.leftRailCollapsed} onToggle={() => setSidebarCollapsed((value) => !value)} onHome={() => setActivePanel('chat')} onSettings={() => setActivePanel('settings')} />
+      <div className="vd-sidebar-slot" style={{ width: sidebarCollapsed ? 36 : layout.sidebarWidth }}>
+        <WorkspaceSidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((value) => !value)} onSettings={() => setActivePanel('settings')} onHelp={() => setActivePanel('help')} onShortcuts={() => toggleCommandPalette()} />
+      </div>
+      <div className="vd-resize-handle vd-resize-sidebar" role="separator" aria-label="Resize workspace sidebar" onPointerDown={(event) => beginResize('sidebarWidth', event)} />
+      <main className="main-content vd-main-shell">
+        <header className="top-bar vd-topbar">
+          <div className="top-menus" role="menubar" aria-label="Application menu">
+            {Object.entries(menuActions).map(([label, action]) => <button key={label} role="menuitem" onClick={action}>{label}</button>)}
           </div>
+          <div className="vd-top-tabs" role="tablist" aria-label="Open work surfaces">
+            <button className={activePanel === 'chat' ? 'active' : ''} role="tab" aria-selected={activePanel === 'chat'} onClick={() => setActivePanel('chat')}>Agent output</button>
+            {selectedFile && <button className={activePanel !== 'chat' ? 'active' : ''} role="tab" aria-selected={activePanel !== 'chat'} onClick={() => setActivePanel('files')} title={selectedFile}>{selectedFile.split(/[\\/]/).pop()}</button>}
+          </div>
+          <SurfaceSwitch />
+        </header>
 
-          {/* Right panel: Editor (visible in chat mode) */}
-          {activePanel === 'chat' && showEditor && (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-              <CodeEditor />
+        <div className="vd-workspace-grid">
+          <section className="vd-primary-pane" aria-label="Primary workspace">
+            <div className="vd-primary-content">
+              {activePanel === 'chat' ? (
+                <div className="vd-chat-editor-split">
+                  <div className={`vd-chat-column ${showEditor ? 'with-editor' : ''}`}>{renderPanel()}</div>
+                  {showEditor && <div className="vd-editor-column"><CodeEditor /></div>}
+                </div>
+              ) : renderPanel()}
             </div>
-          )}
+          </section>
+          <div className="vd-resize-handle vd-resize-history" role="separator" aria-label="Resize session history" onPointerDown={(event) => beginResize('historyWidth', event)} />
+          <HistoryPane collapsed={historyCollapsed} style={{ width: historyCollapsed ? 36 : layout.historyWidth }} onToggle={() => setHistoryCollapsed((value) => !value)} />
+          {!launcherCollapsed && <LauncherRail activePanel={activePanel} onSelect={setActivePanel} />}
+          {!launcherCollapsed && <button className="vd-launcher-collapse" aria-label="Collapse launcher" title="Collapse launcher" onClick={() => setLauncherCollapsed(true)}>›</button>}
+          {launcherCollapsed && <button className="vd-launcher-expand" aria-label="Expand launcher" title="Expand launcher" onClick={() => setLauncherCollapsed(false)}>‹</button>}
         </div>
 
-        {/* Bottom terminal */}
-        {showTerminal && activePanel !== 'settings' && activePanel !== 'terminal' && (
-          <div style={{
-            borderTop: '1px solid var(--border)',
-            height: 240,
-            minHeight: 100,
-            flexShrink: 0,
-          }}>
+        {showTerminal && activePanel !== 'settings' && activePanel !== 'terminal' && activePanel !== 'chat' && (
+          <div className="vd-app-terminal" style={{ height: layout.terminalHeight }}>
+            <div className="vd-resize-handle vd-resize-terminal" role="separator" aria-label="Resize terminal" onPointerDown={(event) => beginResize('terminalHeight', event)} />
             <MultiTerminal />
           </div>
         )}
-      </div>
+      </main>
     </div>
   )
 }
