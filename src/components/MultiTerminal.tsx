@@ -39,7 +39,9 @@ export default function MultiTerminal() {
 
   const fitTerminal = useCallback((instance: TermInstance, container?: HTMLElement | null) => {
     const target = container || instance.terminal.element?.parentElement
-    if (!target || target.clientWidth <= 0 || target.clientHeight <= 0) return false
+    const element = instance.terminal.element
+    if (!element || !element.isConnected || !target || !target.isConnected || target.clientWidth <= 0 || target.clientHeight <= 0) return false
+    if (instance.terminal.cols <= 0 || instance.terminal.rows <= 0) return false
     try {
       instance.fitAddon.fit()
       return true
@@ -113,10 +115,19 @@ export default function MultiTerminal() {
 
     const instance: TermInstance = { terminal: term, fitAddon, termId, cleanup }
     instancesRef.current.set(tabId, instance)
-    requestAnimationFrame(() => {
-      fitTerminal(instance, container)
-      window.api.terminalResize(instance.termId, instance.terminal.cols, instance.terminal.rows)
-    })
+    const fitWhenVisible = () => {
+      let attempts = 0
+      const attempt = () => {
+        attempts += 1
+        if (fitTerminal(instance, container)) {
+          window.api.terminalResize(instance.termId, instance.terminal.cols, instance.terminal.rows)
+        } else if (attempts < 6 && instance.terminal.element?.isConnected) {
+          requestAnimationFrame(attempt)
+        }
+      }
+      requestAnimationFrame(attempt)
+    }
+    fitWhenVisible()
     return instance
   }, [workspacePath, fitTerminal])
 
@@ -151,9 +162,16 @@ export default function MultiTerminal() {
       }
     })
     ro.observe(container)
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== 'hidden' && instance) {
+        if (fitTerminal(instance, container)) window.api.terminalResize(instance.termId, instance.terminal.cols, instance.terminal.rows)
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
 
     return () => {
       ro.disconnect()
+      document.removeEventListener('visibilitychange', onVisibilityChange)
     }
   }, [activeTerminalTab, createTerm, fitTerminal])
 

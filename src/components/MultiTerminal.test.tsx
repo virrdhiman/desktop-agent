@@ -3,6 +3,8 @@ import { render } from '@testing-library/react'
 import { useStore } from '../store'
 import MultiTerminal from './MultiTerminal'
 
+const { fitMock } = vi.hoisted(() => ({ fitMock: vi.fn() }))
+
 vi.mock('xterm', () => ({
   Terminal: class MockTerminal {
     element = document.createElement('div')
@@ -19,7 +21,7 @@ vi.mock('xterm', () => ({
 
 vi.mock('xterm-addon-fit', () => ({
   FitAddon: class MockFitAddon {
-    fit() {}
+    fit() { fitMock() }
   },
 }))
 
@@ -57,5 +59,18 @@ describe('MultiTerminal renderer safety', () => {
     expect(renderError).toBeUndefined()
     expect(window.api.terminalCreate).toHaveBeenCalledWith('term-term-1', '.')
     view?.unmount()
+  })
+
+  it('does not fit a terminal before its container has a visible size', () => {
+    fitMock.mockClear()
+    const originalWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth')
+    const originalHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientHeight')
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, value: 0 })
+    Object.defineProperty(HTMLElement.prototype, 'clientHeight', { configurable: true, value: 0 })
+    const view = render(<MultiTerminal />)
+    expect(fitMock).not.toHaveBeenCalled()
+    view.unmount()
+    if (originalWidth) Object.defineProperty(HTMLElement.prototype, 'clientWidth', originalWidth)
+    if (originalHeight) Object.defineProperty(HTMLElement.prototype, 'clientHeight', originalHeight)
   })
 })
