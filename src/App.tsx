@@ -158,7 +158,7 @@ export default function App() {
     return <AgentChat />
   }
 
-  const showEditor = Boolean(selectedFile) || Boolean(workspacePath && activePanel === 'chat')
+  const showEditor = Boolean(selectedFile)
   const openFolder = async () => {
     const directory = await window.api.openDirectory()
     if (!directory) return

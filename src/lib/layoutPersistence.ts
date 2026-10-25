@@ -17,7 +17,7 @@ export interface LayoutPreferences {
 
 export const DEFAULT_LAYOUT_PREFERENCES: LayoutPreferences = {
   version: 1, leftRailCollapsed: false, sidebarCollapsed: false, historyCollapsed: false, launcherCollapsed: false, terminalCollapsed: false,
-  sidebarWidth: 260, historyWidth: 280, launcherWidth: 52, terminalHeight: 220, workingMode: 'build', surface: 'agent', 
+  sidebarWidth: 260, historyWidth: 240, launcherWidth: 52, terminalHeight: 220, workingMode: 'build', surface: 'agent', 
 }
 
 const clamp = (value: unknown, min: number, max: number, fallback: number) => {

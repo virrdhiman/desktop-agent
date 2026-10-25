@@ -11,7 +11,7 @@ export default function HistoryPane({ collapsed, onToggle, style }: { collapsed:
     <aside className="vd-history-pane" style={style} aria-label="Session and chat history">
       <div className="vd-pane-header"><div><div className="vd-sidebar-title">Context</div><div className="vd-sidebar-subtitle">Sessions & history</div></div><button className="vd-icon-button" aria-label="Collapse history" title="Collapse history" onClick={onToggle}>›</button></div>
       <div className="vd-history-tabs" role="tablist" aria-label="History tabs">
-        <button role="tab" aria-selected={tab === 'history'} className={tab === 'history' ? 'active' : ''} onClick={() => setTab('history')}>Chats <span>{sessions.length}</span></button>
+        <button role="tab" aria-selected={tab === 'history'} className={tab === 'history' ? 'active' : ''} onClick={() => setTab('history')}>History <span>{sessions.length}</span></button>
         <button role="tab" aria-selected={tab === 'search'} className={tab === 'search' ? 'active' : ''} onClick={() => setTab('search')}>Search</button>
       </div>
       <div className="vd-history-content">{tab === 'history' ? <SessionsPanel /> : <SearchResults />}</div>

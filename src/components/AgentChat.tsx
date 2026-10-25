@@ -1712,7 +1712,7 @@ export default function AgentChat() {
               if (e.key === 'Escape') setShowMentions(false)
             }}
             placeholder="Ask or queue work... Type @ for context, Ctrl+V for images, drag files. (Enter queues immediately)"
-            rows={2}
+             rows={4}
             style={{ resize: 'none', fontSize: 13, borderRadius: 12 }}
           />
           <button

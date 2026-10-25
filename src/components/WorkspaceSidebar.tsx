@@ -83,7 +83,7 @@ export default function WorkspaceSidebar({ collapsed, onToggle, onSettings, onHe
 
       <div className="vd-sidebar-section">
         <button className="vd-section-toggle" onClick={() => setActivePanel('sessions')}>
-          <span>▾ Chats</span><span className="vd-count">{sessions.length}</span>
+          <span>▾ All chats</span><span className="vd-count">{sessions.length}</span>
         </button>
       </div>
 
