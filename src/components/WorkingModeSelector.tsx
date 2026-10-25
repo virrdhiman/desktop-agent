@@ -8,7 +8,13 @@ export default function WorkingModeSelector({ settings, onChange }: { settings: 
   return (
     <select aria-label="Working mode" value={value} onChange={(event) => {
       const workingMode = event.target.value as WorkingMode
-      onChange({ ...settings, planMode: workingMode === 'plan', layout: { ...(settings.layout || {}), version: 1, workingMode } as Settings['layout'] })
+      const readOnly = workingMode === 'plan' || workingMode === 'ask' || workingMode === 'review'
+      onChange({
+        ...settings,
+        planMode: readOnly,
+        teamMode: workingMode === 'multitask' ? 'always' : settings.teamMode,
+        layout: { ...(settings.layout || {}), version: 1, workingMode } as Settings['layout'],
+      })
     }} title="Working mode; Plan, Ask, and Review are read-only">
       {MODES.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
     </select>

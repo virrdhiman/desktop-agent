@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import LeftRail from './LeftRail'
 import ComposerAddMenu from './ComposerAddMenu'
 import ComposerControls from './ComposerControls'
+import WorkingModeSelector from './WorkingModeSelector'
 import { normalizeDataToolSettings } from '../lib/dataToolSettings'
 import type { Settings } from '../types'
 
@@ -12,7 +13,7 @@ const settings: Settings = {
     { id: 'cloud', name: 'Cloud', apiKey: '', baseUrl: 'https://example.test', model: 'cloud-balanced' },
     { id: 'ollama', name: 'Ollama', apiKey: 'ollama', baseUrl: 'http://localhost:11434/v1', model: 'qwen2.5-coder:7b' },
   ],
-  activeProvider: 'cloud', workspacePath: 'C:/workspace', responseEffort: 'medium', teamTokenBudget: 'balanced', browserToolEnabled: false,
+  activeProvider: 'cloud', workspacePath: 'C:/workspace', responseEffort: 'medium', teamTokenBudget: 'balanced', teamMode: 'auto', browserToolEnabled: false,
 }
 
 describe('layout shell controls', () => {
@@ -67,5 +68,12 @@ describe('layout shell controls', () => {
     expect(onSettings).toHaveBeenCalledWith(expect.objectContaining({ activeProvider: 'ollama' }))
     fireEvent.change(screen.getByRole('slider', { name: 'Response effort' }), { target: { value: '2' } })
     expect(onSettings).toHaveBeenCalledWith(expect.objectContaining({ responseEffort: 'high' }))
+  })
+
+  it('routes Multitask to the existing multi-agent team mode', () => {
+    const onChange = vi.fn()
+    render(<WorkingModeSelector settings={settings} onChange={onChange} />)
+    fireEvent.change(screen.getByRole('combobox', { name: 'Working mode' }), { target: { value: 'multitask' } })
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ teamMode: 'always', planMode: false, layout: expect.objectContaining({ workingMode: 'multitask' }) }))
   })
 })
