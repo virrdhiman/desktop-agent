@@ -321,6 +321,20 @@ export default function CodeEditor() {
     })
   }, [addTerminalEntry, allFiles, collectReferences, currentIdentifier, currentPosition, hasLanguageService, selectedFile, setFileContent, workspacePath])
 
+  useEffect(() => {
+    const onCommand = (event: Event) => {
+      const command = event.type
+      if (command === 'vd:code-save') void handleSave()
+      if (command === 'vd:code-find') void editorRef.current?.getAction('actions.find')?.run()
+      if (command === 'vd:code-replace') void editorRef.current?.getAction('editor.action.startFindReplaceAction')?.run()
+      if (command === 'vd:code-select-all') void editorRef.current?.getAction('editor.action.selectAll')?.run()
+      if (command === 'vd:code-definition') void handleGoToDefinition()
+    }
+    const commands = ['vd:code-save', 'vd:code-find', 'vd:code-replace', 'vd:code-select-all', 'vd:code-definition']
+    commands.forEach((command) => window.addEventListener(command, onCommand))
+    return () => commands.forEach((command) => window.removeEventListener(command, onCommand))
+  }, [handleGoToDefinition, handleSave])
+
   const acceptInlineEdit = useCallback(async () => {
     if (!latestInlineEdit || !selectedFile) return
     setFileContent(latestInlineEdit.after)

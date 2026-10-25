@@ -432,7 +432,7 @@ function parseMarkdown(text: string): MdBlock[] {
   return blocks
 }
 
-export default function AgentChat() {
+export default function AgentChat({ hideTerminal = false }: { hideTerminal?: boolean } = {}) {
   const {
     messages, addMessage, updateMessage,
     chatLoading, setChatLoading,
@@ -470,7 +470,7 @@ export default function AgentChat() {
 
   const { allFiles, newChat, currentSessionId, setActivePanel,
     planMode, setPlanMode, settings: appSettings, setSettings: setAppSettings, setCancelRequested } = useStore()
-  const showTerminal = !(appSettings.layout?.terminalCollapsed === true)
+  const showTerminal = !hideTerminal && !(appSettings.layout?.terminalCollapsed === true)
   const [chatTerminalHeight, setChatTerminalHeight] = useState(appSettings.layout?.terminalHeight || 220)
   const chatTerminalResizeRef = useRef<{ startY: number; startHeight: number } | null>(null)
 

@@ -26,6 +26,7 @@ import PrerequisiteSetup from './components/PrerequisiteSetup'
 import HelpPanel from './components/HelpPanel'
 import SurfaceSwitch from './components/SurfaceSwitch'
 import AppMenuBar from './components/AppMenuBar'
+import CodeWorkspace from './components/CodeWorkspace'
 import { mergeLayoutPreferences, normalizeLayoutPreferences, type LayoutPreferences } from './lib/layoutPersistence'
 import type { Panel } from './types'
 
@@ -41,6 +42,7 @@ export default function App() {
   const sidebarCollapsed = layout.sidebarCollapsed
   const historyCollapsed = layout.historyCollapsed
   const launcherCollapsed = layout.launcherCollapsed
+  const codeMode = layout.surface === 'code'
 
   const persistTerminalToggle = () => {
     const current = useStore.getState()
@@ -172,14 +174,14 @@ export default function App() {
     <div className="app-layout vd-app-shell">
       <CommandPalette />
       <PrerequisiteSetup />
-      <LeftRail activePanel={activePanel} collapsed={layout.leftRailCollapsed} onToggle={() => updateLayout({ sidebarCollapsed: !sidebarCollapsed }, true)} onHome={() => setActivePanel('chat')} onSettings={() => setActivePanel('settings')} />
-      <div className="vd-sidebar-slot" style={{ width: sidebarCollapsed ? 36 : layout.sidebarWidth }}>
+      {!codeMode && <LeftRail activePanel={activePanel} collapsed={layout.leftRailCollapsed} onToggle={() => updateLayout({ sidebarCollapsed: !sidebarCollapsed }, true)} onHome={() => setActivePanel('chat')} onSettings={() => setActivePanel('settings')} />}
+      {!codeMode && <div className="vd-sidebar-slot" style={{ width: sidebarCollapsed ? 36 : layout.sidebarWidth }}>
         <WorkspaceSidebar collapsed={sidebarCollapsed} onToggle={() => updateLayout({ sidebarCollapsed: !sidebarCollapsed }, true)} onSettings={() => setActivePanel('settings')} onHelp={() => setActivePanel('help')} onShortcuts={() => toggleCommandPalette()} />
-      </div>
-      <div className="vd-resize-handle vd-resize-sidebar" role="separator" aria-label="Resize workspace sidebar" onPointerDown={(event) => beginResize('sidebarWidth', event)} />
+      </div>}
+      {!codeMode && <div className="vd-resize-handle vd-resize-sidebar" role="separator" aria-label="Resize workspace sidebar" onPointerDown={(event) => beginResize('sidebarWidth', event)} />}
       <main className="main-content vd-main-shell">
         <header className="top-bar vd-topbar">
-          <AppMenuBar
+          {!codeMode && <AppMenuBar
             onNewChat={() => { void useStore.getState().newChat(); setActivePanel('chat') }}
             onOpenFolder={() => { void openFolder() }}
             onCommandPalette={toggleCommandPalette}
@@ -187,15 +189,15 @@ export default function App() {
             onToggleTerminal={persistTerminalToggle}
             onSettings={() => setActivePanel('settings')}
             onHelp={() => setActivePanel('help')}
-          />
-          <div className="vd-top-tabs" role="tablist" aria-label="Open work surfaces">
+          />}
+          {!codeMode && <div className="vd-top-tabs" role="tablist" aria-label="Open work surfaces">
             <button className={activePanel === 'chat' ? 'active' : ''} role="tab" aria-selected={activePanel === 'chat'} onClick={() => setActivePanel('chat')}>Agent output</button>
             {selectedFile && <button className={activePanel !== 'chat' ? 'active' : ''} role="tab" aria-selected={activePanel !== 'chat'} onClick={() => setActivePanel('files')} title={selectedFile}>{selectedFile.split(/[\\/]/).pop()}</button>}
-          </div>
+          </div>}
           <SurfaceSwitch />
         </header>
 
-        <div className="vd-workspace-grid">
+        {codeMode ? <CodeWorkspace layout={layout} onLayout={updateLayout} onOpenFolder={openFolder} onSettings={() => setActivePanel('settings')} onHelp={() => setActivePanel('help')} onCommandPalette={toggleCommandPalette} /> : <div className="vd-workspace-grid">
           <section className="vd-primary-pane" aria-label="Primary workspace">
             <div className="vd-primary-content">
               {activePanel === 'chat' ? (
@@ -211,9 +213,9 @@ export default function App() {
           {!launcherCollapsed && <LauncherRail activePanel={activePanel} onSelect={setActivePanel} />}
           {!launcherCollapsed && <button className="vd-launcher-collapse" aria-label="Collapse launcher" title="Collapse launcher" onClick={() => updateLayout({ launcherCollapsed: true }, true)}>›</button>}
           {launcherCollapsed && <button className="vd-launcher-expand" aria-label="Expand launcher" title="Expand launcher" onClick={() => updateLayout({ launcherCollapsed: false }, true)}>‹</button>}
-        </div>
+        </div>}
 
-        {showTerminal && !layout.terminalCollapsed && activePanel !== 'settings' && activePanel !== 'terminal' && activePanel !== 'chat' && (
+        {!codeMode && showTerminal && !layout.terminalCollapsed && activePanel !== 'settings' && activePanel !== 'terminal' && activePanel !== 'chat' && (
           <div className="vd-app-terminal" style={{ height: layout.terminalHeight }}>
             <div className="vd-resize-handle vd-resize-terminal" role="separator" aria-label="Resize terminal" onPointerDown={(event) => beginResize('terminalHeight', event)} />
             <MultiTerminal />
