@@ -438,7 +438,6 @@ export default function AgentChat() {
   const [showMentions, setShowMentions] = useState(false)
   const [mentionQuery, setMentionQuery] = useState('')
   const [mentionType, setMentionType] = useState<'file' | 'folder' | 'web'>('file')
-  const [showSessions, setShowSessions] = useState(false)
   const [voiceStatus, setVoiceStatus] = useState('')
   const [listening, setListening] = useState(false)
   const messagesScrollRef = useRef<HTMLDivElement>(null)
@@ -449,9 +448,11 @@ export default function AgentChat() {
   const pumpingQueueRef = useRef(false)
   const voiceDraftBaseRef = useRef('')
 
-  const { allFiles, sessions, loadSession, deleteSession, newChat, currentSessionId,
+  const { allFiles, newChat, currentSessionId, setActivePanel,
     planMode, setPlanMode, settings: appSettings, setSettings: setAppSettings, setCancelRequested } = useStore()
   const showTerminal = !(appSettings.layout?.terminalCollapsed === true)
+  const [chatTerminalHeight, setChatTerminalHeight] = useState(appSettings.layout?.terminalHeight || 220)
+  const chatTerminalResizeRef = useRef<{ startY: number; startHeight: number } | null>(null)
 
   const activeProvider = settings.providers.find((p) => p.id === settings.activeProvider)
 
@@ -1257,183 +1258,20 @@ export default function AgentChat() {
           <button aria-label="Clear workspace goal" title="Clear goal" onClick={() => { const next = { ...appSettings, goal: '' }; setAppSettings(next); void window.api.saveSettings(next) }}>×</button>
         </div>
       )}
-      <div className="panel-header" style={{ flexWrap: 'wrap', gap: 8, padding: '8px 12px' }}>
-        <h2 style={{ flex: '0 0 auto' }}>🤖 Agent</h2>
-        <div style={{ display: 'flex', flex: '1 1 520px', minWidth: 0, flexWrap: 'wrap', gap: 6, alignItems: 'center', justifyContent: 'flex-end' }}>
-          {/* Model quick-switch */}
-          <select
-            value={modelOverride || ''}
-            onChange={(e) => setModelOverride(e.target.value || null)}
-            style={{
-              padding: '3px 8px', borderRadius: 6, fontSize: 11, maxWidth: 180,
-              background: 'var(--bg-tertiary)', color: 'var(--text-secondary)',
-              border: '1px solid var(--border)', cursor: 'pointer', outline: 'none',
-            }}
-            title="Model for the active provider. Auto refreshes live models, skips expired IDs, and picks by budget. Choosing one pins it for this session."
-            aria-label="Model"
-          >
-            <option value="">Auto: {activeProvider?.model || 'best available'}</option>
-            {[...new Set([...(activeProvider?.model ? [activeProvider.model] : []), ...availableModels])].map((id) => (
-              <option key={id} value={id}>{id}</option>
-            ))}
-          </select>
-
-          <WorkingModeSelector settings={appSettings} onChange={(next) => { setAppSettings(next); void window.api.saveSettings(next) }} />
-          {/* Plan mode toggle */}
-          <button
-            className={`btn btn-sm ${planMode ? 'btn-success' : ''}`}
-            onClick={() => {
-              const newMode = !planMode
-              setPlanMode(newMode)
-              const newSettings = { ...appSettings, planMode: newMode }
-              setAppSettings(newSettings)
-              window.api.saveSettings(newSettings)
-            }}
-            title="Plan Mode: agent plans before executing"
-          >
-            📋 {planMode ? 'Plan ON' : 'Plan'}
-          </button>
-
-          <select
-            value={appSettings.teamMode || 'auto'}
-            onChange={(event) => {
-              const teamMode = event.target.value as 'off' | 'auto' | 'always'
-              const next = { ...appSettings, teamMode }
-              setAppSettings(next)
-              void window.api.saveSettings(next)
-            }}
-            style={{
-              padding: '3px 8px', borderRadius: 6, fontSize: 11,
-              background: 'var(--bg-tertiary)', color: 'var(--text-secondary)',
-              border: '1px solid var(--border)', cursor: 'pointer', outline: 'none',
-            }}
-            title="Environment: Normal uses one executor, Smart chooses per request, Agentic forces planner, worker, reviewer, repair, and verifier."
-            aria-label="Agent environment"
-          >
-            <option value="off">Env: Normal</option>
-            <option value="auto">Env: Smart</option>
-            <option value="always">Env: Agentic</option>
-          </select>
-          {hasCustomTeamProfile(appSettings.teamProfile) && (
-            <span className="badge badge-green" title="Custom agent role instructions are active">Custom team</span>
-          )}
-
-          <select
-            value={appSettings.teamTokenBudget || 'balanced'}
-            onChange={(event) => {
-              const teamTokenBudget = event.target.value as 'cheap' | 'balanced' | 'strong'
-              const next = { ...appSettings, teamTokenBudget }
-              setAppSettings(next)
-              void window.api.saveSettings(next)
-            }}
-            style={{
-              padding: '3px 8px', borderRadius: 6, fontSize: 11,
-              background: 'var(--bg-tertiary)', color: 'var(--text-secondary)',
-              border: '1px solid var(--border)', cursor: 'pointer', outline: 'none',
-            }}
-            title="Agentic budget: Cheap saves calls and prefers free models, Balanced is default, Strong allows richer context and best accessible models."
-            aria-label="Agentic token budget"
-          >
-            <option value="cheap">Budget: Cheap</option>
-            <option value="balanced">Budget: Balanced</option>
-            <option value="strong">Budget: Strong</option>
-          </select>
-
-          {/* Stop button */}
-          {chatLoading && (
-            <button
-              className="btn btn-sm btn-error"
-              onClick={() => useStore.getState().stopGeneration()}
-            >
-              ⏹ Stop
-            </button>
-          )}
-
-          {settings.activeProvider && (
-            <span className="badge badge-blue">
-              {settings.providers.find((p) => p.id === settings.activeProvider)?.name || settings.activeProvider}
-            </span>
-          )}
-          <button
-            className="btn btn-sm"
-            onClick={() => setShowSessions(!showSessions)}
-            title="Chat history (saved automatically on this machine)"
-          >
-            🕘 History
-          </button>
-          {messages.length > 0 && (
-            <>
-              <button className="btn btn-sm" onClick={() => {
-                const md = messages.map(m => `**${m.role === 'user' ? 'You' : m.role === 'system' ? 'System' : 'Agent'}** (${new Date(m.timestamp).toLocaleTimeString()})\n\n${m.content}\n`).join('\n---\n\n')
-                const blob = new Blob([md], { type: 'text/markdown' })
-                const url = URL.createObjectURL(blob)
-                const a = document.createElement('a')
-                a.href = url; a.download = `chat-${new Date().toISOString().slice(0,10)}.md`; a.click()
-                URL.revokeObjectURL(url)
-              }}>📤 Export</button>
-              <button className="btn btn-sm" onClick={() => { void newChat() }} title="Start a new chat. The current one stays in history.">
-                ＋ New chat
-              </button>
-            </>
-          )}
+      <div className="panel-header vd-chat-header">
+        <h2>🤖 Agent</h2>
+        <div className="vd-chat-header-actions">
+          <button className="vd-icon-button" aria-label="Open chat history" title="Open chat history" onClick={() => setActivePanel('sessions')}>🕘</button>
+          <button className="vd-icon-button" aria-label="Export chat" title="Export chat" disabled={messages.length === 0} onClick={() => {
+            const md = messages.map(m => `**${m.role === 'user' ? 'You' : m.role === 'system' ? 'System' : 'Agent'}** (${new Date(m.timestamp).toLocaleTimeString()})\n\n${m.content}\n`).join('\n---\n\n')
+            const blob = new Blob([md], { type: 'text/markdown' })
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url; a.download = `chat-${new Date().toISOString().slice(0,10)}.md`; a.click(); URL.revokeObjectURL(url)
+          }}>📤</button>
+          <button className="vd-icon-button" aria-label="Start a new chat" title="Start a new chat" onClick={() => { void newChat() }}>＋</button>
         </div>
       </div>
-
-      {/* Sessions sidebar */}
-      {showSessions && (
-        <div style={{
-          position: 'absolute', top: 0, right: 0, width: 280, height: '100%',
-          background: 'var(--bg-secondary)', borderLeft: '1px solid var(--border)',
-          zIndex: 50, display: 'flex', flexDirection: 'column', overflow: 'hidden',
-        }}>
-          <div className="panel-header">
-            <h2 style={{ fontSize: 13 }}>🕘 History</h2>
-            <button className="btn btn-sm" onClick={() => setShowSessions(false)} aria-label="Close history">✕</button>
-          </div>
-          <div className="panel-body" style={{ flex: 1, overflowY: 'auto', padding: 4 }}>
-            {sessions.length === 0 ? (
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: 12, textAlign: 'center' }}>
-                No chats yet. Conversations are saved automatically.
-              </div>
-            ) : (
-              sessions.map((s) => (
-                <div
-                  key={s.id}
-                  onClick={() => { void loadSession(s.id); setShowSessions(false) }}
-                  style={{
-                    padding: '8px 10px', borderRadius: 6, cursor: 'pointer', marginBottom: 2,
-                    background: currentSessionId === s.id ? 'rgba(59,130,246,0.1)' : 'transparent',
-                    border: currentSessionId === s.id ? '1px solid var(--accent)' : '1px solid transparent',
-                  }}
-                  onMouseEnter={(e) => { if (currentSessionId !== s.id) e.currentTarget.style.background = 'var(--bg-tertiary)' }}
-                  onMouseLeave={(e) => { if (currentSessionId !== s.id) e.currentTarget.style.background = 'transparent' }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                      {s.title}
-                    </div>
-                    <span
-                      role="button"
-                      aria-label={`Delete chat ${s.title}`}
-                      title="Delete from disk"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        if (window.confirm('Delete this chat from disk? This cannot be undone.')) void deleteSession(s.id)
-                      }}
-                      style={{ fontSize: 11, color: 'var(--text-muted)', padding: '0 4px', cursor: 'pointer' }}
-                    >
-                      ✕
-                    </span>
-                  </div>
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
-                    {new Date(s.updatedAt).toLocaleString()} · {s.messages.length} msgs
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Drag overlay */}
       {dragOver && (
@@ -1627,7 +1465,18 @@ export default function AgentChat() {
       )}
 
       {showTerminal && (
-        <div className="vd-chat-terminal" aria-label="Terminal above composer">
+        <div className="vd-chat-terminal" aria-label="Terminal above composer" style={{ height: chatTerminalHeight }}>
+          <div className="vd-chat-terminal-resize" role="separator" aria-label="Resize terminal" onPointerDown={(event) => {
+            event.preventDefault()
+            chatTerminalResizeRef.current = { startY: event.clientY, startHeight: chatTerminalHeight }
+            const onMove = (move: PointerEvent) => {
+              const start = chatTerminalResizeRef.current
+              if (start) setChatTerminalHeight(Math.min(480, Math.max(120, start.startHeight - (move.clientY - start.startY))))
+            }
+            const onUp = () => { window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); chatTerminalResizeRef.current = null }
+            window.addEventListener('pointermove', onMove)
+            window.addEventListener('pointerup', onUp, { once: true })
+          }} />
           <div className="vd-chat-terminal-header"><span>Terminal</span><span className="vd-sidebar-subtitle">Ctrl+` to toggle</span></div>
           <MultiTerminal />
         </div>
@@ -1693,6 +1542,13 @@ export default function AgentChat() {
             onModelOverride={setModelOverride}
             onSettings={(next) => { setAppSettings(next); void window.api.saveSettings(next) }}
           />
+          <WorkingModeSelector settings={appSettings} onChange={(next) => { setPlanMode(next.planMode === true); setAppSettings(next); void window.api.saveSettings(next) }} />
+          <select className="vd-composer-select" value={appSettings.teamMode || 'auto'} onChange={(event) => { const next = { ...appSettings, teamMode: event.target.value as 'off' | 'auto' | 'always' }; setAppSettings(next); void window.api.saveSettings(next) }} aria-label="Agent environment" title="Choose normal, smart, or agentic execution">
+            <option value="off">Normal</option><option value="auto">Smart</option><option value="always">Agentic</option>
+          </select>
+          {hasCustomTeamProfile(appSettings.teamProfile) && <span className="badge badge-green" title="Custom agent role instructions are active">Custom team</span>}
+          {chatLoading && <button className="btn btn-sm btn-error" onClick={() => useStore.getState().stopGeneration()}>⏹ Stop</button>}
+          {settings.activeProvider && <span className="badge badge-blue" title="Active provider">{settings.providers.find((p) => p.id === settings.activeProvider)?.name || settings.activeProvider}</span>}
         </div>
         {/* Status bar */}
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>

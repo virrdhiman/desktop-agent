@@ -377,7 +377,9 @@ kbd {
 .vd-resize-handle:hover { background: var(--accent); opacity: .55; }
 .vd-resize-terminal { height: 5px; width: 100%; cursor: row-resize; }
 .vd-app-terminal { flex: 0 0 auto; min-height: 120px; border-top: 1px solid var(--border); overflow: hidden; }
-.vd-chat-terminal { flex: 0 0 210px; min-height: 120px; max-height: 360px; display: flex; flex-direction: column; border-top: 1px solid var(--border); background: var(--bg-primary); }
+.vd-chat-terminal { flex: 0 0 auto; min-height: 120px; max-height: 480px; display: flex; flex-direction: column; border-top: 1px solid var(--border); background: var(--bg-primary); }
+.vd-chat-terminal-resize { flex: 0 0 5px; cursor: ns-resize; background: transparent; }
+.vd-chat-terminal-resize:hover { background: var(--accent); }
 .vd-chat-terminal-header { flex: 0 0 28px; display: flex; justify-content: space-between; align-items: center; padding: 4px 10px; border-bottom: 1px solid var(--border); color: var(--text-secondary); font-size: 10px; }
 .vd-chat-terminal > *:last-child { flex: 1; min-height: 0; }
 .vd-chat-terminal .panel-header { min-height: 32px; padding: 4px 8px; }
@@ -387,6 +389,14 @@ kbd {
 .vd-goal-banner button { width: 20px; height: 20px; border: 0; border-radius: 4px; background: transparent; color: var(--text-muted); cursor: pointer; font-size: 16px; }
 .vd-goal-banner button:hover { color: var(--text-primary); background: var(--bg-tertiary); }
 .vd-composer-toolbar { display: flex; align-items: center; gap: 6px; min-height: 30px; margin-bottom: 6px; }
+.vd-chat-header { justify-content: space-between; padding: 8px 12px; }
+.vd-chat-header-actions { display: flex; align-items: center; gap: 4px; }
+.vd-working-mode { position: relative; }
+.vd-working-mode-menu { position: absolute; z-index: 80; bottom: calc(100% + 6px); left: 0; width: 190px; padding: 5px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-secondary); box-shadow: 0 -8px 24px rgba(0,0,0,0.25); }
+.vd-working-mode-menu button { width: 100%; display: grid; gap: 2px; text-align: left; padding: 7px 8px; border: 0; border-radius: 5px; background: transparent; color: var(--text-secondary); cursor: pointer; }
+.vd-working-mode-menu button:hover, .vd-working-mode-menu button.active { background: var(--bg-tertiary); color: var(--text-primary); }
+.vd-working-mode-menu small { color: var(--text-muted); font-size: 9px; }
+.vd-composer-select { height: 28px; padding: 3px 6px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-tertiary); color: var(--text-secondary); font-size: 10px; }
 .vd-add-menu-wrap, .vd-model-picker-wrap { position: relative; }
 .vd-add-button { width: 28px; height: 28px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-tertiary); color: var(--text-primary); cursor: pointer; font-size: 18px; line-height: 1; }
 .vd-add-button:hover, .vd-add-button[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }

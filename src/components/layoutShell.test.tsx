@@ -73,7 +73,8 @@ describe('layout shell controls', () => {
   it('routes Multitask to the existing multi-agent team mode', () => {
     const onChange = vi.fn()
     render(<WorkingModeSelector settings={settings} onChange={onChange} />)
-    fireEvent.change(screen.getByRole('combobox', { name: 'Working mode' }), { target: { value: 'multitask' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Working mode' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /Multitask/ }))
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ teamMode: 'always', planMode: false, layout: expect.objectContaining({ workingMode: 'multitask' }) }))
   })
 })
