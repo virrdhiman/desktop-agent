@@ -17,7 +17,7 @@
  * - handlers/ai.ts     — AI chat with streaming, model discovery, cancel
  * - handlers/shell.ts  — OS shell operations
  */
-import { app, BrowserWindow, dialog, Menu, session, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, session, shell } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import { fileURLToPath } from 'url'
@@ -39,6 +39,9 @@ import { registerLspHandlers } from './handlers/lsp'
 import { registerPrerequisiteHandlers } from './handlers/prerequisites'
 import { closeBrowserSessions } from './browserTool'
 import { appendDiagnosticsLog } from './diagnostics'
+import { SingleIdeWindow } from './ideWindow'
+import { SharedStateStore } from './sharedState'
+import type { SharedAppState } from '../src/types'
 
 // package.json has "type": "module", so the main bundle is ESM and has no CommonJS __dirname.
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -47,6 +50,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 let mainWindow: BrowserWindow | null = null
 let rendererRecoveryAttempts = 0
 const getMainWindow = () => mainWindow
+const sharedState = new SharedStateStore()
+let ideCloseAllowed = false
+const ideWindowManager = new SingleIdeWindow<BrowserWindow>(() => createIdeWindow())
+const getIdeWindow = () => ideWindowManager.get()
+const getRendererWindows = () => [mainWindow, getIdeWindow()].filter((window): window is BrowserWindow => !!window && !window.isDestroyed())
 
 const originalConsoleError = console.error.bind(console)
 
@@ -100,6 +108,108 @@ function resolveWindowIcon(): string | undefined {
   return candidates.find((candidate) => fs.existsSync(candidate))
 }
 
+function loadRenderer(window: BrowserWindow, role: 'main' | 'ide') {
+  if (process.env.VITE_DEV_SERVER_URL) {
+    const separator = process.env.VITE_DEV_SERVER_URL.includes('?') ? '&' : '?'
+    void window.loadURL(`${process.env.VITE_DEV_SERVER_URL}${separator}window=${role}`)
+  } else {
+    void window.loadFile(path.join(__dirname, '../dist/index.html'), { query: { window: role } })
+  }
+}
+
+function configureWindowLinks(window: BrowserWindow) {
+  const contents = window.webContents
+  contents.setWindowOpenHandler(({ url }) => {
+    if (isExternalWebUrl(url)) void shell.openExternal(url)
+    return { action: 'deny' }
+  })
+  contents.on('will-navigate', (event, url) => {
+    if (isSameAppPage(url, contents.getURL())) return
+    event.preventDefault()
+    if (isExternalWebUrl(url)) void shell.openExternal(url)
+  })
+}
+
+type IdeBounds = { x?: number; y?: number; width: number; height: number }
+
+function ideBoundsPath(): string {
+  return path.join(app.getPath('userData'), 'ide-window.json')
+}
+
+function readIdeBounds(): IdeBounds {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(ideBoundsPath(), 'utf8')) as Partial<IdeBounds>
+    return {
+      ...(typeof parsed.x === 'number' ? { x: parsed.x } : {}),
+      ...(typeof parsed.y === 'number' ? { y: parsed.y } : {}),
+      width: typeof parsed.width === 'number' ? Math.max(900, Math.round(parsed.width)) : 1440,
+      height: typeof parsed.height === 'number' ? Math.max(600, Math.round(parsed.height)) : 920,
+    }
+  } catch {
+    return { width: 1440, height: 920 }
+  }
+}
+
+function saveIdeBounds(window: BrowserWindow): void {
+  try {
+    if (!window.isDestroyed() && !window.isMaximized() && !window.isMinimized()) {
+      fs.mkdirSync(path.dirname(ideBoundsPath()), { recursive: true })
+      fs.writeFileSync(ideBoundsPath(), JSON.stringify(window.getBounds()), 'utf8')
+    }
+  } catch {
+    // Window position is a convenience; failure must not affect the app.
+  }
+}
+
+function createIdeWindow(): BrowserWindow {
+  const icon = resolveWindowIcon()
+  const ideWindow = new BrowserWindow({
+    ...readIdeBounds(),
+    minWidth: 1000,
+    minHeight: 600,
+    title: 'VD Agent — Code',
+    titleBarStyle: 'hiddenInset',
+    backgroundColor: '#0f172a',
+    ...(icon ? { icon } : {}),
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      spellcheck: true,
+      sandbox: true,
+    },
+  })
+
+  loadRenderer(ideWindow, 'ide')
+  configureWindowLinks(ideWindow)
+  ideWindow.on('move', () => saveIdeBounds(ideWindow))
+  ideWindow.on('resize', () => saveIdeBounds(ideWindow))
+  ideWindow.on('close', (event) => {
+    if (ideCloseAllowed || !sharedState.get()?.fileDirty) return
+    event.preventDefault()
+    void dialog.showMessageBox(ideWindow, {
+      type: 'warning',
+      title: 'Unsaved changes',
+      message: 'The IDE has unsaved changes.',
+      detail: 'Close the IDE window without saving? The main Agent window will remain open.',
+      buttons: ['Cancel', 'Close without saving'],
+      defaultId: 0,
+      cancelId: 0,
+    }).then(({ response }) => {
+      if (response === 1 && !ideWindow.isDestroyed()) {
+        ideCloseAllowed = true
+        ideWindow.close()
+      }
+    }).catch(() => {})
+  })
+  ideWindow.on('closed', () => {
+    saveIdeBounds(ideWindow)
+    ideCloseAllowed = false
+    ideWindowManager.setClosed(ideWindow)
+  })
+  return ideWindow
+}
+
 function createWindow() {
   const icon = resolveWindowIcon()
   mainWindow = new BrowserWindow({
@@ -119,26 +229,10 @@ function createWindow() {
     },
   })
 
-  // Dev server or production build
-  if (process.env.VITE_DEV_SERVER_URL) {
-    mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL)
-    mainWindow.webContents.openDevTools()
-  } else {
-    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
-  }
-
-  // Links (API key pages, credits) open in the system browser, never in a new app window.
-  const contents = mainWindow.webContents
-  contents.setWindowOpenHandler(({ url }) => {
-    if (isExternalWebUrl(url)) void shell.openExternal(url)
-    return { action: 'deny' }
-  })
-  contents.on('will-navigate', (event, url) => {
-    if (isSameAppPage(url, contents.getURL())) return
-    event.preventDefault()
-    if (isExternalWebUrl(url)) void shell.openExternal(url)
-  })
-  contents.on('render-process-gone', async (_event, details) => {
+  loadRenderer(mainWindow, 'main')
+  configureWindowLinks(mainWindow)
+  if (process.env.VITE_DEV_SERVER_URL) mainWindow.webContents.openDevTools()
+  mainWindow.webContents.on('render-process-gone', async (_event, details) => {
     if (details.reason === 'clean-exit' || !mainWindow || mainWindow.isDestroyed()) return
     rendererRecoveryAttempts++
     const choice = await dialog.showMessageBox(mainWindow, {
@@ -157,6 +251,16 @@ function createWindow() {
     mainWindow = null
     closeBrowserSessions()
   })
+}
+
+function sanitizeSharedState(next: SharedAppState): SharedAppState {
+  return {
+    ...next,
+    settings: {
+      ...next.settings,
+      providers: next.settings.providers.map((provider) => ({ ...provider, apiKey: '' })),
+    },
+  }
 }
 
 // ─── App Lifecycle ────────────────────────────────────────────────────────
@@ -180,18 +284,41 @@ app.whenReady().then(() => {
 
   createWindow()
 
+  ipcMain.handle('window:role', (event) => BrowserWindow.fromWebContents(event.sender) === getIdeWindow() ? 'ide' : 'main')
+  ipcMain.handle('window:openIde', () => {
+    const result = ideWindowManager.openOrFocus()
+    return { opened: true, created: result.created }
+  })
+  ipcMain.handle('window:focusMain', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.show()
+      mainWindow.focus()
+      return { success: true }
+    }
+    return { success: false, error: 'Main Agent window is not available.' }
+  })
+  ipcMain.handle('shared-state:get', () => sharedState.get())
+  ipcMain.on('shared-state:publish', (event, next: SharedAppState) => {
+    if (!next || next.version !== 1 || typeof next.workspacePath !== 'string') return
+    const safeState = sanitizeSharedState(next)
+    sharedState.set(safeState)
+    for (const window of getRendererWindows()) {
+      if (window.webContents !== event.sender) window.webContents.send('shared-state:changed', safeState)
+    }
+  })
+
   // Register all IPC handler modules
   registerFsHandlers(getMainWindow)
   registerGitHandlers()
-  registerTerminalHandlers(getMainWindow)
+  registerTerminalHandlers(getRendererWindows)
   registerToolHandlers()
   registerSettingsHandlers()
   registerConversationHandlers()
   registerWorkspaceStateHandlers()
-  registerUpdateHandlers(getMainWindow)
+  registerUpdateHandlers(getRendererWindows)
   registerDiagnosticsHandlers()
   registerLspHandlers()
-  registerAiHandlers(getMainWindow)
+  registerAiHandlers(getRendererWindows)
   registerShellHandlers()
   registerPrerequisiteHandlers(getMainWindow)
   // The renderer owns the single accessible menu bar; avoid a duplicate native menu.

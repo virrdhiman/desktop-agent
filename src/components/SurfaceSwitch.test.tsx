@@ -1,39 +1,34 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useStore } from '../store'
 import SurfaceSwitch from './SurfaceSwitch'
-import { mergeLayoutPreferences } from '../lib/layoutPersistence'
 
 describe('SurfaceSwitch', () => {
   beforeEach(() => {
-    useStore.setState({ workspacePath: '', settings: { ...useStore.getState().settings, layout: mergeLayoutPreferences(useStore.getState().settings.layout, { surface: 'agent' }) } })
-    vi.mocked(window.api.vscodeOpenWorkspace).mockReset()
-    vi.mocked(window.api.openDirectory).mockReset()
+    vi.mocked(window.api.openIdeWindow).mockReset()
+    vi.mocked(window.api.openIdeWindow).mockResolvedValue({ opened: true, created: true })
   })
 
-  it('explains that a workspace is required and offers Open folder', () => {
+  it('opens the IDE window even when no workspace is open', async () => {
     render(<SurfaceSwitch />)
-    fireEvent.click(screen.getByRole('button', { name: 'Code (VS Code)' }))
-    expect(screen.getByRole('status')).toHaveTextContent('Open a workspace folder first')
-    expect(screen.getByRole('button', { name: 'Open folder' })).toBeInTheDocument()
-    expect(window.api.vscodeOpenWorkspace).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Code' }))
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('IDE window opened'))
+    expect(window.api.openIdeWindow).toHaveBeenCalledOnce()
   })
 
-  it('opens the current workspace and reports success', async () => {
-    useStore.setState({ workspacePath: 'C:/workspace' })
-    vi.mocked(window.api.vscodeOpenWorkspace).mockResolvedValue({ result: 'Opened workspace in VS Code: C:/workspace' })
+  it('reports when the existing IDE window is focused', async () => {
+    vi.mocked(window.api.openIdeWindow).mockResolvedValue({ opened: true, created: false })
     render(<SurfaceSwitch />)
-    fireEvent.click(screen.getByRole('button', { name: 'Code (VS Code)' }))
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Opened workspace in VS Code'))
-    expect(window.api.vscodeOpenWorkspace).toHaveBeenCalledWith('C:/workspace')
+    fireEvent.click(screen.getByRole('button', { name: 'Code' }))
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('IDE window focused'))
   })
 
-  it('reports the exact launch error and install hint', async () => {
-    useStore.setState({ workspacePath: 'C:/workspace' })
-    vi.mocked(window.api.vscodeOpenWorkspace).mockResolvedValue({ error: 'VS Code CLI was not found. Checked PATH and standard install locations.' })
+  it('focuses the Agent window when used from the IDE window', async () => {
+    window.api.windowRole = 'ide'
+    vi.mocked(window.api.focusMainWindow).mockResolvedValue({ success: true })
     render(<SurfaceSwitch />)
-    fireEvent.click(screen.getByRole('button', { name: 'Code (VS Code)' }))
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Checked PATH and standard install locations'))
-    expect(screen.getByRole('status')).toHaveTextContent('Install VS Code')
+    fireEvent.click(screen.getByRole('button', { name: 'Agent' }))
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Agent window focused'))
+    expect(window.api.focusMainWindow).toHaveBeenCalledOnce()
+    window.api.windowRole = 'main'
   })
 })

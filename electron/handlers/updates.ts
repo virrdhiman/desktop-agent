@@ -40,10 +40,10 @@ function configureUpdateFeed() {
   updater().setFeedURL({ provider: 'generic', url: url.toString().replace(/\/?$/, '/') })
 }
 
-export function registerUpdateHandlers(getMainWindow: () => BrowserWindow | null) {
+export function registerUpdateHandlers(getWindows: () => BrowserWindow[]) {
   const publish = (next: UpdateStatus) => {
     status = next
-    getMainWindow()?.webContents.send('updates:status', next)
+    for (const window of getWindows()) if (!window.isDestroyed()) window.webContents.send('updates:status', next)
   }
 
   if (!initialized) {

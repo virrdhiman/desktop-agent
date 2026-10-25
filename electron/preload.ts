@@ -16,7 +16,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { SetupDefinition, SetupItemId } from '../src/lib/prerequisiteSetup'
 import type { DiagnosticsViewerPayload } from './diagnostics'
-import type { RepoIndexStatus } from '../src/types'
+import type { RepoIndexStatus, SharedAppState } from '../src/types'
 
 /** Invoke with a timeout — prevents renderer from hanging if main process stalls */
 function invokeWithTimeout(channel: string, ...args: any[]): Promise<any> {
@@ -31,6 +31,18 @@ function invokeWithTimeout(channel: string, ...args: any[]): Promise<any> {
 }
 
 contextBridge.exposeInMainWorld('api', {
+  // ═══ App windows and shared state ════════════════════════════════════════════
+  windowRole: new URLSearchParams(location.search).get('window') === 'ide' ? 'ide' as const : 'main' as const,
+  openIdeWindow: () => invokeWithTimeout('window:openIde') as Promise<{ opened: boolean; created: boolean }>,
+  focusMainWindow: () => invokeWithTimeout('window:focusMain') as Promise<{ success: boolean; error?: string }>,
+  getSharedState: () => invokeWithTimeout('shared-state:get') as Promise<SharedAppState | null>,
+  publishSharedState: (state: SharedAppState) => { ipcRenderer.send('shared-state:publish', state) },
+  onSharedState: (cb: (state: SharedAppState) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: SharedAppState) => cb(state)
+    ipcRenderer.on('shared-state:changed', listener)
+    return () => { ipcRenderer.removeListener('shared-state:changed', listener) }
+  },
+
   // ═══ File System ══════════════════════════════════════════════════════════════
   // Browse, read, write, create, delete files and directories
   // File System
@@ -262,6 +274,12 @@ export type AiChatResult =
   | { error: string; kind?: 'auth' | 'retry-model' | 'other' | 'cancelled'; status?: number; models?: string[] }
 
 export type ElectronAPI = {
+  windowRole: 'main' | 'ide'
+  openIdeWindow: () => Promise<{ opened: boolean; created: boolean }>
+  focusMainWindow: () => Promise<{ success: boolean; error?: string }>
+  getSharedState: () => Promise<SharedAppState | null>
+  publishSharedState: (state: SharedAppState) => void
+  onSharedState: (cb: (state: SharedAppState) => void) => () => void
   openDirectory: () => Promise<string | null>
   readDirectory: (dirPath: string) => Promise<FileEntry[] | { error: string }>
   readFile: (filePath: string) => Promise<{ content: string; path: string } | { error: string }>

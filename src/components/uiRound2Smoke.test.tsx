@@ -19,8 +19,11 @@ const settings: Settings = {
 
 describe('Round 2 UI smoke', () => {
   it('opens the single application menu and runs real actions', () => {
-    const actions = { newChat: vi.fn(), openFolder: vi.fn(), palette: vi.fn(), sidebar: vi.fn(), terminal: vi.fn(), settings: vi.fn(), help: vi.fn() }
-    render(<AppMenuBar onNewChat={actions.newChat} onOpenFolder={actions.openFolder} onCommandPalette={actions.palette} onToggleSidebar={actions.sidebar} onToggleTerminal={actions.terminal} onSettings={actions.settings} onHelp={actions.help} />)
+    const actions = { newChat: vi.fn(), openFolder: vi.fn(), openIde: vi.fn(), palette: vi.fn(), sidebar: vi.fn(), terminal: vi.fn(), settings: vi.fn(), help: vi.fn() }
+    render(<AppMenuBar onNewChat={actions.newChat} onOpenFolder={actions.openFolder} onCommandPalette={actions.palette} onToggleSidebar={actions.sidebar} onToggleTerminal={actions.terminal} onSettings={actions.settings} onHelp={actions.help} onOpenIde={actions.openIde} />)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'View' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Open IDE window' }))
+    expect(actions.openIde).toHaveBeenCalledOnce()
     fireEvent.click(screen.getByRole('menuitem', { name: 'View' }))
     fireEvent.click(screen.getByRole('menuitem', { name: 'Toggle terminal' }))
     expect(actions.terminal).toHaveBeenCalledOnce()

@@ -147,6 +147,26 @@ export interface ChatSession {
   resume?: SessionResumeState
 }
 
+/** State shared between the primary Agent window and the optional IDE window. */
+export interface SharedAppState {
+  version: 1
+  workspacePath: string
+  files: FileEntry[]
+  selectedFile: string | null
+  openFiles: string[]
+  fileContent: string
+  fileDirty: boolean
+  gitStatus: GitStatus | null
+  gitLog: GitLogEntry[]
+  settings: Settings
+  messages: ChatMessage[]
+  currentSessionId: string | null
+  planMode: boolean
+  terminalTabs: TerminalTab[]
+  activeTerminalTab: string | null
+  terminalEntries: TerminalEntry[]
+}
+
 export interface CheckpointSummary {
   id: string
   sessionId: string

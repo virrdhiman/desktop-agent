@@ -9,6 +9,7 @@ type AppMenuBarProps = {
   onToggleTerminal: () => void
   onSettings: () => void
   onHelp: () => void
+  onOpenIde: () => void
 }
 
 export default function AppMenuBar(props: AppMenuBarProps) {
@@ -17,7 +18,7 @@ export default function AppMenuBar(props: AppMenuBarProps) {
   const menus: Record<string, MenuAction[]> = {
     File: [{ label: 'New chat', action: props.onNewChat }, { label: 'Open folder…', action: props.onOpenFolder }],
     Edit: [{ label: 'Command palette', action: props.onCommandPalette }, { label: 'Keyboard shortcuts', action: props.onHelp }],
-    View: [{ label: 'Toggle sidebar', action: props.onToggleSidebar }, { label: 'Toggle terminal', action: props.onToggleTerminal }],
+    View: [{ label: 'Open IDE window', action: props.onOpenIde }, { label: 'Toggle sidebar', action: props.onToggleSidebar }, { label: 'Toggle terminal', action: props.onToggleTerminal }],
     Help: [{ label: 'Documentation & diagnostics', action: props.onHelp }, { label: 'Settings', action: props.onSettings }],
   }
 

@@ -52,9 +52,9 @@ function CodeMenuBar({ menus }: { menus: Record<string, CodeMenuItem[]> }) {
   </nav>
 }
 
-function ExplorerTree({ files, selectedFile, onOpen, onRename, onDelete }: { files: FileEntry[]; selectedFile: string | null; onOpen: (file: FileEntry) => void; onRename: () => void; onDelete: () => void }) {
+function ExplorerTree({ files, selectedFile, onOpen, onRename, onDelete, onOpenFolder }: { files: FileEntry[]; selectedFile: string | null; onOpen: (file: FileEntry) => void; onRename: () => void; onDelete: () => void; onOpenFolder: () => void }) {
   return <div className="vd-code-explorer-tree" role="tree" aria-label="Code explorer files">
-    {files.length === 0 ? <div className="vd-code-empty">Open a folder to browse files.</div> : files.slice(0, 200).map((file) => <button key={file.path} role="treeitem" className={selectedFile === file.path ? 'active' : ''} title={file.path} onClick={() => onOpen(file)}>
+    {files.length === 0 ? <div className="vd-code-empty">Open a folder to browse files.<button className="btn btn-sm" onClick={onOpenFolder}>Open Folder</button></div> : files.slice(0, 200).map((file) => <button key={file.path} role="treeitem" className={selectedFile === file.path ? 'active' : ''} title={file.path} onClick={() => onOpen(file)}>
       <span>{file.isDirectory ? '▸' : '·'}</span><span>{file.name}</span>
     </button>)}
     {selectedFile && <div className="vd-code-file-actions"><button onClick={onRename}>Rename</button><button onClick={onDelete}>Delete</button></div>}
@@ -197,7 +197,7 @@ export default function CodeWorkspace({ layout, onLayout, onOpenFolder, onSettin
         </div>
         {leftTab === 'explorer' && <>
           <div className="vd-code-actions"><button onClick={() => { void createEntry(false) }} title="New file">＋ File</button><button onClick={() => { void createEntry(true) }} title="New folder">＋ Folder</button><button onClick={() => { void refreshFiles() }} title="Refresh files">↻</button></div>
-          <ExplorerTree files={files} selectedFile={selectedFile} onOpen={openFile} onRename={() => { void renameSelected() }} onDelete={() => { void deleteSelected() }} />
+          <ExplorerTree files={files} selectedFile={selectedFile} onOpen={openFile} onRename={() => { void renameSelected() }} onDelete={() => { void deleteSelected() }} onOpenFolder={() => { void onOpenFolder() }} />
           {selectedFile && <div className="vd-code-outline"><button className="vd-code-section" onClick={() => setOutlineOpen((value) => !value)}>{outlineOpen ? '⌄' : '›'} Outline</button>{outlineOpen && (outlineItems.length ? outlineItems.map((item) => <button key={`${item.name}-${item.line}`} onClick={() => { setStatus(`Outline: ${item.name} at line ${item.line}`) }}>ƒ {item.name} <small>:{item.line}</small></button>) : <div className="vd-code-empty">No symbols detected.</div>)}</div>}
           <div className="vd-code-timeline"><button className="vd-code-section" onClick={() => setTimelineOpen((value) => !value)}>{timelineOpen ? '⌄' : '›'} Timeline</button>{timelineOpen && (gitLog.length ? gitLog.slice(0, 8).map((entry) => <div key={entry.hash} title={entry.message}><strong>{entry.hash.slice(0, 7)}</strong> {entry.message}</div>) : <div className="vd-code-empty">No git history available.</div>)}</div>
         </>}

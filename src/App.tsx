@@ -28,13 +28,66 @@ import SurfaceSwitch from './components/SurfaceSwitch'
 import AppMenuBar from './components/AppMenuBar'
 import CodeWorkspace from './components/CodeWorkspace'
 import { mergeLayoutPreferences, normalizeLayoutPreferences, type LayoutPreferences } from './lib/layoutPersistence'
-import type { Panel } from './types'
+import type { Panel, SharedAppState } from './types'
+
+type StoreSnapshot = ReturnType<typeof useStore.getState>
+
+function buildSharedState(state: StoreSnapshot): SharedAppState {
+  return {
+    version: 1,
+    workspacePath: state.workspacePath,
+    files: state.files.length > 0 ? state.files : state.allFiles,
+    selectedFile: state.selectedFile,
+    openFiles: state.openFiles,
+    fileContent: state.fileContent,
+    fileDirty: state.fileDirty,
+    gitStatus: state.gitStatus,
+    gitLog: state.gitLog,
+    settings: {
+      ...state.settings,
+      providers: state.settings.providers.map((provider) => ({ ...provider, apiKey: '' })),
+    },
+    messages: state.messages,
+    currentSessionId: state.currentSessionId,
+    planMode: state.planMode,
+    terminalTabs: state.terminalTabs,
+    activeTerminalTab: state.activeTerminalTab,
+    terminalEntries: state.terminalEntries,
+  }
+}
+
+function applySharedState(snapshot: SharedAppState): void {
+  const current = useStore.getState()
+  const providers = snapshot.settings.providers.map((provider) => ({
+    ...provider,
+    apiKey: provider.apiKey || current.settings.providers.find((item) => item.id === provider.id)?.apiKey || '',
+  }))
+  useStore.setState({
+    workspacePath: snapshot.workspacePath,
+    currentDirectory: snapshot.workspacePath,
+    files: snapshot.files,
+    allFiles: snapshot.files,
+    selectedFile: snapshot.selectedFile,
+    openFiles: snapshot.openFiles,
+    fileContent: snapshot.fileContent,
+    fileDirty: snapshot.fileDirty,
+    gitStatus: snapshot.gitStatus,
+    gitLog: snapshot.gitLog,
+    settings: { ...snapshot.settings, providers },
+    messages: snapshot.messages,
+    currentSessionId: snapshot.currentSessionId,
+    planMode: snapshot.planMode,
+    terminalTabs: snapshot.terminalTabs,
+    activeTerminalTab: snapshot.activeTerminalTab,
+    terminalEntries: snapshot.terminalEntries,
+  })
+}
 
 export default function App() {
   const {
     setSettings, settings, workspacePath, setWorkspacePath, setProjectMemory,
     selectedFile, showTerminal, activePanel,
-    setIsRepo, setGitStatus, setAllFiles, setRepoIndexStatus, setActivePanel, toggleCommandPalette,
+    setIsRepo, setGitStatus, setFiles, setAllFiles, setRepoIndexStatus, setActivePanel, toggleCommandPalette,
     showCommandPalette, setShowCommandPalette,
   } = useStore()
   const resizeCleanup = useRef<(() => void) | null>(null)
@@ -42,7 +95,11 @@ export default function App() {
   const sidebarCollapsed = layout.sidebarCollapsed
   const historyCollapsed = layout.historyCollapsed
   const launcherCollapsed = layout.launcherCollapsed
-  const codeMode = layout.surface === 'code'
+  const isIdeWindow = window.api.windowRole === 'ide'
+  const codeMode = isIdeWindow
+  const syncApplying = useRef(false)
+  const syncTimer = useRef<number | null>(null)
+  const lastPublishedState = useRef('')
 
   const persistTerminalToggle = () => {
     const current = useStore.getState()
@@ -76,14 +133,17 @@ export default function App() {
           setIsRepo(isRepo)
           if (isRepo) window.api.gitStatus(activeWorkspace).then((status) => { if (!('error' in status)) setGitStatus(status as any) })
         })
-        window.api.walkDirectory(activeWorkspace).then((files) => setAllFiles(files))
+        window.api.walkDirectory(activeWorkspace).then((files) => { setFiles(files); setAllFiles(files) })
         if (loadedSettings.indexingEnabled === true) void window.api.toolExecute({ name: 'repo_index', args: {}, workspace: activeWorkspace }).catch(() => {})
       } catch (err: any) {
         console.warn(`Failed to initialize VD Agent: ${err?.message || err}`)
       }
     }
     void initialize()
-    const flush = () => { void useStore.getState().flushSessionSave() }
+    const flush = () => {
+      void useStore.getState().flushSessionSave()
+      window.api.publishSharedState(buildSharedState(useStore.getState()))
+    }
     const checkpointCleanup = window.api.onCheckpointCreated((checkpoint) => useStore.getState().setLatestCheckpoint(checkpoint))
     const indexStatusCleanup = window.api.onRepoIndexStatus((status) => setRepoIndexStatus(status))
     const autosaveInterval = window.setInterval(flush, 5_000)
@@ -100,6 +160,44 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+    const publish = () => {
+      syncTimer.current = null
+      if (syncApplying.current) return
+      const snapshot = buildSharedState(useStore.getState())
+      const serialized = JSON.stringify(snapshot)
+      if (serialized === lastPublishedState.current) return
+      lastPublishedState.current = serialized
+      window.api.publishSharedState(snapshot)
+    }
+    const schedulePublish = () => {
+      if (syncApplying.current || syncTimer.current !== null) return
+      syncTimer.current = window.setTimeout(publish, 40)
+    }
+    const unsubscribe = useStore.subscribe(schedulePublish)
+    const cleanup = window.api.onSharedState((snapshot) => {
+      syncApplying.current = true
+      applySharedState(snapshot)
+      lastPublishedState.current = JSON.stringify(buildSharedState(useStore.getState()))
+      syncApplying.current = false
+    })
+    void window.api.getSharedState().then((snapshot) => {
+      if (snapshot) {
+        syncApplying.current = true
+        applySharedState(snapshot)
+        lastPublishedState.current = JSON.stringify(buildSharedState(useStore.getState()))
+        syncApplying.current = false
+      } else {
+        schedulePublish()
+      }
+    }).catch(() => schedulePublish())
+    return () => {
+      unsubscribe()
+      cleanup()
+      if (syncTimer.current !== null) window.clearTimeout(syncTimer.current)
+    }
+  }, [])
+
+  useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key === 'p' && !event.shiftKey) { event.preventDefault(); toggleCommandPalette() }
       if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key === 'P') { event.preventDefault(); toggleCommandPalette() }
@@ -109,6 +207,7 @@ export default function App() {
       if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key === 'A') { event.preventDefault(); setActivePanel('chat') }
       if ((event.metaKey || event.ctrlKey) && event.key === 'n') { event.preventDefault(); void useStore.getState().newChat() }
       if ((event.metaKey || event.ctrlKey) && event.key === ',') { event.preventDefault(); setActivePanel('settings') }
+      if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === 'e') { event.preventDefault(); void window.api.openIdeWindow() }
       if (event.key === 'Escape' && showCommandPalette) setShowCommandPalette(false)
     }
     window.addEventListener('keydown', handler)
@@ -166,7 +265,7 @@ export default function App() {
     if (!directory) return
     setWorkspacePath(directory)
     const files = await window.api.walkDirectory(directory)
-    if (Array.isArray(files)) setAllFiles(files)
+    if (Array.isArray(files)) { setFiles(files); setAllFiles(files) }
     setActivePanel('chat')
   }
 
@@ -189,6 +288,7 @@ export default function App() {
             onToggleTerminal={persistTerminalToggle}
             onSettings={() => setActivePanel('settings')}
             onHelp={() => setActivePanel('help')}
+            onOpenIde={() => { void window.api.openIdeWindow() }}
           />}
           {!codeMode && <div className="vd-top-tabs" role="tablist" aria-label="Open work surfaces">
             <button className={activePanel === 'chat' ? 'active' : ''} role="tab" aria-selected={activePanel === 'chat'} onClick={() => setActivePanel('chat')}>Agent output</button>

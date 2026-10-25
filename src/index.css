@@ -456,6 +456,7 @@ kbd {
 .vd-code-explorer-tree > button { display: flex; align-items: center; gap: 5px; width: 100%; padding: 5px 6px; border: 0; border-radius: 4px; background: transparent; color: var(--text-secondary); cursor: pointer; text-align: left; font-size: 11px; }
 .vd-code-explorer-tree > button:hover, .vd-code-explorer-tree > button.active { background: var(--bg-tertiary); color: var(--text-primary); }
 .vd-code-empty { padding: 12px 8px; color: var(--text-muted); font-size: 10px; line-height: 1.5; }
+.vd-code-empty .btn { display: block; margin-top: 8px; }
 .vd-code-outline, .vd-code-timeline { flex: 0 0 auto; max-height: 180px; overflow: auto; border-top: 1px solid var(--border); }
 .vd-code-section { display: block; width: 100%; padding: 6px 8px; border: 0; background: var(--bg-tertiary); color: var(--text-secondary); cursor: pointer; text-align: left; font-size: 10px; }
 .vd-code-outline > button:not(.vd-code-section) { display: block; width: 100%; padding: 4px 10px; border: 0; background: transparent; color: var(--text-muted); cursor: pointer; text-align: left; font: 10px monospace; }

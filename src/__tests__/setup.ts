@@ -11,6 +11,12 @@ import { getSetupCatalog } from '../lib/prerequisiteSetup'
 // Mock window.api for all DOM tests (node-environment tests have no window)
 if (typeof window !== 'undefined') Object.defineProperty(window, 'api', {
   value: {
+    windowRole: 'main',
+    openIdeWindow: vi.fn().mockResolvedValue({ opened: true, created: true }),
+    focusMainWindow: vi.fn().mockResolvedValue({ success: true }),
+    getSharedState: vi.fn().mockResolvedValue(null),
+    publishSharedState: vi.fn(),
+    onSharedState: vi.fn(() => () => {}),
     openDirectory: vi.fn(),
     readDirectory: vi.fn(),
     readFile: vi.fn(),
