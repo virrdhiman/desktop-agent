@@ -36,4 +36,28 @@ describe('CodeWorkspace', () => {
     await waitFor(() => expect(screen.getByText('Ln 7, Col 12')).toBeInTheDocument())
     await waitFor(() => expect(window.api.gitLog).not.toHaveBeenCalledWith('', expect.anything()))
   })
+
+  it('keeps workspace files, source control, terminal and mode status available', async () => {
+    const layout = mergeLayoutPreferences(useStore.getState().settings.layout, { surface: 'code', workingMode: 'debug' })
+    useStore.setState({
+      workspacePath: 'C:/workspace',
+      files: [{ name: 'main.ts', path: 'C:/workspace/main.ts', isDirectory: false }],
+      selectedFile: 'C:/workspace/main.ts',
+      openFiles: ['C:/workspace/main.ts'],
+      fileContent: 'function main() {}',
+      gitStatus: { branch: 'feature/ui', tracking: 'origin/feature/ui', ahead: 0, behind: 0, staged: [], modified: ['main.ts'], not_added: [], deleted: [], renamed: [], isClean: false },
+      settings: { ...useStore.getState().settings, layout },
+    })
+    vi.mocked(window.api.gitLog).mockResolvedValue([{ hash: '123456789', date: 'today', message: 'Initial commit', author: 'VD' }])
+    render(<CodeWorkspace layout={layout} onLayout={vi.fn()} onOpenFolder={vi.fn().mockResolvedValue(undefined)} onSettings={vi.fn()} onHelp={vi.fn()} onCommandPalette={vi.fn()} />)
+    expect(screen.getByRole('treeitem', { name: /main\.ts/ })).toBeInTheDocument()
+    expect(screen.getByText(/⑂ feature\/ui/)).toBeInTheDocument()
+    expect(screen.getByText('debug')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Collapse' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: 'Source Control' }))
+    expect(screen.getByText('Source Control', { selector: 'div' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: 'Search' }))
+    expect(screen.getByLabelText('Search in files')).toBeInTheDocument()
+    await waitFor(() => expect(window.api.gitLog).toHaveBeenCalledWith('C:/workspace', 30))
+  })
 })
