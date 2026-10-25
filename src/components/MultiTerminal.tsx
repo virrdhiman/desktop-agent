@@ -79,7 +79,9 @@ export default function MultiTerminal() {
     term.open(container)
 
     const termId = `term-${tabId}`
-    const cwd = workspacePath || process.env.HOME || '.'
+    // Renderer code cannot rely on Node globals. The main process resolves the
+    // relative fallback using its own platform-specific working directory.
+    const cwd = workspacePath || '.'
 
     window.api.terminalCreate(termId, cwd)
 
