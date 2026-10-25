@@ -24,6 +24,7 @@ interface TermInstance {
   terminal: Terminal
   fitAddon: FitAddon
   termId: string
+  disposed: boolean
   cleanup: () => void
 }
 
@@ -40,7 +41,9 @@ export default function MultiTerminal() {
   const fitTerminal = useCallback((instance: TermInstance, container?: HTMLElement | null) => {
     const target = container || instance.terminal.element?.parentElement
     const element = instance.terminal.element
-    if (!element || !element.isConnected || !target || !target.isConnected || target.clientWidth <= 0 || target.clientHeight <= 0) return false
+    if (instance.disposed || !element || !element.isConnected || !target || !target.isConnected || target.clientWidth <= 0 || target.clientHeight <= 0) return false
+    const style = window.getComputedStyle(target)
+    if (style.display === 'none' || style.visibility === 'hidden') return false
     if (instance.terminal.cols <= 0 || instance.terminal.rows <= 0) return false
     try {
       instance.fitAddon.fit()
@@ -107,13 +110,15 @@ export default function MultiTerminal() {
     term.writeln('\x1b[36m╚═══════════════════════════════════════╝\x1b[0m')
     term.writeln('')
 
+    const instance: TermInstance = { terminal: term, fitAddon, termId, disposed: false, cleanup: () => {} }
     const cleanup = () => {
+      instance.disposed = true
       disposed = true
       window.api.terminalKill(termId)
       term.dispose()
     }
 
-    const instance: TermInstance = { terminal: term, fitAddon, termId, cleanup }
+    instance.cleanup = cleanup
     instancesRef.current.set(tabId, instance)
     const fitWhenVisible = () => {
       let attempts = 0

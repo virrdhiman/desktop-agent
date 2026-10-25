@@ -28,12 +28,11 @@ export default function LeftRail({ activePanel, collapsed, onToggle, onHome, onS
             title={item.label}
             onClick={item.onClick}
           >
-            <span aria-hidden="true">{item.icon}</span>
+            <span aria-hidden="true">{item.icon}</span><span className="vd-rail-label">{item.label}</span>
           </button>
         ))}
       </div>
       <div className="vd-rail-spacer" />
-      <div className="vd-rail-status" title="Workspace status" aria-label="Workspace status">●</div>
     </nav>
   )
 }

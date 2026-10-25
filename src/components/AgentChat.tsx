@@ -280,12 +280,32 @@ function MarkdownContent({ content }: { content: string }) {
         if (block.type === 'hr') {
           return <hr key={i} style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '12px 0' }} />
         }
+        if (block.type === 'paragraph' && looksLikeCode(block.content)) {
+          return <CodeBlock key={i} content={block.content} language="code" index={i} />
+        }
         return (
           <p key={i} style={{ margin: '4px 0', fontSize: 13 }}>
             <InlineMarkdown text={block.content} />
           </p>
         )
       })}
+    </div>
+  )
+}
+
+function looksLikeCode(text: string): boolean {
+  const lines = text.split('\n').filter((line) => line.trim())
+  if (lines.length < 2) return false
+  const signals = lines.filter((line) => /^(\s{2,}|import\s|export\s|const\s|let\s|var\s|function\s|class\s|<[/!]?[A-Za-z]|[.#][\w-]+\s*\{|[\w-]+\s*:\s*[^ ]+;)/.test(line) || /[{};]\s*$/.test(line))
+  return signals.length >= Math.max(2, Math.ceil(lines.length * 0.5))
+}
+
+function CodeBlock({ content, language, index }: { content: string; language: string; index: number }) {
+  return (
+    <div className="vd-message-code-block">
+      <div className="vd-message-code-header"><span>{language}</span><button onClick={() => { void navigator.clipboard.writeText(content) }}>📋 Copy</button></div>
+      <pre><code dangerouslySetInnerHTML={{ __html: highlightSyntax(content, language) }} /></pre>
+      <span className="sr-only" id={`code-description-${index}`}>Scrollable code block</span>
     </div>
   )
 }
