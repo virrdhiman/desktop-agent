@@ -69,6 +69,7 @@ contextBridge.exposeInMainWorld('api', {
   gitPull: (repoPath: string) => invokeWithTimeout('git:pull', repoPath),
   gitInit: (repoPath: string) => invokeWithTimeout('git:init', repoPath),
   gitLog: (repoPath: string, count?: number) => invokeWithTimeout('git:log', repoPath, count),
+  gitFileLog: (repoPath: string, filePath: string, count?: number) => invokeWithTimeout('git:fileLog', repoPath, filePath, count),
   gitIsRepo: (dirPath: string) => invokeWithTimeout('git:isRepo', dirPath),
   gitBranches: (repoPath: string) => invokeWithTimeout('git:branches', repoPath),
   gitCreateBranch: (repoPath: string, branchName: string) => invokeWithTimeout('git:createBranch', repoPath, branchName),
@@ -169,6 +170,8 @@ contextBridge.exposeInMainWorld('api', {
 
   // Local project memory and file recovery checkpoints
   projectMemoryLoad: (workspace: string, force = false) => invokeWithTimeout('projectMemory:load', workspace, force),
+  projectNotesLoad: (workspace: string) => invokeWithTimeout('projectNotes:load', workspace),
+  projectNotesSave: (workspace: string, content: string) => invokeWithTimeout('projectNotes:save', workspace, content),
   listCheckpoints: (sessionId: string) => invokeWithTimeout('checkpoints:list', sessionId),
   restoreCheckpoint: (sessionId: string, checkpointId: string) => invokeWithTimeout('checkpoints:restore', sessionId, checkpointId),
 
@@ -215,7 +218,7 @@ export type PrerequisiteProgress = {
 export type PrerequisiteDownloadResult =
   | { success: true; path: string; sha256: string; bytes: number }
   | { success: false; cancelled?: boolean; error: string }
-export type ConversationInput = { id: string; title?: string; createdAt?: number; messages: ConversationMessage[]; pinned?: boolean; summary?: string; resume?: Record<string, unknown> }
+export type ConversationInput = { id: string; title?: string; createdAt?: number; messages: ConversationMessage[]; earlierMessages?: ConversationMessage[]; pinnedSummary?: string; parentSessionId?: string; forkedFromMessageId?: string; pinned?: boolean; summary?: string; resume?: Record<string, unknown> }
 export type ConversationRecord = ConversationInput & { version: number; title: string; createdAt: number; updatedAt: number }
 export type LspLocation = { path: string; line: number; column: number; preview: string }
 export type LspDiagnostic = LspLocation & { message: string; severity: 'error' | 'warning' | 'info' }
@@ -300,6 +303,7 @@ export type ElectronAPI = {
   gitPull: (repoPath: string) => Promise<{ success: boolean; summary?: string } | { error: string }>
   gitInit: (repoPath: string) => Promise<{ success: boolean } | { error: string }>
   gitLog: (repoPath: string, count?: number) => Promise<GitLogEntry[] | { error: string }>
+  gitFileLog: (repoPath: string, filePath: string, count?: number) => Promise<GitLogEntry[] | { error: string }>
   gitIsRepo: (dirPath: string) => Promise<boolean>
   gitBranches: (repoPath: string) => Promise<{ current: string; branches: string[] } | { error: string }>
   gitCreateBranch: (repoPath: string, branchName: string) => Promise<{ success: boolean } | { error: string }>
@@ -352,6 +356,8 @@ export type ElectronAPI = {
   lspReferences: (root: string, file: string, line: number, column: number) => Promise<LspLocation[] | { error: string }>
   lspRename: (root: string, file: string, line: number, column: number, newName: string) => Promise<LspRenameResult | { error: string }>
   projectMemoryLoad: (workspace: string, force?: boolean) => Promise<{ content: string; updatedAt: number; fingerprint: string } | { error: string }>
+  projectNotesLoad: (workspace: string) => Promise<{ version: 1; workspace: string; updatedAt: number; content: string } | { error: string }>
+  projectNotesSave: (workspace: string, content: string) => Promise<{ version: 1; workspace: string; updatedAt: number; content: string } | { error: string }>
   listCheckpoints: (sessionId: string) => Promise<Array<CheckpointSummary & { workspace: string }> | { error: string }>
   restoreCheckpoint: (sessionId: string, checkpointId: string) => Promise<{ success: boolean; restored: string[]; removed: string[]; skipped: string[]; workspace: string } | { error: string }>
   updateStatus: () => Promise<UpdateStatus>

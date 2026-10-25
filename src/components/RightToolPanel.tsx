@@ -15,7 +15,7 @@ type RightToolPanelProps = {
 }
 
 const tabs: Array<{ id: RightPanelTab; label: string; shortLabel: string }> = [
-  { id: 'browser', label: 'Browser', shortLabel: 'Web' },
+  { id: 'browser', label: 'Search results', shortLabel: 'Search' },
   { id: 'terminal', label: 'Terminal', shortLabel: 'Term' },
   { id: 'files', label: 'Files', shortLabel: 'Files' },
   { id: 'changes', label: 'Changes', shortLabel: 'Git' },

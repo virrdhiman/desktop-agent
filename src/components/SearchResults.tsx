@@ -31,7 +31,8 @@ export default function SearchResults() {
         {lines.length === 0 ? (
           <div className="empty-state">
             <div className="empty-state-icon">🔍</div>
-            <div className="empty-state-text">No results found</div>
+            <div className="empty-state-text">No workspace search results yet</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: 12, textAlign: 'center', maxWidth: 240 }}>This panel shows local workspace search results, not a live browser.</div>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>

@@ -146,30 +146,24 @@ export default function MultiTerminal() {
 
     // Check if instance already exists
     let instance = instancesRef.current.get(activeTerminalTab)
-    if (instance) {
-      container.appendChild(instance.terminal.element!)
-      requestAnimationFrame(() => {
-        if (instance) {
-          fitTerminal(instance, container)
-          window.api.terminalResize(instance.termId, instance.terminal.cols, instance.terminal.rows)
-        }
-      })
-      return
-    }
+    if (instance) container.appendChild(instance.terminal.element!)
+    else instance = createTerm(activeTerminalTab, container)
 
-    // Create new
-    instance = createTerm(activeTerminalTab, container)
+    const scheduleFit = () => {
+      requestAnimationFrame(() => {
+        if (instance && fitTerminal(instance, container)) window.api.terminalResize(instance.termId, instance.terminal.cols, instance.terminal.rows)
+      })
+    }
+    scheduleFit()
 
     // Resize observer
     const ro = new ResizeObserver(() => {
-      if (instance && fitTerminal(instance, container)) {
-        window.api.terminalResize(instance.termId, instance.terminal.cols, instance.terminal.rows)
-      }
+      scheduleFit()
     })
     ro.observe(container)
     const onVisibilityChange = () => {
       if (document.visibilityState !== 'hidden' && instance) {
-        if (fitTerminal(instance, container)) window.api.terminalResize(instance.termId, instance.terminal.cols, instance.terminal.rows)
+        scheduleFit()
       }
     }
     document.addEventListener('visibilitychange', onVisibilityChange)

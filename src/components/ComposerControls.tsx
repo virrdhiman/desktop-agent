@@ -69,7 +69,7 @@ export default function ComposerControls({ settings, activeProvider, availableMo
         <button className={source === 'local' ? 'active' : ''} onClick={() => changeSource('local')} title={localProviders.length ? 'Use a configured local provider' : 'No local provider is configured'}>Local</button>
         <button className={source === 'cloud' ? 'active' : ''} onClick={() => changeSource('cloud')} title={cloudProviders.length ? 'Use a configured cloud provider' : 'No cloud provider is configured'}>Cloud</button>
       </div>
-      <label className="vd-effort-control" title="Used in the model prompt to control response depth">
+      <label className="vd-effort-control" title="Prompt style only; provider parameters are unchanged">
         <span>Effort</span>
         <input type="range" min="0" max="2" step="1" value={settings.responseEffort === 'low' ? 0 : settings.responseEffort === 'high' ? 2 : 1} aria-label="Response effort" onChange={(event) => onSettings({ ...settings, responseEffort: (['low', 'medium', 'high'] as const)[Number(event.target.value)] })} />
         <span>{settings.responseEffort || 'medium'}</span>

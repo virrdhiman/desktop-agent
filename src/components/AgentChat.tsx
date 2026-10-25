@@ -27,6 +27,7 @@ import WorkingModeSelector from './WorkingModeSelector'
 import ComposerAddMenu from './ComposerAddMenu'
 import ComposerControls from './ComposerControls'
 import { buildConversationSummary, useStore } from '../store'
+import { contextLevel, contextWindowForModel, estimateTokens } from '../lib/chatControl'
 import type { AgentTaskKind, ChatMessage, AgentStep, ProviderConfig } from '../types'
 import {
   applyDiscoveredModel, buildProviderChain, classifyAgentTask, providerIsConfigured, providerPrefersFreeModels, recordProviderOutcome, refreshProviderModelCatalog,
@@ -446,6 +447,8 @@ export default function AgentChat() {
     projectMemory, latestCheckpoint, lastVerification,
     toolExecutions, tasks,
     openFiles, fileEditHistory,
+    earlierMessages, pinnedSummary, parentSessionId, projectNotes, sessions,
+    summarizeAndContinue, forkChat, forkFromMessage, setProjectNotes, loadSession,
   } = useStore()
 
   const [input, setInput] = useState('')
@@ -478,6 +481,14 @@ export default function AgentChat() {
   const { allFiles, newChat, currentSessionId, setActivePanel,
     planMode, setPlanMode, settings: appSettings, setSettings: setAppSettings, setCancelRequested } = useStore()
   const activeProvider = settings.providers.find((p) => p.id === settings.activeProvider)
+  const selectedModel = modelOverride || activeProvider?.model
+  const contextTokens = estimateTokens([...messages, ...(input ? [{ content: input }] : [])])
+  const contextWindow = contextWindowForModel(selectedModel)
+  const contextState = contextLevel(contextTokens, contextWindow)
+  const [contextDismissed, setContextDismissed] = useState(false)
+  const [showProjectNotes, setShowProjectNotes] = useState(false)
+  const [notesDraft, setNotesDraft] = useState(projectNotes)
+  useEffect(() => setNotesDraft(projectNotes), [projectNotes])
 
   const syncQueryQueue = useCallback((updater: (jobs: QueuedQuery[]) => QueuedQuery[]) => {
     const next = updater(queryQueueRef.current)
@@ -785,7 +796,8 @@ export default function AgentChat() {
       workspaceFiles: allFiles,
       recentEdits: fileEditHistory,
       projectMemory,
-      conversationSummary: buildConversationSummary(historyMessages),
+      pinnedNotes: projectNotes,
+      conversationSummary: [buildConversationSummary(historyMessages), pinnedSummary].filter(Boolean).join('\n\n'),
       resumeNote: [
         latestCheckpoint ? `Latest recovery checkpoint: ${latestCheckpoint.label} (${latestCheckpoint.files.join(', ')})` : '',
         lastVerification ? `Last verification: ${lastVerification.ok ? 'passed' : 'failed'} ${lastVerification.command}\n${lastVerification.summary}` : '',
@@ -798,6 +810,7 @@ export default function AgentChat() {
       context: workspaceContext,
       customRules: appSettings.customRules,
       responseEffort: appSettings.responseEffort || 'medium',
+      strictGrounding: appSettings.strictGrounding === true,
     })
     const teamBudget = appSettings.teamTokenBudget || 'balanced'
     const teamProfile = resolveTeamProfile(appSettings.teamPreset, appSettings.teamProfile)
@@ -1067,7 +1080,7 @@ export default function AgentChat() {
       if (!outcome) return
       addTokens(0, Math.ceil(outcome.content.length / 4))
     }
-  }, [workspacePath, selectedFile, fileContent, openFiles, allFiles, fileEditHistory, projectMemory, latestCheckpoint, lastVerification, tasks, toolExecutions, planMode, appSettings.customRules, appSettings.teamTokenBudget, appSettings.teamPreset, appSettings.teamProfile, appSettings.teamMode, appSettings.dynamicTeam, setCancelRequested, setStreamingContent, addTask, updateTask, addStepToTask, callWithFallback, addTokens, addMessage, processToolCalls, updateQueuedQuery])
+  }, [workspacePath, selectedFile, fileContent, openFiles, allFiles, fileEditHistory, projectMemory, projectNotes, pinnedSummary, latestCheckpoint, lastVerification, tasks, toolExecutions, planMode, appSettings.customRules, appSettings.strictGrounding, appSettings.teamTokenBudget, appSettings.teamPreset, appSettings.teamProfile, appSettings.teamMode, appSettings.dynamicTeam, setCancelRequested, setStreamingContent, addTask, updateTask, addStepToTask, callWithFallback, addTokens, addMessage, processToolCalls, updateQueuedQuery])
 
   const pumpQueryQueue = useCallback(() => {
     if (pumpingQueueRef.current) return
@@ -1281,6 +1294,19 @@ export default function AgentChat() {
           <button aria-label="Clear workspace goal" title="Clear goal" onClick={() => { const next = { ...appSettings, goal: '' }; setAppSettings(next); void window.api.saveSettings(next) }}>×</button>
         </div>
       )}
+      {parentSessionId && (
+        <div className="vd-fork-breadcrumb" role="status">
+          Forked from <button onClick={() => void loadSession(parentSessionId)}>{sessions.find((session) => session.id === parentSessionId)?.title || parentSessionId}</button>
+        </div>
+      )}
+      {contextState !== 'normal' && !contextDismissed && (
+        <div className={`vd-context-warning ${contextState}`} role="alert">
+          <span>Context is getting full ({contextWindow ? `${Math.round((contextTokens / contextWindow) * 100)}%` : 'estimate'}).</span>
+          <button onClick={() => void summarizeAndContinue()}>Summarize &amp; continue</button>
+          <button onClick={() => void forkChat()}>Fork chat</button>
+          <button aria-label="Dismiss context warning" onClick={() => setContextDismissed(true)}>Dismiss</button>
+        </div>
+      )}
       <div className="panel-header vd-chat-header">
         <h2>🤖 Agent</h2>
         <div className="vd-chat-header-actions">
@@ -1293,8 +1319,16 @@ export default function AgentChat() {
             a.href = url; a.download = `chat-${new Date().toISOString().slice(0,10)}.md`; a.click(); URL.revokeObjectURL(url)
           }}>📤</button>
           <button className="vd-icon-button" aria-label="Start a new chat" title="Start a new chat" onClick={() => { void newChat() }}>＋</button>
+          <button className="vd-icon-button" aria-label="Edit pinned project notes" title="Edit pinned project notes" onClick={() => setShowProjectNotes((open) => !open)}>📌</button>
         </div>
       </div>
+      {showProjectNotes && (
+        <div className="vd-pinned-notes-editor">
+          <label htmlFor="vd-pinned-notes">Pinned project notes</label>
+          <textarea id="vd-pinned-notes" value={notesDraft} onChange={(event) => setNotesDraft(event.target.value.slice(0, 12_000))} rows={4} placeholder="User-maintained constraints or decisions for this project" />
+          <div><button className="btn btn-sm btn-primary" onClick={async () => { setProjectNotes(notesDraft); if (workspacePath) await window.api.projectNotesSave(workspacePath, notesDraft); setShowProjectNotes(false) }}>Save notes</button></div>
+        </div>
+      )}
 
       {/* Drag overlay */}
       {dragOver && (
@@ -1312,6 +1346,12 @@ export default function AgentChat() {
 
       {/* Messages */}
       <div ref={messagesScrollRef} style={{ flex: 1, overflowY: 'auto', padding: '16px 16px' }}>
+        {earlierMessages.length > 0 && (
+          <details className="vd-earlier-messages">
+            <summary>Earlier messages ({earlierMessages.length})</summary>
+            {earlierMessages.map((message) => <div key={message.id}><strong>{message.role}:</strong> {message.content}</div>)}
+          </details>
+        )}
         {messages.length === 0 ? (
           <div className="empty-state">
             <div style={{
@@ -1359,6 +1399,7 @@ export default function AgentChat() {
                   <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                     {new Date(msg.timestamp).toLocaleTimeString()}
                   </span>
+                  <button className="vd-message-fork" title="Create a new chat from this message" onClick={() => void forkFromMessage(msg.id)}>Fork from here</button>
                 </div>
                 <div style={{
                   padding: '10px 14px',
@@ -1593,26 +1634,9 @@ export default function AgentChat() {
             )}
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-              ~{Math.ceil(input.length / 4)} tokens · {input.length} chars{' '}
-              {messages.length > 0 && `· ${messages.length} msgs`}
+            <span className={`vd-context-meter ${contextState}`} title="Estimated from message characters; actual provider usage may differ">
+              ~{contextTokens.toLocaleString()}{contextWindow ? ` / ${contextWindow.toLocaleString()}` : ''} tokens (estimate)
             </span>
-            {/* Context window usage bar */}
-            {(() => {
-              const totalChars = messages.reduce((s, m) => s + m.content.length + (m.toolCalls?.reduce((ts, t) => ts + JSON.stringify(t).length, 0) || 0), 0)
-              const estimatedTokens = Math.ceil(totalChars / 4)
-              const maxTokens = 128000
-              const pct = Math.min(100, (estimatedTokens / maxTokens) * 100)
-              const color = pct > 80 ? '#ef4444' : pct > 50 ? '#f59e0b' : '#4ade80'
-              return (
-                <div title={`${estimatedTokens.toLocaleString()} / ${maxTokens.toLocaleString()} tokens used`} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <div style={{ width: 60, height: 4, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
-                    <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 2, transition: 'width 0.3s' }} />
-                  </div>
-                  <span style={{ fontSize: 9, color }}>{pct.toFixed(0)}%</span>
-                </div>
-              )
-            })()}
           </div>
         </div>
         <div className="vd-composer-input-row">

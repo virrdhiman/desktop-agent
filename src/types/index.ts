@@ -123,6 +123,10 @@ export interface Settings extends DataToolSettings {
   layout?: LayoutPreferences
   telemetryEnabled?: boolean
   updateChannel?: 'stable' | 'beta'
+  /** Opt-in evidence-only response rules. */
+  strictGrounding?: boolean
+  /** Versioned, per-workspace user-maintained notes. */
+  pinnedNotes?: { version: 1; projects: Record<string, string> }
 }
 
 export interface ChatMessage {
@@ -144,6 +148,10 @@ export interface ChatSession {
   pinned?: boolean
   recovered?: boolean
   summary?: string
+  earlierMessages?: ChatMessage[]
+  pinnedSummary?: string
+  parentSessionId?: string
+  forkedFromMessageId?: string
   resume?: SessionResumeState
 }
 
@@ -160,6 +168,7 @@ export interface SharedAppState {
   gitLog: GitLogEntry[]
   settings: Settings
   messages: ChatMessage[]
+  projectNotes?: string
   currentSessionId: string | null
   planMode: boolean
   terminalTabs: TerminalTab[]
@@ -205,6 +214,9 @@ export interface SessionResumeState {
   conversationSummary?: string
   checkpoint?: CheckpointSummary
   lastVerification?: VerificationSummary
+  pinnedSummary?: string
+  parentSessionId?: string
+  forkedFromMessageId?: string
   git?: { branch?: string; head?: string; dirty?: boolean }
 }
 

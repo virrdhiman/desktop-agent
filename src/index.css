@@ -511,3 +511,18 @@ kbd {
 .vd-effort-control span:last-child { min-width: 34px; color: var(--text-secondary); text-transform: capitalize; }
 @media (max-width: 1180px) { .vd-history-pane { width: 220px !important; } .vd-launcher-rail { width: 42px; flex-basis: 42px; } .vd-launcher-button { width: 34px; } .vd-right-tools { min-width: 260px; } }
 @media (max-width: 900px) { .vd-topbar { gap: 4px; padding-left: 4px; padding-right: 4px; } .top-menus { gap: 0; } .top-menus > .vd-app-menu > button { padding: 5px 4px; font-size: 10px; } .vd-top-tabs { display: none; } .surface-switch button { padding: 5px 6px; font-size: 10px; white-space: nowrap; } .vd-composer-toolbar > * { max-width: 100%; } .vd-composer-more { display: block; } .vd-composer-toolbar > .vd-composer-optional { display: none; } .vd-right-panel-tabs button { padding-left: 5px; padding-right: 5px; } }
+/* Long-chat controls remain readable in both themes and narrow panes. */
+.vd-context-warning { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:7px 12px; border-bottom:1px solid var(--border); font-size:12px; }
+.vd-context-warning.amber { background:rgba(245,158,11,.12); color:#fbbf24; }
+.vd-context-warning.red { background:rgba(239,68,68,.13); color:#fca5a5; }
+.vd-context-warning button, .vd-fork-breadcrumb button { border:0; background:transparent; color:var(--accent); cursor:pointer; font:inherit; text-decoration:underline; }
+.vd-context-meter { font-size:10px; color:var(--text-muted); }
+.vd-context-meter.amber { color:#f59e0b; }
+.vd-context-meter.red { color:#ef4444; }
+.vd-fork-breadcrumb { padding:5px 14px; font-size:11px; color:var(--text-muted); border-bottom:1px solid var(--border); }
+.vd-pinned-notes-editor { display:grid; gap:6px; padding:10px 14px; border-bottom:1px solid var(--border); background:var(--bg-secondary); font-size:12px; }
+.vd-pinned-notes-editor textarea { width:100%; resize:vertical; min-height:70px; color:var(--text-primary); background:var(--bg-primary); border:1px solid var(--border); border-radius:6px; padding:8px; font:inherit; }
+.vd-earlier-messages { margin-bottom:12px; padding:8px 10px; border:1px solid var(--border); border-radius:8px; color:var(--text-muted); font-size:11px; max-height:180px; overflow:auto; }
+.vd-earlier-messages summary { cursor:pointer; color:var(--text-secondary); font-weight:600; }
+.vd-message-fork { margin-left:auto; border:0; background:transparent; color:var(--text-muted); cursor:pointer; font-size:10px; opacity:.7; }
+.vd-message-fork:hover { color:var(--accent); opacity:1; }

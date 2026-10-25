@@ -11,6 +11,7 @@
 import { ipcMain } from 'electron'
 import { simpleGit, SimpleGit } from 'simple-git'
 import { spawn } from 'child_process'
+import path from 'path'
 
 /** Cache of SimpleGit instances per working directory */
 const gitInstances: Map<string, SimpleGit> = new Map()
@@ -153,6 +154,20 @@ export function registerGitHandlers() {
         message: entry.message,
         author: entry.author_name,
       }))
+    } catch (err: any) {
+      return { error: err.message }
+    }
+  })
+
+  ipcMain.handle('git:fileLog', async (_event, repoPath: string, filePath: string, count: number = 20) => {
+    try {
+      const root = path.resolve(repoPath)
+      const target = path.resolve(filePath)
+      const relative = path.relative(root, target)
+      if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) throw new Error('File is outside the repository')
+      const git = getGit(root)
+      const log = await git.log({ maxCount: count, file: relative })
+      return log.all.map((entry) => ({ hash: entry.hash, date: entry.date, message: entry.message, author: entry.author_name }))
     } catch (err: any) {
       return { error: err.message }
     }

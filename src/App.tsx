@@ -49,6 +49,7 @@ function buildSharedState(state: StoreSnapshot): SharedAppState {
       providers: state.settings.providers.map((provider) => ({ ...provider, apiKey: '' })),
     },
     messages: state.messages,
+    projectNotes: state.projectNotes,
     currentSessionId: state.currentSessionId,
     planMode: state.planMode,
     terminalTabs: state.terminalTabs,
@@ -76,6 +77,7 @@ function applySharedState(snapshot: SharedAppState): void {
     gitLog: snapshot.gitLog,
     settings: { ...snapshot.settings, providers },
     messages: snapshot.messages,
+    projectNotes: snapshot.projectNotes || '',
     currentSessionId: snapshot.currentSessionId,
     planMode: snapshot.planMode,
     terminalTabs: snapshot.terminalTabs,
@@ -86,7 +88,7 @@ function applySharedState(snapshot: SharedAppState): void {
 
 export default function App() {
   const {
-    setSettings, settings, workspacePath, setWorkspacePath, setProjectMemory,
+    setSettings, settings, workspacePath, setWorkspacePath, setProjectMemory, setProjectNotes,
     selectedFile, activePanel,
     setIsRepo, setGitStatus, setFiles, setAllFiles, setRepoIndexStatus, setActivePanel, toggleCommandPalette,
     showCommandPalette, setShowCommandPalette,
@@ -129,6 +131,7 @@ export default function App() {
         if (!activeWorkspace) return
         if (!restoredState.workspacePath) setWorkspacePath(activeWorkspace)
         window.api.projectMemoryLoad(activeWorkspace).then((memory) => { if (!('error' in memory)) setProjectMemory(memory.content) }).catch(() => {})
+        window.api.projectNotesLoad(activeWorkspace).then((notes) => { if (!('error' in notes)) setProjectNotes(notes.content) }).catch(() => {})
         window.api.gitIsRepo(activeWorkspace).then((isRepo) => {
           setIsRepo(isRepo)
           if (isRepo) window.api.gitStatus(activeWorkspace).then((status) => { if (!('error' in status)) setGitStatus(status as any) })
@@ -267,6 +270,8 @@ export default function App() {
     setWorkspacePath(directory)
     const files = await window.api.walkDirectory(directory)
     if (Array.isArray(files)) { setFiles(files); setAllFiles(files) }
+    const notes = await window.api.projectNotesLoad(directory)
+    if (!('error' in notes)) setProjectNotes(notes.content)
     setActivePanel('chat')
   }
 

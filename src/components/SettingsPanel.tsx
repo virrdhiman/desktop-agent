@@ -884,6 +884,18 @@ export default function SettingsPanel() {
               <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 14, fontSize: 12 }}>
                 <input
                   type="checkbox"
+                  checked={settings.strictGrounding === true}
+                  onChange={(event) => {
+                    const next = { ...settings, strictGrounding: event.target.checked }
+                    setSettings(next)
+                    void window.api.saveSettings(next)
+                  }}
+                />
+                <span><strong>Strict grounding</strong><br /><span style={{ color: 'var(--text-muted)' }}>Opt in to evidence-only claims. The agent cites files and reports commands or tests as not checked unless this chat has a tool result.</span></span>
+              </label>
+              <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 14, fontSize: 12 }}>
+                <input
+                  type="checkbox"
                   checked={settings.browserToolEnabled === true}
                   onChange={(event) => {
                     const next = { ...settings, browserToolEnabled: event.target.checked }

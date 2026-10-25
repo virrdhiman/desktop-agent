@@ -11,11 +11,45 @@ export type ProjectMemory = {
   content: string
 }
 
+export type ProjectNotes = {
+  version: 1
+  workspace: string
+  updatedAt: number
+  content: string
+}
+
 const MEMORY_FILES = ['package.json', 'README.md', 'AGENTS.md', 'CONTRIBUTING.md', 'pyproject.toml', 'Cargo.toml', 'go.mod']
 
 function memoryFile(baseDir: string, workspace: string) {
   const id = crypto.createHash('sha256').update(path.resolve(workspace)).digest('hex').slice(0, 24)
   return path.join(baseDir, `${id}.json`)
+}
+
+function notesFile(baseDir: string, workspace: string) {
+  const id = crypto.createHash('sha256').update(path.resolve(workspace)).digest('hex').slice(0, 24)
+  return path.join(baseDir, `${id}-notes.json`)
+}
+
+export async function loadProjectNotes(baseDir: string, workspace: string): Promise<ProjectNotes> {
+  const root = path.resolve(workspace)
+  try {
+    const stored = JSON.parse(await fs.promises.readFile(notesFile(baseDir, root), 'utf-8')) as Partial<ProjectNotes>
+    if (stored.version === 1 && stored.workspace === root && typeof stored.content === 'string') {
+      return { version: 1, workspace: root, updatedAt: typeof stored.updatedAt === 'number' ? stored.updatedAt : 0, content: stored.content.slice(0, 12_000) }
+    }
+  } catch {}
+  return { version: 1, workspace: root, updatedAt: 0, content: '' }
+}
+
+export async function saveProjectNotes(baseDir: string, workspace: string, content: string): Promise<ProjectNotes> {
+  const root = path.resolve(workspace)
+  const notes: ProjectNotes = { version: 1, workspace: root, updatedAt: Date.now(), content: content.slice(0, 12_000) }
+  await fs.promises.mkdir(baseDir, { recursive: true })
+  const target = notesFile(baseDir, root)
+  const tmp = `${target}.${process.pid}.${crypto.randomUUID()}.tmp`
+  await fs.promises.writeFile(tmp, JSON.stringify(notes, null, 2), 'utf-8')
+  await fs.promises.rename(tmp, target)
+  return notes
 }
 
 async function readText(file: string, max = 3000) {

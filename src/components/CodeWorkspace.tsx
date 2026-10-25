@@ -72,6 +72,7 @@ export default function CodeWorkspace({ layout, onLayout, onOpenFolder, onSettin
   const [diagnostics, setDiagnostics] = useState<Array<{ severity?: string }>>([])
   const [outlineOpen, setOutlineOpen] = useState(true)
   const [timelineOpen, setTimelineOpen] = useState(false)
+  const [fileGitLog, setFileGitLog] = useState<typeof gitLog>([])
   const [cursor, setCursor] = useState({ line: 1, column: 1 })
   const resizeCleanup = useRef<(() => void) | null>(null)
 
@@ -86,6 +87,16 @@ export default function CodeWorkspace({ layout, onLayout, onOpenFolder, onSettin
     if (!workspacePath) { setGitLog([]); return }
     void window.api.gitLog(workspacePath, 30).then((next) => { if (Array.isArray(next)) setGitLog(next) })
   }, [workspacePath, setGitLog])
+  useEffect(() => {
+    if (!workspacePath || !selectedFile) { setFileGitLog([]); return }
+    let cancelled = false
+    const loadFileLog = window.api.gitFileLog
+    if (typeof loadFileLog !== 'function') return
+    void loadFileLog(workspacePath, selectedFile, 20).then((next) => {
+      if (!cancelled && Array.isArray(next)) setFileGitLog(next)
+    }).catch(() => { if (!cancelled) setFileGitLog([]) })
+    return () => { cancelled = true }
+  }, [workspacePath, selectedFile])
   useEffect(() => {
     const onCursorPosition = (event: Event) => {
       const detail = (event as CustomEvent<{ line?: number; column?: number }>).detail
@@ -199,7 +210,7 @@ export default function CodeWorkspace({ layout, onLayout, onOpenFolder, onSettin
           <div className="vd-code-actions"><button onClick={() => { void createEntry(false) }} title="New file">＋ File</button><button onClick={() => { void createEntry(true) }} title="New folder">＋ Folder</button><button onClick={() => { void refreshFiles() }} title="Refresh files">↻</button></div>
           <ExplorerTree files={files} selectedFile={selectedFile} onOpen={openFile} onRename={() => { void renameSelected() }} onDelete={() => { void deleteSelected() }} onOpenFolder={() => { void onOpenFolder() }} />
           {selectedFile && <div className="vd-code-outline"><button className="vd-code-section" onClick={() => setOutlineOpen((value) => !value)}>{outlineOpen ? '⌄' : '›'} Outline</button>{outlineOpen && (outlineItems.length ? outlineItems.map((item) => <button key={`${item.name}-${item.line}`} onClick={() => { setStatus(`Outline: ${item.name} at line ${item.line}`) }}>ƒ {item.name} <small>:{item.line}</small></button>) : <div className="vd-code-empty">No symbols detected.</div>)}</div>}
-          <div className="vd-code-timeline"><button className="vd-code-section" onClick={() => setTimelineOpen((value) => !value)}>{timelineOpen ? '⌄' : '›'} Timeline</button>{timelineOpen && (gitLog.length ? gitLog.slice(0, 8).map((entry) => <div key={entry.hash} title={entry.message}><strong>{entry.hash.slice(0, 7)}</strong> {entry.message}</div>) : <div className="vd-code-empty">No git history available.</div>)}</div>
+          <div className="vd-code-timeline"><button className="vd-code-section" onClick={() => setTimelineOpen((value) => !value)}>{timelineOpen ? '⌄' : '›'} Timeline</button>{timelineOpen && (selectedFile ? (fileGitLog.length ? fileGitLog.slice(0, 8).map((entry) => <div key={entry.hash} title={entry.message}><strong>{entry.hash.slice(0, 7)}</strong> {entry.message}</div>) : <div className="vd-code-empty">No git history for this file.</div>) : <div className="vd-code-empty">Open a file to view its timeline.</div>)}</div>
         </>}
         {leftTab === 'search' && <div className="vd-code-search"><div className="vd-code-search-row"><input aria-label="Search in files" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void searchFiles() }} placeholder="Search in files" /><button onClick={() => { void searchFiles() }}>⌕</button></div><SearchResults /></div>}
         {leftTab === 'source-control' && <div className="vd-code-panel-scroll"><GitPanel /></div>}
