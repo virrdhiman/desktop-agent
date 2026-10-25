@@ -17,7 +17,7 @@
  * - handlers/ai.ts     — AI chat with streaming, model discovery, cancel
  * - handlers/shell.ts  — OS shell operations
  */
-import { app, BrowserWindow, dialog, session, shell } from 'electron'
+import { app, BrowserWindow, dialog, Menu, session, shell } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import { fileURLToPath } from 'url'
@@ -194,6 +194,8 @@ app.whenReady().then(() => {
   registerAiHandlers(getMainWindow)
   registerShellHandlers()
   registerPrerequisiteHandlers(getMainWindow)
+  // The renderer owns the single accessible menu bar; avoid a duplicate native menu.
+  Menu.setApplicationMenu(null)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

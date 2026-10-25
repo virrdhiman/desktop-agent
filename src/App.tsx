@@ -25,6 +25,7 @@ import CommandPalette from './components/CommandPalette'
 import PrerequisiteSetup from './components/PrerequisiteSetup'
 import HelpPanel from './components/HelpPanel'
 import SurfaceSwitch from './components/SurfaceSwitch'
+import AppMenuBar from './components/AppMenuBar'
 import { mergeLayoutPreferences, normalizeLayoutPreferences, type LayoutPreferences } from './lib/layoutPersistence'
 import type { Panel } from './types'
 
@@ -105,6 +106,7 @@ export default function App() {
       if ((event.metaKey || event.ctrlKey) && event.key === 'b') { event.preventDefault(); setActivePanel('files') }
       if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key === 'A') { event.preventDefault(); setActivePanel('chat') }
       if ((event.metaKey || event.ctrlKey) && event.key === 'n') { event.preventDefault(); void useStore.getState().newChat() }
+      if ((event.metaKey || event.ctrlKey) && event.key === ',') { event.preventDefault(); setActivePanel('settings') }
       if (event.key === 'Escape' && showCommandPalette) setShowCommandPalette(false)
     }
     window.addEventListener('keydown', handler)
@@ -157,11 +159,13 @@ export default function App() {
   }
 
   const showEditor = Boolean(selectedFile) || Boolean(workspacePath && activePanel === 'chat')
-  const menuActions: Record<string, () => void> = {
-    File: () => setActivePanel('files'),
-    Edit: () => toggleCommandPalette(),
-    View: persistTerminalToggle,
-    Help: () => setActivePanel('help'),
+  const openFolder = async () => {
+    const directory = await window.api.openDirectory()
+    if (!directory) return
+    setWorkspacePath(directory)
+    const files = await window.api.walkDirectory(directory)
+    if (Array.isArray(files)) setAllFiles(files)
+    setActivePanel('chat')
   }
 
   return (
@@ -175,9 +179,15 @@ export default function App() {
       <div className="vd-resize-handle vd-resize-sidebar" role="separator" aria-label="Resize workspace sidebar" onPointerDown={(event) => beginResize('sidebarWidth', event)} />
       <main className="main-content vd-main-shell">
         <header className="top-bar vd-topbar">
-          <div className="top-menus" role="menubar" aria-label="Application menu">
-            {Object.entries(menuActions).map(([label, action]) => <button key={label} role="menuitem" onClick={action}>{label}</button>)}
-          </div>
+          <AppMenuBar
+            onNewChat={() => { void useStore.getState().newChat(); setActivePanel('chat') }}
+            onOpenFolder={() => { void openFolder() }}
+            onCommandPalette={toggleCommandPalette}
+            onToggleSidebar={() => updateLayout({ sidebarCollapsed: !sidebarCollapsed }, true)}
+            onToggleTerminal={persistTerminalToggle}
+            onSettings={() => setActivePanel('settings')}
+            onHelp={() => setActivePanel('help')}
+          />
           <div className="vd-top-tabs" role="tablist" aria-label="Open work surfaces">
             <button className={activePanel === 'chat' ? 'active' : ''} role="tab" aria-selected={activePanel === 'chat'} onClick={() => setActivePanel('chat')}>Agent output</button>
             {selectedFile && <button className={activePanel !== 'chat' ? 'active' : ''} role="tab" aria-selected={activePanel !== 'chat'} onClick={() => setActivePanel('files')} title={selectedFile}>{selectedFile.split(/[\\/]/).pop()}</button>}
