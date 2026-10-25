@@ -17,6 +17,7 @@
  * - AGENT_TOOLS constant — the tool definitions sent to the AI model
  */
 import type { DataToolSettings } from '../lib/dataToolSettings'
+import type { LayoutPreferences } from '../lib/layoutPersistence'
 
 export interface FileEntry {
   name: string
@@ -117,6 +118,9 @@ export interface Settings extends DataToolSettings {
   autoUpdate?: boolean
   autocompleteEnabled?: boolean
   indexingEnabled?: boolean
+  responseEffort?: 'low' | 'medium' | 'high'
+  goal?: string
+  layout?: LayoutPreferences
   telemetryEnabled?: boolean
   updateChannel?: 'stable' | 'beta'
 }

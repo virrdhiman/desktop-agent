@@ -25,6 +25,8 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import DiffViewer from './DiffViewer'
 import WorkingModeSelector from './WorkingModeSelector'
 import MultiTerminal from './MultiTerminal'
+import ComposerAddMenu from './ComposerAddMenu'
+import ComposerControls from './ComposerControls'
 import { buildConversationSummary, useStore } from '../store'
 import type { AgentTaskKind, ChatMessage, AgentStep, ProviderConfig } from '../types'
 import {
@@ -771,6 +773,7 @@ export default function AgentChat() {
       planMode,
       context: workspaceContext,
       customRules: appSettings.customRules,
+      responseEffort: appSettings.responseEffort || 'medium',
     })
     const teamBudget = appSettings.teamTokenBudget || 'balanced'
     const teamProfile = resolveTeamProfile(appSettings.teamPreset, appSettings.teamProfile)
@@ -1248,6 +1251,12 @@ export default function AgentChat() {
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
+      {appSettings.goal && (
+        <div className="vd-goal-banner" role="status">
+          <span>◎ <strong>Goal</strong> {appSettings.goal}</span>
+          <button aria-label="Clear workspace goal" title="Clear goal" onClick={() => { const next = { ...appSettings, goal: '' }; setAppSettings(next); void window.api.saveSettings(next) }}>×</button>
+        </div>
+      )}
       <div className="panel-header" style={{ flexWrap: 'wrap', gap: 8, padding: '8px 12px' }}>
         <h2 style={{ flex: '0 0 auto' }}>🤖 Agent</h2>
         <div style={{ display: 'flex', flex: '1 1 520px', minWidth: 0, flexWrap: 'wrap', gap: 6, alignItems: 'center', justifyContent: 'flex-end' }}>
@@ -1660,6 +1669,31 @@ export default function AgentChat() {
         borderTop: '1px solid var(--border)',
         background: 'var(--bg-secondary)',
       }}>
+        <div className="vd-composer-toolbar">
+          <ComposerAddMenu
+            input={input}
+            workspacePath={workspacePath}
+            allFiles={allFiles}
+            settings={appSettings}
+            planMode={planMode}
+            onInput={setInput}
+            onSettings={(next) => { setAppSettings(next); void window.api.saveSettings(next) }}
+            onPlanMode={(enabled) => {
+              setPlanMode(enabled)
+              const next = { ...appSettings, planMode: enabled, layout: { ...(appSettings.layout || {}), version: 1, workingMode: enabled ? 'plan' : 'build' } as typeof appSettings.layout }
+              setAppSettings(next)
+              void window.api.saveSettings(next)
+            }}
+          />
+          <ComposerControls
+            settings={appSettings}
+            activeProvider={activeProvider}
+            availableModels={availableModels}
+            modelOverride={modelOverride}
+            onModelOverride={setModelOverride}
+            onSettings={(next) => { setAppSettings(next); void window.api.saveSettings(next) }}
+          />
+        </div>
         {/* Status bar */}
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>

@@ -619,6 +619,7 @@ export const useStore = create<AppState>((set, get) => ({
     setupChecklistDismissed: false,
     autocompleteEnabled: false,
     indexingEnabled: false,
+    responseEffort: 'medium',
     telemetryEnabled: false,
     updateChannel: 'stable',
   },

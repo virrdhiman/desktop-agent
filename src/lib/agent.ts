@@ -191,13 +191,14 @@ export function buildContext({
   return parts.join('\n\n')
 }
 
-export function buildSystemPrompt(opts: { planMode: boolean; context: string; customRules?: string }): string {
+export function buildSystemPrompt(opts: { planMode: boolean; context: string; customRules?: string; responseEffort?: 'low' | 'medium' | 'high' }): string {
   const modeLine = opts.planMode
     ? 'Plan Mode is ON: propose a plan and wait for approval. Do not modify anything.'
     : 'Plan Mode is OFF: execute the task.'
   return [
     TOOL_SYSTEM_PROMPT,
     `## Session\n${modeLine}`,
+    opts.responseEffort ? `Response effort: ${opts.responseEffort}. Match this depth while remaining concise and evidence-based.` : '',
     opts.context ? `## Context\n${opts.context}` : '',
     opts.customRules?.trim() ? `## User rules\n${opts.customRules.trim()}` : '',
   ].filter(Boolean).join('\n\n')
