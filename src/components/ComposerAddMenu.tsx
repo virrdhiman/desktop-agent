@@ -55,9 +55,9 @@ export default function ComposerAddMenu({ input, workspacePath, allFiles, settin
     { id: 'goal', label: 'Goal', detail: settings.goal ? 'Update persistent goal' : 'Keep a goal above the chat', icon: '◎', section: 'Add', action: () => { const goal = window.prompt('Workspace goal', settings.goal || '')?.trim(); if (goal) onSettings({ ...settings, goal }); else if (goal === '') onSettings({ ...settings, goal: '' }); setOpen(false) } },
     { id: 'plan', label: 'Plan mode', detail: planMode ? 'On · waits before tools' : 'Propose before acting', icon: '☷', section: 'Add', action: () => { onPlanMode(!planMode); setOpen(false) } },
     { id: 'code-review', label: 'Code review', detail: 'Review a workspace file', icon: '⌕', section: 'Tools', action: () => insertHint('[Capability: code review]') },
-    { id: 'pdf', label: 'PDF extraction', detail: 'Read text from a workspace PDF', icon: '▤', section: 'Tools', action: () => insertHint('[Capability: PDF extraction]') },
-    { id: 'spreadsheet', label: 'Spreadsheets', detail: 'Read or write approved workspace sheets', icon: '▦', section: 'Tools', action: () => insertHint('[Capability: spreadsheets]') },
-    { id: 'ocr', label: 'OCR image', detail: 'Read text from a workspace image', icon: '▧', section: 'Tools', action: () => insertHint('[Capability: OCR image]') },
+    ...(settings.pdfToolEnabled ? [{ id: 'pdf', label: 'PDF extraction', detail: 'Read text from a workspace PDF', icon: '▤', section: 'Tools' as const, action: () => insertHint('[Capability: PDF extraction]') }] : []),
+    ...(settings.spreadsheetToolEnabled ? [{ id: 'spreadsheet', label: 'Spreadsheets', detail: 'Read or write approved workspace sheets', icon: '▦', section: 'Tools' as const, action: () => insertHint('[Capability: spreadsheets]') }] : []),
+    ...(settings.ocrToolEnabled ? [{ id: 'ocr', label: 'OCR image', detail: 'Read text from a workspace image', icon: '▧', section: 'Tools' as const, action: () => insertHint('[Capability: OCR image]') }] : []),
     ...(settings.browserToolEnabled ? [{ id: 'browser', label: 'Browser', detail: 'Use the opt-in browser tool', icon: '◉', section: 'Tools' as const, action: () => insertHint('[Capability: browser]') }] : []),
   ]
   const filtered = items.filter((item) => `${item.label} ${item.detail}`.toLowerCase().includes(query.toLowerCase()))
