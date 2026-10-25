@@ -32,6 +32,8 @@ describe('CodeWorkspace', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: 'View' }))
     fireEvent.click(screen.getByRole('menuitem', { name: 'Toggle terminal' }))
     expect(onLayout).toHaveBeenCalledWith(expect.objectContaining({ terminalCollapsed: true }), true)
+    window.dispatchEvent(new CustomEvent('vd:cursor-position', { detail: { line: 7, column: 12 } }))
+    await waitFor(() => expect(screen.getByText('Ln 7, Col 12')).toBeInTheDocument())
     await waitFor(() => expect(window.api.gitLog).not.toHaveBeenCalledWith('', expect.anything()))
   })
 })

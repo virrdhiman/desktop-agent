@@ -443,6 +443,7 @@ kbd {
 .vd-code-left, .vd-code-agent { min-width: 0; min-height: 0; overflow: hidden; background: var(--bg-secondary); }
 .vd-code-left { display: flex; flex-direction: column; border-right: 1px solid var(--border); }
 .vd-code-agent { display: flex; flex-direction: column; border-left: 1px solid var(--border); }
+.vd-code-agent > .vd-chat-column, .vd-code-agent > div:last-child { flex: 1; min-height: 0; overflow: hidden; }
 .vd-code-agent-header { display: flex; align-items: center; justify-content: space-between; flex: 0 0 30px; padding: 0 8px; border-bottom: 1px solid var(--border); color: var(--text-secondary); font-size: 11px; font-weight: 600; }
 .vd-code-agent-header button { border: 0; background: transparent; color: var(--text-muted); cursor: pointer; }
 .vd-code-agent > .vd-chat-column { height: 100%; }

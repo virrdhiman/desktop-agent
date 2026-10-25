@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties } from 'react'
 import CodeEditor from './CodeEditor'
 import GitPanel from './GitPanel'
 import MultiTerminal from './MultiTerminal'
@@ -87,6 +86,14 @@ export default function CodeWorkspace({ layout, onLayout, onOpenFolder, onSettin
     if (!workspacePath) { setGitLog([]); return }
     void window.api.gitLog(workspacePath, 30).then((next) => { if (Array.isArray(next)) setGitLog(next) })
   }, [workspacePath, setGitLog])
+  useEffect(() => {
+    const onCursorPosition = (event: Event) => {
+      const detail = (event as CustomEvent<{ line?: number; column?: number }>).detail
+      if (typeof detail?.line === 'number' && typeof detail.column === 'number') setCursor({ line: detail.line, column: detail.column })
+    }
+    window.addEventListener('vd:cursor-position', onCursorPosition)
+    return () => window.removeEventListener('vd:cursor-position', onCursorPosition)
+  }, [])
 
   const outline = useMemo(() => fileContent.split('\n').map((line, index) => {
     const match = line.match(/^\s*(export\s+)?(async\s+)?(function|class|interface|type|const|let|def)\s+([A-Za-z_$][\w$]*)/)

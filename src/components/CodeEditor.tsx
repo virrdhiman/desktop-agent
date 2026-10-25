@@ -409,6 +409,11 @@ export default function CodeEditor() {
 
   const handleEditorMount = useCallback((editor: Monaco.editor.IStandaloneCodeEditor, monaco: typeof Monaco) => {
     editorRef.current = editor
+    editor.onDidChangeCursorPosition((event) => {
+      window.dispatchEvent(new CustomEvent('vd:cursor-position', {
+        detail: { line: event.position.lineNumber, column: event.position.column },
+      }))
+    })
     completionProviderRef.current?.dispose()
     completionProviderRef.current = monaco.languages.registerCompletionItemProvider(language, {
       triggerCharacters: ['.', '/', '-', '_'],
