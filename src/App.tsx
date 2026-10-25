@@ -4,7 +4,7 @@
  * @project VD Agent
  * @license Proprietary. See LICENSE.
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useStore } from './store'
 import LeftRail from './components/LeftRail'
 import WorkspaceSidebar from './components/WorkspaceSidebar'
@@ -35,11 +35,20 @@ export default function App() {
     setIsRepo, setGitStatus, setAllFiles, setRepoIndexStatus, setActivePanel, toggleCommandPalette,
     showCommandPalette, setShowCommandPalette,
   } = useStore()
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [historyCollapsed, setHistoryCollapsed] = useState(false)
-  const [launcherCollapsed, setLauncherCollapsed] = useState(false)
   const resizeCleanup = useRef<(() => void) | null>(null)
   const layout = normalizeLayoutPreferences(settings.layout)
+  const sidebarCollapsed = layout.sidebarCollapsed
+  const historyCollapsed = layout.historyCollapsed
+  const launcherCollapsed = layout.launcherCollapsed
+
+  const persistTerminalToggle = () => {
+    const current = useStore.getState()
+    current.toggleTerminal()
+    const nextLayout = mergeLayoutPreferences(current.settings.layout, { terminalCollapsed: !normalizeLayoutPreferences(current.settings.layout).terminalCollapsed })
+    const nextSettings = { ...current.settings, layout: nextLayout }
+    setSettings(nextSettings)
+    void window.api.saveSettings(nextSettings)
+  }
 
   useEffect(() => {
     const initialize = async () => {
@@ -91,7 +100,7 @@ export default function App() {
     const handler = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key === 'p' && !event.shiftKey) { event.preventDefault(); toggleCommandPalette() }
       if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key === 'P') { event.preventDefault(); toggleCommandPalette() }
-      if ((event.metaKey || event.ctrlKey) && event.key === '`') { event.preventDefault(); useStore.getState().toggleTerminal() }
+      if ((event.metaKey || event.ctrlKey) && event.key === '`') { event.preventDefault(); persistTerminalToggle() }
       if ((event.metaKey || event.ctrlKey) && event.key === 'g') { event.preventDefault(); setActivePanel('git') }
       if ((event.metaKey || event.ctrlKey) && event.key === 'b') { event.preventDefault(); setActivePanel('files') }
       if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key === 'A') { event.preventDefault(); setActivePanel('chat') }
@@ -151,7 +160,7 @@ export default function App() {
   const menuActions: Record<string, () => void> = {
     File: () => setActivePanel('files'),
     Edit: () => toggleCommandPalette(),
-    View: () => useStore.getState().toggleTerminal(),
+    View: persistTerminalToggle,
     Help: () => setActivePanel('help'),
   }
 
@@ -159,9 +168,9 @@ export default function App() {
     <div className="app-layout vd-app-shell">
       <CommandPalette />
       <PrerequisiteSetup />
-      <LeftRail activePanel={activePanel} collapsed={layout.leftRailCollapsed} onToggle={() => setSidebarCollapsed((value) => !value)} onHome={() => setActivePanel('chat')} onSettings={() => setActivePanel('settings')} />
+      <LeftRail activePanel={activePanel} collapsed={layout.leftRailCollapsed} onToggle={() => updateLayout({ sidebarCollapsed: !sidebarCollapsed }, true)} onHome={() => setActivePanel('chat')} onSettings={() => setActivePanel('settings')} />
       <div className="vd-sidebar-slot" style={{ width: sidebarCollapsed ? 36 : layout.sidebarWidth }}>
-        <WorkspaceSidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((value) => !value)} onSettings={() => setActivePanel('settings')} onHelp={() => setActivePanel('help')} onShortcuts={() => toggleCommandPalette()} />
+        <WorkspaceSidebar collapsed={sidebarCollapsed} onToggle={() => updateLayout({ sidebarCollapsed: !sidebarCollapsed }, true)} onSettings={() => setActivePanel('settings')} onHelp={() => setActivePanel('help')} onShortcuts={() => toggleCommandPalette()} />
       </div>
       <div className="vd-resize-handle vd-resize-sidebar" role="separator" aria-label="Resize workspace sidebar" onPointerDown={(event) => beginResize('sidebarWidth', event)} />
       <main className="main-content vd-main-shell">
@@ -188,13 +197,13 @@ export default function App() {
             </div>
           </section>
           <div className="vd-resize-handle vd-resize-history" role="separator" aria-label="Resize session history" onPointerDown={(event) => beginResize('historyWidth', event)} />
-          <HistoryPane collapsed={historyCollapsed} style={{ width: historyCollapsed ? 36 : layout.historyWidth }} onToggle={() => setHistoryCollapsed((value) => !value)} />
+          <HistoryPane collapsed={historyCollapsed} style={{ width: historyCollapsed ? 36 : layout.historyWidth }} onToggle={() => updateLayout({ historyCollapsed: !historyCollapsed }, true)} />
           {!launcherCollapsed && <LauncherRail activePanel={activePanel} onSelect={setActivePanel} />}
-          {!launcherCollapsed && <button className="vd-launcher-collapse" aria-label="Collapse launcher" title="Collapse launcher" onClick={() => setLauncherCollapsed(true)}>›</button>}
-          {launcherCollapsed && <button className="vd-launcher-expand" aria-label="Expand launcher" title="Expand launcher" onClick={() => setLauncherCollapsed(false)}>‹</button>}
+          {!launcherCollapsed && <button className="vd-launcher-collapse" aria-label="Collapse launcher" title="Collapse launcher" onClick={() => updateLayout({ launcherCollapsed: true }, true)}>›</button>}
+          {launcherCollapsed && <button className="vd-launcher-expand" aria-label="Expand launcher" title="Expand launcher" onClick={() => updateLayout({ launcherCollapsed: false }, true)}>‹</button>}
         </div>
 
-        {showTerminal && activePanel !== 'settings' && activePanel !== 'terminal' && activePanel !== 'chat' && (
+        {showTerminal && !layout.terminalCollapsed && activePanel !== 'settings' && activePanel !== 'terminal' && activePanel !== 'chat' && (
           <div className="vd-app-terminal" style={{ height: layout.terminalHeight }}>
             <div className="vd-resize-handle vd-resize-terminal" role="separator" aria-label="Resize terminal" onPointerDown={(event) => beginResize('terminalHeight', event)} />
             <MultiTerminal />

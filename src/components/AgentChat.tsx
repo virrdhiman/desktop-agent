@@ -427,7 +427,6 @@ export default function AgentChat() {
     projectMemory, latestCheckpoint, lastVerification,
     toolExecutions, tasks,
     openFiles, fileEditHistory,
-    showTerminal,
   } = useStore()
 
   const [input, setInput] = useState('')
@@ -452,6 +451,7 @@ export default function AgentChat() {
 
   const { allFiles, sessions, loadSession, deleteSession, newChat, currentSessionId,
     planMode, setPlanMode, settings: appSettings, setSettings: setAppSettings, setCancelRequested } = useStore()
+  const showTerminal = !(appSettings.layout?.terminalCollapsed === true)
 
   const activeProvider = settings.providers.find((p) => p.id === settings.activeProvider)
 
