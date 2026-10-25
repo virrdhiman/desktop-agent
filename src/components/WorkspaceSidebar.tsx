@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useStore } from '../store'
 import type { Panel } from '../types'
 import AvatarMenu from './AvatarMenu'
+import { APP_VERSION } from '../lib/brand'
 
 type WorkspaceSidebarProps = {
   collapsed: boolean
@@ -121,7 +122,7 @@ export default function WorkspaceSidebar({ collapsed, onToggle, onSettings, onHe
       </div>
       <div className="vd-sidebar-footer">
         <AvatarMenu onSettings={onSettings} onHelp={onHelp} onShortcuts={onShortcuts} />
-        <span className="vd-sidebar-footer-label">VD Agent</span>
+        <span className="vd-sidebar-footer-label">VD Agent · v{APP_VERSION}</span>
       </div>
     </aside>
   )

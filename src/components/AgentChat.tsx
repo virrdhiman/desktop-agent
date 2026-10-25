@@ -24,7 +24,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import DiffViewer from './DiffViewer'
 import WorkingModeSelector from './WorkingModeSelector'
-import MultiTerminal from './MultiTerminal'
 import ComposerAddMenu from './ComposerAddMenu'
 import ComposerControls from './ComposerControls'
 import { buildConversationSummary, useStore } from '../store'
@@ -432,7 +431,7 @@ function parseMarkdown(text: string): MdBlock[] {
   return blocks
 }
 
-export default function AgentChat({ hideTerminal = false }: { hideTerminal?: boolean } = {}) {
+export default function AgentChat() {
   const {
     messages, addMessage, updateMessage,
     chatLoading, setChatLoading,
@@ -460,6 +459,7 @@ export default function AgentChat({ hideTerminal = false }: { hideTerminal?: boo
   const [mentionType, setMentionType] = useState<'file' | 'folder' | 'web'>('file')
   const [voiceStatus, setVoiceStatus] = useState('')
   const [listening, setListening] = useState(false)
+  const [showComposerMore, setShowComposerMore] = useState(false)
   const messagesScrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -468,12 +468,15 @@ export default function AgentChat({ hideTerminal = false }: { hideTerminal?: boo
   const pumpingQueueRef = useRef(false)
   const voiceDraftBaseRef = useRef('')
 
+  const resizeComposer = useCallback(() => {
+    const element = inputRef.current
+    if (!element) return
+    element.style.height = 'auto'
+    element.style.height = `${Math.min(240, Math.max(72, element.scrollHeight))}px`
+  }, [])
+
   const { allFiles, newChat, currentSessionId, setActivePanel,
     planMode, setPlanMode, settings: appSettings, setSettings: setAppSettings, setCancelRequested } = useStore()
-  const showTerminal = !hideTerminal && !(appSettings.layout?.terminalCollapsed === true)
-  const [chatTerminalHeight, setChatTerminalHeight] = useState(appSettings.layout?.terminalHeight || 220)
-  const chatTerminalResizeRef = useRef<{ startY: number; startHeight: number } | null>(null)
-
   const activeProvider = settings.providers.find((p) => p.id === settings.activeProvider)
 
   const syncQueryQueue = useCallback((updater: (jobs: QueuedQuery[]) => QueuedQuery[]) => {
@@ -1484,24 +1487,6 @@ export default function AgentChat({ hideTerminal = false }: { hideTerminal?: boo
         </div>
       )}
 
-      {showTerminal && (
-        <div className="vd-chat-terminal" aria-label="Terminal above composer" style={{ height: chatTerminalHeight }}>
-          <div className="vd-chat-terminal-resize" role="separator" aria-label="Resize terminal" onPointerDown={(event) => {
-            event.preventDefault()
-            chatTerminalResizeRef.current = { startY: event.clientY, startHeight: chatTerminalHeight }
-            const onMove = (move: PointerEvent) => {
-              const start = chatTerminalResizeRef.current
-              if (start) setChatTerminalHeight(Math.min(480, Math.max(120, start.startHeight - (move.clientY - start.startY))))
-            }
-            const onUp = () => { window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); chatTerminalResizeRef.current = null }
-            window.addEventListener('pointermove', onMove)
-            window.addEventListener('pointerup', onUp, { once: true })
-          }} />
-          <div className="vd-chat-terminal-header"><span>Terminal</span><span className="vd-sidebar-subtitle">Ctrl+` to toggle</span></div>
-          <MultiTerminal />
-        </div>
-      )}
-
       {/* Pending images preview */}
       {pendingImages.length > 0 && (
         <div style={{
@@ -1533,7 +1518,7 @@ export default function AgentChat({ hideTerminal = false }: { hideTerminal?: boo
       )}
 
       {/* Input */}
-      <div style={{
+      <div className="vd-composer-surface" style={{
         padding: '10px 14px',
         borderTop: '1px solid var(--border)',
         background: 'var(--bg-secondary)',
@@ -1563,15 +1548,29 @@ export default function AgentChat({ hideTerminal = false }: { hideTerminal?: boo
             onSettings={(next) => { setAppSettings(next); void window.api.saveSettings(next) }}
           />
           <WorkingModeSelector settings={appSettings} onChange={(next) => { setPlanMode(next.planMode === true); setAppSettings(next); void window.api.saveSettings(next) }} />
-          <select className="vd-composer-select" value={appSettings.teamMode || 'auto'} onChange={(event) => { const next = { ...appSettings, teamMode: event.target.value as 'off' | 'auto' | 'always' }; setAppSettings(next); void window.api.saveSettings(next) }} aria-label="Agent environment" title="Choose normal, smart, or agentic execution">
-            <option value="off">Normal</option><option value="auto">Smart</option><option value="always">Agentic</option>
-          </select>
-          {hasCustomTeamProfile(appSettings.teamProfile) && <span className="badge badge-green" title="Custom agent role instructions are active">Custom team</span>}
+          <div className="vd-composer-optional">
+            <select className="vd-composer-select" value={appSettings.teamMode || 'auto'} onChange={(event) => { const next = { ...appSettings, teamMode: event.target.value as 'off' | 'auto' | 'always' }; setAppSettings(next); void window.api.saveSettings(next) }} aria-label="Agent environment" title="Choose normal, smart, or agentic execution">
+              <option value="off">Normal</option><option value="auto">Smart</option><option value="always">Agentic</option>
+            </select>
+          </div>
+          <div className="vd-composer-optional">{hasCustomTeamProfile(appSettings.teamProfile) && <span className="badge badge-green" title="Custom agent role instructions are active">Custom team</span>}</div>
+          <div className="vd-composer-more">
+            <button aria-haspopup="menu" aria-expanded={showComposerMore} onClick={() => setShowComposerMore((open) => !open)}>More⌄</button>
+            {showComposerMore && <div className="vd-composer-more-popover" role="menu" aria-label="More composer options">
+              <label>Execution environment
+                <select className="vd-composer-select" value={appSettings.teamMode || 'auto'} onChange={(event) => { const next = { ...appSettings, teamMode: event.target.value as 'off' | 'auto' | 'always' }; setAppSettings(next); void window.api.saveSettings(next) }}>
+                  <option value="off">Normal</option><option value="auto">Smart</option><option value="always">Agentic</option>
+                </select>
+              </label>
+              <div>Active provider: {settings.providers.find((provider) => provider.id === settings.activeProvider)?.name || 'Automatic'}</div>
+              {hasCustomTeamProfile(appSettings.teamProfile) && <div>Custom team profile active</div>}
+            </div>}
+          </div>
           {chatLoading && <button className="btn btn-sm btn-error" onClick={() => useStore.getState().stopGeneration()}>⏹ Stop</button>}
-          {settings.activeProvider && <span className="badge badge-blue" title="Active provider">{settings.providers.find((p) => p.id === settings.activeProvider)?.name || settings.activeProvider}</span>}
+          {settings.activeProvider && <span className="vd-composer-optional badge badge-blue" title="Active provider">{settings.providers.find((p) => p.id === settings.activeProvider)?.name || settings.activeProvider}</span>}
         </div>
         {/* Status bar */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+        <div className="vd-composer-status" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             {planMode && (
               <span className="badge badge-green" style={{ fontSize: 10 }}>📋 Plan Mode</span>
@@ -1616,7 +1615,7 @@ export default function AgentChat({ hideTerminal = false }: { hideTerminal?: boo
             })()}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+        <div className="vd-composer-input-row">
           <button
             className={`btn btn-sm ${listening ? 'btn-success' : ''}`}
             onClick={startVoiceInput}
@@ -1727,12 +1726,13 @@ export default function AgentChat({ hideTerminal = false }: { hideTerminal?: boo
                 setShowMentions(false)
               }
             }}
+            onInput={resizeComposer}
             onKeyDown={(e) => {
               handleKeyDown(e)
               if (e.key === 'Escape') setShowMentions(false)
             }}
             placeholder="Ask or queue work... Type @ for context, Ctrl+V for images, drag files. (Enter queues immediately)"
-             rows={4}
+            rows={3}
             style={{ resize: 'none', fontSize: 13, borderRadius: 12 }}
           />
           <button
@@ -1745,7 +1745,7 @@ export default function AgentChat({ hideTerminal = false }: { hideTerminal?: boo
           </button>
         </div>
         {voiceStatus && (
-          <div style={{ marginTop: 4, fontSize: 10, color: 'var(--text-muted)' }}>
+          <div className="vd-composer-voice-status" style={{ marginTop: 4, fontSize: 10, color: 'var(--text-muted)' }}>
             {voiceStatus}
           </div>
         )}

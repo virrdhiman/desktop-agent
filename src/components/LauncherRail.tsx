@@ -1,13 +1,13 @@
-import type { Panel } from '../types'
+import type { RightPanelTab } from '../lib/layoutPersistence'
 
-type LauncherRailProps = { activePanel: Panel; onSelect: (panel: Panel) => void }
+type LauncherRailProps = { activePanel: RightPanelTab; onSelect: (panel: RightPanelTab) => void }
 
 export default function LauncherRail({ activePanel, onSelect }: LauncherRailProps) {
-  const launchers: Array<{ id: Panel; label: string; icon: string }> = [
-    { id: 'search', label: 'Browser / search', icon: '◉' },
+  const launchers: Array<{ id: RightPanelTab; label: string; icon: string }> = [
+    { id: 'browser', label: 'Browser', icon: '◉' },
     { id: 'files', label: 'Files', icon: '▣' },
     { id: 'terminal', label: 'Terminal', icon: '›_' },
-    { id: 'git', label: 'Changes', icon: '⑂' },
+    { id: 'changes', label: 'Changes', icon: '⑂' },
   ]
   return (
     <aside className="vd-launcher-rail" aria-label="Quick launchers">

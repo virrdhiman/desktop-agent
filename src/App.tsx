@@ -15,6 +15,7 @@ import FileBrowser from './components/FileBrowser'
 import GitPanel from './components/GitPanel'
 import CodeEditor from './components/CodeEditor'
 import MultiTerminal from './components/MultiTerminal'
+import RightToolPanel from './components/RightToolPanel'
 import SettingsPanel from './components/SettingsPanel'
 import TaskPanel from './components/TaskPanel'
 import BranchManager from './components/BranchManager'
@@ -27,7 +28,7 @@ import HelpPanel from './components/HelpPanel'
 import SurfaceSwitch from './components/SurfaceSwitch'
 import AppMenuBar from './components/AppMenuBar'
 import CodeWorkspace from './components/CodeWorkspace'
-import { mergeLayoutPreferences, normalizeLayoutPreferences, type LayoutPreferences } from './lib/layoutPersistence'
+import { isTerminalPanelShortcut, mergeLayoutPreferences, normalizeLayoutPreferences, type LayoutPreferences, type RightPanelTab } from './lib/layoutPersistence'
 import type { Panel, SharedAppState } from './types'
 
 type StoreSnapshot = ReturnType<typeof useStore.getState>
@@ -86,7 +87,7 @@ function applySharedState(snapshot: SharedAppState): void {
 export default function App() {
   const {
     setSettings, settings, workspacePath, setWorkspacePath, setProjectMemory,
-    selectedFile, showTerminal, activePanel,
+    selectedFile, activePanel,
     setIsRepo, setGitStatus, setFiles, setAllFiles, setRepoIndexStatus, setActivePanel, toggleCommandPalette,
     showCommandPalette, setShowCommandPalette,
   } = useStore()
@@ -103,8 +104,7 @@ export default function App() {
 
   const persistTerminalToggle = () => {
     const current = useStore.getState()
-    current.toggleTerminal()
-    const nextLayout = mergeLayoutPreferences(current.settings.layout, { terminalCollapsed: !normalizeLayoutPreferences(current.settings.layout).terminalCollapsed })
+    const nextLayout = mergeLayoutPreferences(current.settings.layout, { rightPanelTab: 'terminal', launcherCollapsed: false })
     const nextSettings = { ...current.settings, layout: nextLayout }
     setSettings(nextSettings)
     void window.api.saveSettings(nextSettings)
@@ -201,7 +201,7 @@ export default function App() {
     const handler = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key === 'p' && !event.shiftKey) { event.preventDefault(); toggleCommandPalette() }
       if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key === 'P') { event.preventDefault(); toggleCommandPalette() }
-      if ((event.metaKey || event.ctrlKey) && event.key === '`') { event.preventDefault(); persistTerminalToggle() }
+      if (isTerminalPanelShortcut(event)) { event.preventDefault(); persistTerminalToggle() }
       if ((event.metaKey || event.ctrlKey) && event.key === 'g') { event.preventDefault(); setActivePanel('git') }
       if ((event.metaKey || event.ctrlKey) && event.key === 'b') { event.preventDefault(); setActivePanel('files') }
       if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key === 'A') { event.preventDefault(); setActivePanel('chat') }
@@ -223,7 +223,7 @@ export default function App() {
     if (persist) void window.api.saveSettings(nextSettings)
   }, [setSettings])
 
-  const beginResize = useCallback((kind: 'sidebarWidth' | 'historyWidth' | 'terminalHeight', event: React.PointerEvent) => {
+  const beginResize = useCallback((kind: 'sidebarWidth' | 'historyWidth' | 'rightPanelWidth' | 'terminalHeight', event: React.PointerEvent) => {
     event.preventDefault()
     resizeCleanup.current?.()
     const startX = event.clientX
@@ -232,6 +232,7 @@ export default function App() {
     const onMove = (moveEvent: PointerEvent) => {
       if (kind === 'sidebarWidth') updateLayout({ sidebarWidth: start.sidebarWidth + moveEvent.clientX - startX })
       if (kind === 'historyWidth') updateLayout({ historyWidth: start.historyWidth - (moveEvent.clientX - startX) })
+      if (kind === 'rightPanelWidth') updateLayout({ rightPanelWidth: start.rightPanelWidth - (moveEvent.clientX - startX) })
       if (kind === 'terminalHeight') updateLayout({ terminalHeight: start.terminalHeight - (moveEvent.clientY - startY) })
     }
     const onUp = () => {
@@ -310,17 +311,10 @@ export default function App() {
           </section>
           <div className="vd-resize-handle vd-resize-history" role="separator" aria-label="Resize session history" onPointerDown={(event) => beginResize('historyWidth', event)} />
           <HistoryPane collapsed={historyCollapsed} style={{ width: historyCollapsed ? 36 : layout.historyWidth }} onToggle={() => updateLayout({ historyCollapsed: !historyCollapsed }, true)} />
-          {!launcherCollapsed && <LauncherRail activePanel={activePanel} onSelect={setActivePanel} />}
-          {!launcherCollapsed && <button className="vd-launcher-collapse" aria-label="Collapse launcher" title="Collapse launcher" onClick={() => updateLayout({ launcherCollapsed: true }, true)}>›</button>}
+          {!launcherCollapsed && <LauncherRail activePanel={layout.rightPanelTab} onSelect={(tab: RightPanelTab) => updateLayout({ rightPanelTab: tab }, true)} />}
+          {!launcherCollapsed && <RightToolPanel tab={layout.rightPanelTab} width={layout.rightPanelWidth} onTab={(tab) => updateLayout({ rightPanelTab: tab }, true)} onCollapse={() => updateLayout({ launcherCollapsed: true }, true)} onResizeStart={(event) => beginResize('rightPanelWidth', event)} />}
           {launcherCollapsed && <button className="vd-launcher-expand" aria-label="Expand launcher" title="Expand launcher" onClick={() => updateLayout({ launcherCollapsed: false }, true)}>‹</button>}
         </div>}
-
-        {!codeMode && showTerminal && !layout.terminalCollapsed && activePanel !== 'settings' && activePanel !== 'terminal' && activePanel !== 'chat' && (
-          <div className="vd-app-terminal" style={{ height: layout.terminalHeight }}>
-            <div className="vd-resize-handle vd-resize-terminal" role="separator" aria-label="Resize terminal" onPointerDown={(event) => beginResize('terminalHeight', event)} />
-            <MultiTerminal />
-          </div>
-        )}
       </main>
     </div>
   )

@@ -11,9 +11,9 @@ const settings: Settings = {
   activeProvider: 'cloud',
   workspacePath: 'C:/workspace',
   layout: {
-    version: 1, leftRailCollapsed: false, sidebarCollapsed: false, historyCollapsed: false,
+    version: 1, leftRailCollapsed: false, sidebarCollapsed: false, historyCollapsed: true,
     launcherCollapsed: false, terminalCollapsed: false, sidebarWidth: 260, historyWidth: 240,
-    launcherWidth: 52, terminalHeight: 220, workingMode: 'build', surface: 'agent',
+    launcherWidth: 52, rightPanelWidth: 340, rightPanelTab: 'terminal', terminalHeight: 220, workingMode: 'build', surface: 'agent',
   },
 }
 
