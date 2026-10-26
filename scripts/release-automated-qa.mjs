@@ -227,7 +227,7 @@ async function main() {
     const firstRunText = await mainPage.evaluate('document.body.innerText')
     const firstRunSettings = await mainPage.evaluate('window.api.loadSettings()')
     check('packaged first run is isolated and key-free', !firstRunText.match(/API key configured|key saved/i), `fresh userData; configured providers=${(firstRunSettings.providers || []).filter((provider) => provider.hasKey).length}`)
-    check('first-run key guidance is visible', firstRunText.includes('Add an API key in Settings'), firstRunText.slice(0, 800))
+    check('first-run key guidance is visible', firstRunText.includes('Add an API key in Settings'), 'welcome screen')
 
     const lockedPath = path.join(workspace, 'locked.txt').replaceAll("'", "''")
     const lockProcess = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `$stream = [System.IO.File]::Open('${lockedPath}', [System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None); Start-Sleep -Seconds 30; $stream.Dispose()`], { windowsHide: true })
@@ -252,7 +252,7 @@ async function main() {
     const ide = await waitForRole(port, 'ide', beforeIde)
     await sleep(1_500)
     const noFolderText = await ide.evaluate('document.body.innerText')
-    check('IDE no-folder state offers Open Folder', /open folder/i.test(noFolderText), noFolderText.slice(0, 300))
+    check('IDE no-folder state offers Open Folder', /open folder/i.test(noFolderText), 'Open Folder control visible')
     await mainPage.evaluate('window.api.openIdeWindow()')
     await sleep(500)
     const ideTargets = []
