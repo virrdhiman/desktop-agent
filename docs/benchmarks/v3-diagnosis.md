@@ -25,6 +25,20 @@ There is no archived failed cell with a provider error, quota response, or HTTP
 PROVIDER 0, HARNESS 30, unknown 0**. The harness count includes cells whose
 evidence was invalidated by shared workspaces or dependency skipping.
 
+## Default routing derived from the evidence
+
+The application keeps the user's active provider first. When automatic
+fallback is enabled, the following provider order is used for configured
+fallbacks: coding `nvidia -> mistral -> gemini -> groq -> ollama`, analysis
+`gemini -> mistral -> nvidia -> groq -> ollama`, documentation
+`mistral -> gemini -> groq -> ollama -> nvidia`, and quick tasks
+`groq -> gemini -> ollama -> mistral -> nvidia`. This is a conservative default,
+not a claim that the failed v3 cells proved a winner: task 1 and task 2 were
+quality-sensitive failures across all tested models, task 8 was the broad pass,
+and tasks 9-11 were affected by model or harness evidence limits. Live health,
+cooldowns, configured keys, and explicit paid-model settings still govern the
+actual chain.
+
 ## App-suspect review
 
 | Suspect | Status | Evidence |

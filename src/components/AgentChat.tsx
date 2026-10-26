@@ -748,7 +748,7 @@ export default function AgentChat() {
     apiMessages: any[], preferredId?: string, taskKind: AgentTaskKind = 'analysis', stream = true
   ): Promise<ChatOutcome> => {
     const current = useStore.getState().settings
-    const base = buildProviderChain(current.providers, current.activeProvider, undefined, taskKind)
+    const base = buildProviderChain(current.providers, current.activeProvider, undefined, taskKind, Date.now(), current.taskRouting)
     const preferred = base.find((p) => p.id === preferredId)
     const chain = preferred ? [preferred, ...base.filter((p) => p !== preferred)] : base
     if (chain.length === 0) return { error: noProviderNotice() }
@@ -927,7 +927,9 @@ export default function AgentChat() {
       useStore.getState().settings.providers,
       useStore.getState().settings.activeProvider,
       3,
-      taskKind
+      taskKind,
+      Date.now(),
+      useStore.getState().settings.taskRouting
     ).map((candidate) => candidate.id)
     const callRole = async (
       label: string,

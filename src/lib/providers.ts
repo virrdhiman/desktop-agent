@@ -4,7 +4,7 @@
  * @project VD Agent
  * @license Proprietary. See LICENSE.
  */
-import type { AgentTaskKind, ProviderConfig, Settings, TeamTokenBudget } from '../types'
+import type { AgentTaskKind, ProviderConfig, Settings, TaskRoutingDefaults, TeamTokenBudget } from '../types'
 import { rankModels } from './modelSelect'
 import { isLocalPlaceholderKey } from './providerKeys'
 
@@ -44,6 +44,19 @@ export function providerIsConfigured(provider?: { apiKey?: string; hasKey?: bool
 export const MAX_PROVIDER_ATTEMPTS = 4
 
 /**
+ * Conservative defaults derived from the v3 evidence: task 1/2 were quality-sensitive,
+ * task 8 was the only broad pass, and tasks 9-11 need strong verification. These are
+ * fallback preferences only; the user's active provider always stays first and missing
+ * or unconfigured providers are ignored.
+ */
+export const DEFAULT_TASK_ROUTING: Required<TaskRoutingDefaults> = {
+  coding: ['nvidia', 'mistral', 'gemini', 'groq', 'ollama'],
+  analysis: ['gemini', 'mistral', 'nvidia', 'groq', 'ollama'],
+  documentation: ['mistral', 'gemini', 'groq', 'ollama', 'nvidia'],
+  quick: ['groq', 'gemini', 'ollama', 'mistral', 'nvidia'],
+}
+
+/**
  * Active provider first, then other official free chat providers that have a key.
  * Local servers are skipped (placeholder keys say nothing about whether they are running).
  * Unofficial proxies are omitted from the catalog and are never used as fallbacks.
@@ -53,13 +66,20 @@ export function buildProviderChain(
   activeId: string,
   max = MAX_PROVIDER_ATTEMPTS,
   taskKind: AgentTaskKind = 'analysis',
-  now = Date.now()
+  now = Date.now(),
+  routing?: TaskRoutingDefaults
 ): ProviderConfig[] {
   const active = providers.find((p) => p.id === activeId)
   const activeCategory = active ? getProviderCategory(active) : 'free'
   const fallbacks = providers.filter(
     (p) => p.id !== activeId && providerIsConfigured(p) && providerCanFallbackFrom(activeCategory, getProviderCategory(p))
-  ).sort((a, b) => providerScore(b, taskKind, now) - providerScore(a, taskKind, now))
+  ).sort((a, b) => {
+    const preferred = routing?.[taskKind] || []
+    const routeA = preferred.indexOf(a.id)
+    const routeB = preferred.indexOf(b.id)
+    const routeDelta = (routeA < 0 ? Number.MAX_SAFE_INTEGER : routeA) - (routeB < 0 ? Number.MAX_SAFE_INTEGER : routeB)
+    return routeDelta || providerScore(b, taskKind, now) - providerScore(a, taskKind, now)
+  })
   return [...(active ? [active] : []), ...fallbacks].slice(0, max)
 }
 
