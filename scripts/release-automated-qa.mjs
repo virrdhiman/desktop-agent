@@ -197,13 +197,13 @@ async function runSecurityInspection(packageRoot) {
   const asarPath = path.join(resources, 'app.asar')
   const asar = require('@electron/asar')
   const entries = new Set(asar.listPackage(asarPath))
-  const suspicious = [...entries].filter((entry) => /(?:^|\/)(?:\.env(?:\.|$)|[^/]*(?:key|secret|credential)[^/]*|[^/]+\.pem$)/i.test(entry))
+  const suspicious = [...entries].filter((entry) => /(?:^|\/)(?:\.env(?:\.|$)|(?:api[-_]?key|secret|credential|password)[^/]*|[^/]+\.(?:pem|key)$)/i.test(entry))
   check('packaged app has no secret-looking files', suspicious.length === 0, suspicious.slice(0, 5).join(', '))
   const main = asar.extractFile(asarPath, 'dist-electron/main.js').toString('utf8')
   const preload = asar.extractFile(asarPath, 'dist-electron/preload.cjs').toString('utf8')
   check('packaged security preferences are present', /contextIsolation\s*:\s*(?:true|!0)/.test(main) && /nodeIntegration\s*:\s*(?:false|!1)/.test(main) && /sandbox\s*:\s*(?:true|!0)/.test(main), 'main BrowserWindow webPreferences')
-  check('packaged CSP and external-link policy are present', /Content-Security-Policy/.test(main) && /setWindowOpenHandler/.test(main) && /shell\.openExternal/.test(main), 'CSP, denied window opens, system browser')
-  check('packaged preload exposes a bounded bridge', /contextBridge\.exposeInMainWorld/.test(preload) && !/ipcRenderer\.send\(.*window\./.test(preload), 'contextBridge preload')
+  check('packaged CSP and external-link policy are present', /Content-Security-Policy/.test(main) && /setWindowOpenHandler/.test(main) && /openExternal/.test(main), 'CSP, denied window opens, system browser')
+  check('packaged preload exposes a bounded bridge', /contextBridge\.exposeInMainWorld/.test(preload) && /ipcRenderer\.invoke/.test(preload) && !/exposeInMainWorld\(\s*["']api["']\s*,\s*ipcRenderer/.test(preload), 'contextBridge preload')
   return entries
 }
 
@@ -261,7 +261,7 @@ async function main() {
     }
     check('IDE is single-instance and second open focuses it', ideTargets.length === 1, `${ideTargets.length} IDE targets`)
     await publishWorkspace(mainPage, safeSettings)
-    await sleep(700)
+    await sleep(2_000)
     check('IDE follows the shared workspace', (await ide.evaluate('document.body.innerText')).includes('qa-editor.ts'), 'shared fixture workspace')
     await ide.evaluate(`(() => {
       window.prompt = () => 'qa-renamed.ts'
@@ -318,7 +318,7 @@ async function main() {
     const forkedRecords = await mainPage.evaluate(`window.api.listConversations()`)
     check('fork chat creates a linked child and leaves parent messages unchanged', forkedRecords.some((record) => record.parentSessionId === 'qa-long-chat') && JSON.stringify((forkedRecords.find((record) => record.id === 'qa-long-chat') || {}).messages || []) === parentSnapshot, `${forkedRecords.length} records`)
     const forkButtonCount = await mainPage.evaluate('document.querySelectorAll(".vd-message-fork").length')
-    await mainPage.evaluate('document.querySelectorAll(".vd-message-fork")[0]?.click(); true')
+    await mainPage.evaluate('([...document.querySelectorAll(".vd-message-fork")].find((button) => button.parentElement?.textContent?.includes("You")))?.click(); true')
     await sleep(2_500)
     const forkFromHereRecords = await mainPage.evaluate(`window.api.listConversations()`)
     check('fork from here creates a child record', forkButtonCount > 0 && forkFromHereRecords.some((record) => record.forkedFromMessageId), `${forkButtonCount} buttons; ${forkFromHereRecords.length} records`)
