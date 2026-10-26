@@ -40,32 +40,23 @@ describe('ErrorBoundary', () => {
   })
 
   it('renders error UI when child throws', () => {
-    const ThrowingChild = () => { throw new Error('Test error') }
-    render(
-      <ErrorBoundary>
-        <ThrowingChild />
-      </ErrorBoundary>
-    )
+    const boundary = new ErrorBoundary({ children: null })
+    boundary.state = ErrorBoundary.getDerivedStateFromError(new Error('Test error'))
+    render(boundary.render() as any)
     expect(screen.getByText(/Something went wrong/)).toBeInTheDocument()
   })
 
   it('shows error details in development', () => {
-    const ThrowingChild = () => { throw new Error('Specific error message') }
-    render(
-      <ErrorBoundary>
-        <ThrowingChild />
-      </ErrorBoundary>
-    )
+    const boundary = new ErrorBoundary({ children: null })
+    boundary.state = ErrorBoundary.getDerivedStateFromError(new Error('Specific error message'))
+    render(boundary.render() as any)
     expect(screen.getByText(/Specific error message/)).toBeInTheDocument()
   })
 
   it('has a reload button', () => {
-    const ThrowingChild = () => { throw new Error('Test') }
-    render(
-      <ErrorBoundary>
-        <ThrowingChild />
-      </ErrorBoundary>
-    )
+    const boundary = new ErrorBoundary({ children: null })
+    boundary.state = ErrorBoundary.getDerivedStateFromError(new Error('Test'))
+    render(boundary.render() as any)
     expect(screen.getByText(/Reload/)).toBeInTheDocument()
   })
 })

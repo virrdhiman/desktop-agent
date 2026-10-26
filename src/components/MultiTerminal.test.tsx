@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render } from '@testing-library/react'
+import { act, render, waitFor } from '@testing-library/react'
 import { useStore } from '../store'
 import MultiTerminal from './MultiTerminal'
 
@@ -70,6 +70,36 @@ describe('MultiTerminal renderer safety', () => {
     const view = render(<MultiTerminal />)
     expect(fitMock).not.toHaveBeenCalled()
     view.unmount()
+    if (originalWidth) Object.defineProperty(HTMLElement.prototype, 'clientWidth', originalWidth)
+    if (originalHeight) Object.defineProperty(HTMLElement.prototype, 'clientHeight', originalHeight)
+  })
+
+  it('refits after a visible panel resize and active-tab switch', async () => {
+    const originalWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth')
+    const originalHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientHeight')
+    const originalObserver = global.ResizeObserver
+    let resize: (() => void) | undefined
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, value: 400 })
+    Object.defineProperty(HTMLElement.prototype, 'clientHeight', { configurable: true, value: 240 })
+    global.ResizeObserver = class ResizeObserver {
+      constructor(callback: () => void) { resize = callback }
+      observe() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver
+    fitMock.mockClear()
+    const view = render(<MultiTerminal />)
+    await waitFor(() => expect(fitMock).toHaveBeenCalled())
+    const firstCount = fitMock.mock.calls.length
+    await act(async () => {
+      resize?.()
+      useStore.setState({
+        terminalTabs: [{ id: 'term-1', name: 'Terminal 1', cwd: '' }, { id: 'term-2', name: 'Terminal 2', cwd: '' }],
+        activeTerminalTab: 'term-2',
+      })
+    })
+    await waitFor(() => expect(fitMock.mock.calls.length).toBeGreaterThan(firstCount))
+    view.unmount()
+    global.ResizeObserver = originalObserver
     if (originalWidth) Object.defineProperty(HTMLElement.prototype, 'clientWidth', originalWidth)
     if (originalHeight) Object.defineProperty(HTMLElement.prototype, 'clientHeight', originalHeight)
   })

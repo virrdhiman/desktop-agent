@@ -31,4 +31,12 @@ describe('provider key masking', () => {
     expect(secureStoredApiKey({ apiKey: 'ollama' }, '', () => { throw new Error('unavailable') })).toBe('ollama')
     expect(() => secureStoredApiKey({ apiKey: 'new-key' }, '', () => { throw new Error('unavailable') })).toThrow('unavailable')
   })
+
+  it('never exposes key-shaped values in renderer provider payloads', () => {
+    const masked = maskProviderForRenderer({ id: 'provider', apiKey: 'sk-proj-' + 'x'.repeat(30), hasKey: true })
+    const serialized = JSON.stringify(masked)
+    expect(serialized).not.toMatch(/sk-proj-/)
+    expect(serialized).not.toMatch(/apiKey":"[^\"]+"/)
+    expect(masked).toMatchObject({ apiKey: '', hasKey: true })
+  })
 })

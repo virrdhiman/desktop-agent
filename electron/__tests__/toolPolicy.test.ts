@@ -66,6 +66,19 @@ describe('tool policy', () => {
     expect(checkpointTargets('multi_file_edit', { edits: [{ path: 'a' }, { path: 'b' }] })).toEqual(['a', 'b'])
   })
 
+  it('blocks traversal for every file-facing tool family', () => {
+    const outside = path.resolve(workspace, '..', 'outside.txt')
+    const fileTools = ['read_file', 'write_file', 'edit_file', 'create_file', 'delete_file', 'multi_file_edit', 'archive_extract', 'vscode_apply_edit', 'spreadsheet_write', 'pdf_extract_text', 'ocr_image']
+    for (const name of fileTools) {
+      const args = name === 'multi_file_edit'
+        ? { edits: [{ path: outside }] }
+        : name === 'archive_extract'
+          ? { archive_path: outside, output_path: path.join(workspace, 'out') }
+          : { path: outside }
+      expect(assessToolPolicy(name, args, workspace).outsideWorkspace).toContain(outside)
+    }
+  })
+
   it('includes the full shell command in the approval text', () => {
     const command = `echo ${'x'.repeat(900)}`
     const decision = assessToolPolicy('run_command', { command, cwd: workspace }, workspace)

@@ -509,8 +509,10 @@ try {
   check('restart data includes pinned rich resume and verification state', richResumeOk,
     richResumeOk ? '' : JSON.stringify({ pinned: resumed?.pinned, resume: resumed?.resume }).slice(0, 800))
   await sleep(1200)
+  await b.evaluate(`document.querySelector('[aria-label="Expand history"]')?.click()`)
+  await sleep(300)
   const restored = await b.evaluate(`(() => {
-    const btn = [...document.querySelectorAll('button')].find(x => /History/.test(x.textContent || ''))
+    const btn = [...document.querySelectorAll('[role="tab"], button')].find(x => /History/.test(x.textContent || ''))
     const r = btn?.getBoundingClientRect()
     return { text: document.body.innerText, headerTop: r?.top ?? -1, headerBottom: r?.bottom ?? Infinity, vh: innerHeight }
   })()`)
@@ -549,7 +551,7 @@ try {
   await sleep(500)
   await b.screenshot('editor.png')
 
-  await b.evaluate(`document.querySelector('[aria-label^="Sessions panel"]')?.click()`)
+  await b.evaluate(`document.querySelector('[aria-label="Expand history"]')?.click()`)
   await sleep(300)
   const del = await b.evaluate(`(() => {
     window.confirm = () => true

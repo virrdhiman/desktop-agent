@@ -5,7 +5,7 @@
  * @license Proprietary. See LICENSE.
  */
 import '@testing-library/jest-dom'
-import { vi } from 'vitest'
+import { beforeEach, vi } from 'vitest'
 import { getSetupCatalog } from '../lib/prerequisiteSetup'
 
 // Mock window.api for all DOM tests (node-environment tests have no window)
@@ -37,6 +37,7 @@ if (typeof window !== 'undefined') Object.defineProperty(window, 'api', {
     gitPull: vi.fn(),
     gitInit: vi.fn(),
     gitLog: vi.fn(),
+    gitFileLog: vi.fn().mockResolvedValue([]),
     gitIsRepo: vi.fn(),
     gitBranches: vi.fn(),
     gitCreateBranch: vi.fn(),
@@ -100,6 +101,8 @@ if (typeof window !== 'undefined') Object.defineProperty(window, 'api', {
     lspReferences: vi.fn().mockResolvedValue([]),
     lspRename: vi.fn().mockResolvedValue({ replacements: 0, updatedFiles: [], errors: [] }),
     projectMemoryLoad: vi.fn().mockResolvedValue({ content: '', updatedAt: 0, fingerprint: '' }),
+    projectNotesLoad: vi.fn().mockResolvedValue({ version: 1, workspace: '', updatedAt: 0, content: '' }),
+    projectNotesSave: vi.fn().mockResolvedValue({ version: 1, workspace: '', updatedAt: 0, content: '' }),
     listCheckpoints: vi.fn().mockResolvedValue([]),
     restoreCheckpoint: vi.fn(),
     updateStatus: vi.fn().mockResolvedValue({ state: 'idle', message: 'Not checked' }),
@@ -130,3 +133,19 @@ Object.defineProperty(global, 'IntersectionObserver', {
     takeRecords() { return [] }
   },
 })
+
+// React deliberately logs the component stack when an ErrorBoundary test throws.
+// Those tests assert the fallback UI; keep real unexpected console errors visible.
+const originalConsoleError = console.error.bind(console)
+const filteredConsoleError = (...args: unknown[]) => {
+  const text = args.map((value) => String(value)).join(' ')
+  if (/Error: Test(?:$|\s)|Test error|Specific error message|Integration test crash|specific error 42|\bcrash\b/.test(text)) return
+  originalConsoleError(...args)
+}
+const installFilteredConsoleErrorMock = () => {
+  console.error = filteredConsoleError
+  if (typeof window !== 'undefined') window.console.error = filteredConsoleError
+}
+
+installFilteredConsoleErrorMock()
+beforeEach(installFilteredConsoleErrorMock)

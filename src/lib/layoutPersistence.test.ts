@@ -14,4 +14,21 @@ describe('layout persistence', () => {
     expect(isTerminalPanelShortcut({ key: '`', ctrlKey: true })).toBe(true)
     expect(isTerminalPanelShortcut({ key: '`', ctrlKey: false, metaKey: false })).toBe(false)
   })
+
+  it('migrates old settings without a layout and clamps corrupt pane values', () => {
+    const migrated = normalizeLayoutPreferences(undefined)
+    expect(migrated).toEqual(DEFAULT_LAYOUT_PREFERENCES)
+    const corrupt = normalizeLayoutPreferences({
+      sidebarWidth: Number.POSITIVE_INFINITY,
+      historyWidth: -100,
+      rightPanelWidth: 'wide',
+      terminalHeight: 999999,
+      historyCollapsed: false,
+    })
+    expect(corrupt.sidebarWidth).toBe(260)
+    expect(corrupt.historyWidth).toBe(220)
+    expect(corrupt.rightPanelWidth).toBe(340)
+    expect(corrupt.terminalHeight).toBe(480)
+    expect(corrupt.historyCollapsed).toBe(false)
+  })
 })
