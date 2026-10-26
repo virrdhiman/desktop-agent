@@ -18,6 +18,7 @@ export type ToolPolicyDecision = {
   outsideWorkspace: string[]
   restrictedCommandBlocked?: boolean
   restrictedCommandReason?: string
+  workingModeBlocked?: boolean
   browserToolBlocked?: boolean
   previewRequired?: boolean
 }
@@ -125,7 +126,7 @@ export function assessToolPolicy(
     : { blocked: false }
 
   if ((workingMode === 'plan' || workingMode === 'ask' || workingMode === 'review') && risk !== 'read') {
-    return { risk, needsApproval: false, reason: workingMode[0].toUpperCase() + workingMode.slice(1) + ' mode is read-only and cannot run ' + risk + '-risk tools.', targets, outsideWorkspace, previewRequired }
+    return { risk, needsApproval: false, workingModeBlocked: true, reason: workingMode[0].toUpperCase() + workingMode.slice(1) + ' mode is read-only and cannot run ' + risk + '-risk tools.', targets, outsideWorkspace, previewRequired }
   }
 
   const reason = outsideWorkspace.length > 0

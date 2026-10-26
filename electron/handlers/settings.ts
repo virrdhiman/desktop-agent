@@ -20,8 +20,8 @@ import { normalizeDataToolSettings } from '../../src/lib/dataToolSettings'
 import { normalizeAdvancedSettings } from '../../src/lib/advancedSettings'
 import { listLocalOllamaModels, pullSmallOllamaModel } from '../ollamaModels'
 
-/** Path to settings JSON on disk */
-export const SETTINGS_PATH = path.join(app.getPath('userData'), 'settings.json')
+/** Resolve settings after app.setPath('userData') has been applied by the launcher. */
+export function settingsPath(): string { return path.join(app.getPath('userData'), 'settings.json') }
 
 const ENV_PROVIDER_KEYS: Record<string, string[]> = {
   groq: ['GROQ_API_KEY'],
@@ -158,7 +158,7 @@ function normalizeActiveProvider(activeProvider: string | undefined, providers: 
 /** Settings with decrypted keys, for the main process only. */
 export async function loadRuntimeSettings(): Promise<any> {
   try {
-    const parsed = JSON.parse(await fs.promises.readFile(SETTINGS_PATH, 'utf-8'))
+    const parsed = JSON.parse(await fs.promises.readFile(settingsPath(), 'utf-8'))
     if (Array.isArray(parsed.providers)) {
       parsed.providers = withEnvProviderKeys(withNewDefaults(
         parsed.providers.map((p: any) => ({ ...p, apiKey: decryptApiKey(p.apiKey || '') }))
@@ -217,7 +217,7 @@ export async function resolveProviderApiKey(providerId: string, supplied?: strin
 /** Decrypted keys that look real (placeholders like "ollama" are ignored). Used to redact chat history. */
 export async function loadConfiguredApiKeys(): Promise<string[]> {
   try {
-    const parsed = JSON.parse(await fs.promises.readFile(SETTINGS_PATH, 'utf-8'))
+    const parsed = JSON.parse(await fs.promises.readFile(settingsPath(), 'utf-8'))
     return (parsed.providers || [])
       .map((p: any) => decryptApiKey(p.apiKey || ''))
       .filter((k: string) => typeof k === 'string' && k.length >= 12 && !k.startsWith('enc:'))
@@ -250,7 +250,7 @@ export function registerSettingsHandlers() {
     try {
       let previous: any[] = []
       try {
-        const raw = JSON.parse(await fs.promises.readFile(SETTINGS_PATH, 'utf-8'))
+        const raw = JSON.parse(await fs.promises.readFile(settingsPath(), 'utf-8'))
         previous = Array.isArray(raw.providers) ? raw.providers : []
       } catch { /* first save */ }
       const previousKeys = new Map(previous.map((provider) => [provider.id, provider.apiKey || '']))
@@ -269,9 +269,10 @@ export function registerSettingsHandlers() {
           }
         }) || settings.providers,
       }
-      const tmp = `${SETTINGS_PATH}.${process.pid}.${randomUUID()}.tmp`
+      const target = settingsPath()
+      const tmp = `${target}.${process.pid}.${randomUUID()}.tmp`
       await fs.promises.writeFile(tmp, JSON.stringify(toSave, null, 2), 'utf-8')
-      await fs.promises.rename(tmp, SETTINGS_PATH)
+      await fs.promises.rename(tmp, target)
       if (!toSave.browserToolEnabled) closeBrowserSessions()
       return { success: true }
     } catch (err: any) {

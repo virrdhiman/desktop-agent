@@ -1,6 +1,7 @@
 param(
   [string]$FixtureRoot = 'C:\vd-vms\qa-fixture',
-  [switch]$SkipBuild
+  [switch]$SkipBuild,
+  [int]$StabilityMinutes = 30
 )
 
 $ErrorActionPreference = 'Stop'
@@ -49,19 +50,49 @@ if (Test-Path -LiteralPath $resources) {
   $results.Add([pscustomobject]@{ Name = 'packaged-validator'; Status = 'NOT CHECKED'; Evidence = 'release/win-unpacked/resources does not exist; no packaged build was requested' })
 }
 
+$automatedQaOk = $false
+$automatedQaReport = Join-Path $FixtureRoot 'automated\logs\automated-qa.json'
+$packagedExe = Join-Path $repo "$packageOutput/win-unpacked/VD Agent.exe"
+if ($packageOk -and (Test-Path -LiteralPath $packagedExe)) {
+  $automatedCommand = "node scripts/release-automated-qa.mjs --exe `"$packagedExe`" --package-root `"$(Join-Path $repo $packageOutput)`" --fixture `"$(Join-Path $FixtureRoot 'automated')`" --stability-minutes $StabilityMinutes"
+  $automatedQaOk = Run-Check 'automated-packaged-qa' $automatedCommand { node scripts/release-automated-qa.mjs --exe $packagedExe --package-root (Join-Path $repo $packageOutput) --fixture (Join-Path $FixtureRoot 'automated') --stability-minutes $StabilityMinutes }
+} else {
+  $results.Add([pscustomobject]@{ Name = 'automated-packaged-qa'; Status = 'NOT CHECKED'; Evidence = 'packaged executable was not produced' })
+}
+
+function Qa-Group([string[]]$Names) {
+  if (-not (Test-Path -LiteralPath $automatedQaReport)) { return [pscustomobject]@{ Status = 'NOT CHECKED'; Evidence = 'automated-packaged-qa did not produce a report' } }
+  $report = Get-Content -LiteralPath $automatedQaReport -Raw | ConvertFrom-Json
+  $rows = @($report.results | Where-Object { $Names -contains $_.name })
+  if ($rows.Count -lt $Names.Count) { return [pscustomobject]@{ Status = 'NOT CHECKED'; Evidence = "Missing automated checks: $((Compare-Object $Names @($rows.name) -PassThru | Where-Object { $_ -in $Names }) -join ', ')" } }
+  $failed = @($rows | Where-Object status -eq 'FAIL')
+  [pscustomobject]@{ Status = if ($failed.Count) { 'FAIL' } else { 'PASS' }; Evidence = (($rows | ForEach-Object { "$($_.name): $($_.detail)" }) -join ' | ') }
+}
+
+$qaAgent = Qa-Group @('packaged first run is isolated and key-free', 'first-run key guidance is visible')
+$qaModes = Qa-Group @('working mode policy is enforced in the packaged app')
+$qaIde = Qa-Group @('IDE no-folder state offers Open Folder', 'IDE is single-instance and second open focuses it', 'IDE follows the shared workspace', 'IDE rename action is wired', 'IDE delete confirmation is wired')
+$qaGit = Qa-Group @('throwaway git fixture supports status, diff, stage and commit')
+$qaBrowser = Qa-Group @('local browser fixture labels source and handles 404')
+$qaFiles = Qa-Group @('permission errors are returned without renderer crashes', 'file tool rejects paths outside the workspace')
+$qaProvider = Qa-Group @('packaged app has no secret-looking files', 'packaged first run is isolated and key-free')
+$qaChats = Qa-Group @('long chat crosses the context warning threshold', 'summarize and continue keeps the transcript recoverable', 'fork chat creates a linked child and leaves parent messages unchanged', 'fork from here creates a child record')
+$qaStability = Qa-Group @('idle/action stability stays below 2x baseline', 'stability run has no renderer errors or crashes')
+$qaSecurity = Qa-Group @('packaged app has no secret-looking files', 'packaged security preferences are present', 'packaged CSP and external-link policy are present', 'packaged preload exposes a bounded bridge')
+
 $automated = @(
-  [pscustomobject]@{ Item = '1 Startup/isolation'; Status = if ($smokeOk) { 'PASS' } else { 'FAIL' }; Evidence = 'isolated-smoke.log' },
-  [pscustomobject]@{ Item = '2 Agent view'; Status = 'NOT CHECKED'; Evidence = 'Requires manual visual interaction; smoke covers startup only' },
-  [pscustomobject]@{ Item = '3 Working modes'; Status = 'NOT CHECKED'; Evidence = 'Requires real UI tool-policy interaction' },
-  [pscustomobject]@{ Item = '4 Code window'; Status = 'NOT CHECKED'; Evidence = 'Requires manual editor/window interaction' },
+  [pscustomobject]@{ Item = '1 Startup/isolation'; Status = if ($smokeOk -and $qaAgent.Status -eq 'PASS') { 'PASS' } else { if ($qaAgent.Status -eq 'NOT CHECKED') { 'NOT CHECKED' } else { 'FAIL' } }; Evidence = "isolated-smoke.log; $($qaAgent.Evidence)" },
+  [pscustomobject]@{ Item = '2 Agent view'; Status = $qaAgent.Status; Evidence = $qaAgent.Evidence },
+  [pscustomobject]@{ Item = '3 Working modes'; Status = $qaModes.Status; Evidence = $qaModes.Evidence },
+  [pscustomobject]@{ Item = '4 Code window'; Status = $qaIde.Status; Evidence = $qaIde.Evidence },
   [pscustomobject]@{ Item = '5 Terminal'; Status = if ($smokeOk) { 'PASS' } else { 'FAIL' }; Evidence = 'isolated-smoke.log; terminal path is exercised by smoke' },
-  [pscustomobject]@{ Item = '6 Git fixture'; Status = 'NOT CHECKED'; Evidence = 'Requires throwaway-repository UI workflow' },
-  [pscustomobject]@{ Item = '7 Local browser fixture'; Status = 'NOT CHECKED'; Evidence = 'Requires local HTTP fixture interaction' },
-  [pscustomobject]@{ Item = '8 Files/path safety'; Status = 'NOT CHECKED'; Evidence = 'Requires manual permission/traversal cases' },
-  [pscustomobject]@{ Item = '9 Providers/keys'; Status = 'NOT CHECKED'; Evidence = 'No real credentials used by this gate' },
-  [pscustomobject]@{ Item = '10 Chats/long context'; Status = 'NOT CHECKED'; Evidence = 'Requires manual compaction/fork/relaunch flow' },
-  [pscustomobject]@{ Item = '11 Stability'; Status = 'NOT CHECKED'; Evidence = '30-minute idle and crash recovery require a live desktop session' },
-  [pscustomobject]@{ Item = '12 Security'; Status = 'NOT CHECKED'; Evidence = 'Requires packaged runtime inspection' },
+  [pscustomobject]@{ Item = '6 Git fixture'; Status = $qaGit.Status; Evidence = $qaGit.Evidence },
+  [pscustomobject]@{ Item = '7 Local browser fixture'; Status = $qaBrowser.Status; Evidence = $qaBrowser.Evidence },
+  [pscustomobject]@{ Item = '8 Files/path safety'; Status = $qaFiles.Status; Evidence = $qaFiles.Evidence },
+  [pscustomobject]@{ Item = '9 Providers/keys'; Status = $qaProvider.Status; Evidence = $qaProvider.Evidence },
+  [pscustomobject]@{ Item = '10 Chats/long context'; Status = $qaChats.Status; Evidence = $qaChats.Evidence },
+  [pscustomobject]@{ Item = '11 Stability'; Status = $qaStability.Status; Evidence = $qaStability.Evidence },
+  [pscustomobject]@{ Item = '12 Security'; Status = $qaSecurity.Status; Evidence = $qaSecurity.Evidence },
   [pscustomobject]@{ Item = '13 Packaging'; Status = if ($buildOk -and $vsixOk -and $preflightOk -and $packageOk -and $capabilitiesOk) { 'PASS' } else { 'FAIL' }; Evidence = 'build/vscode-package/package-preflight/unsigned-package/packaged-validator logs' },
   [pscustomobject]@{ Item = '14 Final checks'; Status = if ($buildOk -and $lintOk -and $testOk) { 'PASS' } else { 'FAIL' }; Evidence = 'build/lint/vitest logs' }
 )
@@ -81,7 +112,7 @@ $lines.Add('')
 $lines.Add('## Automated checks')
 foreach ($row in $results) { $lines.Add("- **$($row.Status)** $($row.Name): ``$($row.Evidence)``") }
 $lines.Add('')
-$lines.Add('Manual items remain NO-GO until the operator completes the fixture-only visual checklist. No real sites, accounts, API keys, purchases, or user data are used by this gate.')
+$lines.Add('Automated checks use only throwaway fixture files, a local 127.0.0.1 server, and an isolated packaged-app userData directory. Visual polish and unsigned-installer SmartScreen interaction remain manual.')
 Set-Content -LiteralPath (Join-Path $repo 'docs/release-checklist.md') -Value $lines -Encoding UTF8
 
 Write-Output "Release gate verdict: $verdict"

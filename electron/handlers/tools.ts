@@ -169,6 +169,8 @@ export function registerToolHandlers() {
           return { error: `Restricted command mode blocked this command: ${decision.restrictedCommandReason}. This is a command policy, not an OS sandbox.` }
         }
 
+        if (decision.workingModeBlocked) return { error: decision.reason }
+
         if (decision.risk !== 'read' && tool.name !== 'run_command' && !tool.workspace) {
           return { error: `Blocked ${tool.name}: open a workspace before allowing agent mutations.` }
         }

@@ -41,10 +41,13 @@ import { closeBrowserSessions } from './browserTool'
 import { appendDiagnosticsLog } from './diagnostics'
 import { SingleIdeWindow } from './ideWindow'
 import { SharedStateStore } from './sharedState'
+import { userDataOverride } from './userDataPath'
 import type { SharedAppState } from '../src/types'
 
 // package.json has "type": "module", so the main bundle is ESM and has no CommonJS __dirname.
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const qaUserData = userDataOverride()
+if (qaUserData) app.setPath('userData', qaUserData)
 
 /** Main BrowserWindow reference — passed to handlers that need to send events to renderer */
 let mainWindow: BrowserWindow | null = null

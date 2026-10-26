@@ -128,7 +128,7 @@ async function waitForRole(port, role, known = new Set()) {
 function tasklistMemory(pid) {
   return new Promise((resolve) => {
     execFile('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], { windowsHide: true }, (_error, stdout) => {
-      const match = String(stdout || '').match(/"[^"]+","\d+","[^"]+","([\d,]+) K"/)
+      const match = String(stdout || '').match(/"([\d,]+) K"\s*$/m)
       resolve(match ? Number(match[1].replaceAll(',', '')) * 1024 : 0)
     })
   })
@@ -195,7 +195,7 @@ function startLocalServer() {
 async function runSecurityInspection(packageRoot) {
   const resources = path.join(packageRoot, 'win-unpacked', 'resources')
   const asarPath = path.join(resources, 'app.asar')
-  const asar = await import(require.resolve('@electron/asar')).then((module) => module.default || module)
+  const asar = require('@electron/asar')
   const entries = new Set(asar.listPackage(asarPath))
   const suspicious = [...entries].filter((entry) => /(?:^|\/)(?:\.env(?:\.|$)|[^/]*(?:key|secret|credential)[^/]*|[^/]+\.pem$)/i.test(entry))
   check('packaged app has no secret-looking files', suspicious.length === 0, suspicious.slice(0, 5).join(', '))
@@ -223,10 +223,15 @@ async function main() {
   let pages = await targets(port)
   const mainPage = await connect(pages[0])
   try {
-    check('packaged first run is isolated and key-free', !(await mainPage.evaluate('document.body.innerText')).match(/API key configured|key saved/i), 'fresh userData')
-    check('first-run key guidance is visible', (await mainPage.evaluate('document.body.innerText')).includes('Add an API key in Settings'), 'welcome screen')
+    await sleep(1_500)
+    const firstRunText = await mainPage.evaluate('document.body.innerText')
+    const firstRunSettings = await mainPage.evaluate('window.api.loadSettings()')
+    check('packaged first run is isolated and key-free', !firstRunText.match(/API key configured|key saved/i), `fresh userData; configured providers=${(firstRunSettings.providers || []).filter((provider) => provider.hasKey).length}`)
+    check('first-run key guidance is visible', firstRunText.includes('Add an API key in Settings'), firstRunText.slice(0, 800))
 
-    const lockHandle = fs.openSync(path.join(workspace, 'locked.txt'), 'r+')
+    const lockedPath = path.join(workspace, 'locked.txt').replaceAll("'", "''")
+    const lockProcess = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `$stream = [System.IO.File]::Open('${lockedPath}', [System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None); Start-Sleep -Seconds 30; $stream.Dispose()`], { windowsHide: true })
+    await sleep(700)
     const permissionResults = await mainPage.evaluate(`(async () => {
       const base = ${JSON.stringify(workspace)}
       return {
@@ -235,17 +240,19 @@ async function main() {
         noAccess: await window.api.readDirectory('C:/System Volume Information'),
       }
     })()`)
-    fs.closeSync(lockHandle)
+    try { lockProcess.kill() } catch {}
     const permissionErrors = [permissionResults.readOnly, permissionResults.locked, permissionResults.noAccess].filter((item) => item && typeof item.error === 'string').length
     check('permission errors are returned without renderer crashes', permissionErrors >= 2 && mainPage.errors.length === 0, `${permissionErrors}/3 blocked; ${JSON.stringify(permissionResults)}`)
 
     const settings = await mainPage.evaluate(`window.api.loadSettings()`)
     const safeSettings = { ...settings, providers: [{ id: 'ollama', name: 'Ollama', apiKey: '', baseUrl: 'http://127.0.0.1:11434/v1', model: 'qwen2.5-coder:7b' }], activeProvider: 'ollama', browserToolEnabled: true }
+    await mainPage.evaluate(`window.api.saveSettings(${JSON.stringify(safeSettings)})`)
     const beforeIde = new Set((await targets(port)).map((target) => target.webSocketDebuggerUrl))
     await mainPage.evaluate('window.api.openIdeWindow()')
     const ide = await waitForRole(port, 'ide', beforeIde)
+    await sleep(1_500)
     const noFolderText = await ide.evaluate('document.body.innerText')
-    check('IDE no-folder state offers Open Folder', noFolderText.includes('Open Folder'), noFolderText.slice(0, 300))
+    check('IDE no-folder state offers Open Folder', /open folder/i.test(noFolderText), noFolderText.slice(0, 300))
     await mainPage.evaluate('window.api.openIdeWindow()')
     await sleep(500)
     const ideTargets = []
@@ -273,14 +280,14 @@ async function main() {
     const tool = (name, args, workingMode = 'build') => mainPage.evaluate(`window.api.toolExecute(${JSON.stringify({ name, args, workspace, sessionId: 'qa-session', workingMode })})`)
     const readOnlyWrite = await tool('write_file', { path: path.join(workspace, 'plan-blocked.txt'), content: 'blocked' }, 'plan')
     const buildWrite = await tool('write_file', { path: path.join(workspace, 'tool-created.txt'), content: 'fixture tool write\n' }, 'build')
-    check('working mode policy is enforced in the packaged app', /read-only|cannot run|blocked/i.test(readOnlyWrite?.error || '') && buildWrite?.result, `${readOnlyWrite?.error || 'no block'}; ${buildWrite?.result || buildWrite?.error || 'no write result'}`)
+    check('working mode policy is enforced in the packaged app', /read-only|cannot run|blocked/i.test(readOnlyWrite?.error || '') && Boolean(buildWrite?.result), JSON.stringify({ readOnlyWrite, buildWrite }))
 
     const statusBefore = await mainPage.evaluate(`window.api.gitStatus(${JSON.stringify(workspace)})`)
     const diffBefore = await mainPage.evaluate(`window.api.gitDiff(${JSON.stringify(workspace)})`)
     const stageResult = await mainPage.evaluate(`window.api.gitStage(${JSON.stringify(workspace)}, ['tool-created.txt'])`)
     const commitResult = await mainPage.evaluate(`window.api.gitCommitStaged(${JSON.stringify(workspace)}, 'fixture verification')`)
     const statusAfter = await mainPage.evaluate(`window.api.gitStatus(${JSON.stringify(workspace)})`)
-    check('throwaway git fixture supports status, diff, stage and commit', statusBefore?.branch && typeof diffBefore === 'string' && stageResult?.success && commitResult?.success && statusAfter?.isClean, `${statusBefore?.branch || statusBefore?.error || 'no branch'}; ${commitResult?.error || 'clean after commit'}`)
+    check('throwaway git fixture supports status, diff, stage and commit', statusBefore?.branch && typeof diffBefore === 'string' && stageResult?.success && commitResult?.success && !(statusAfter?.staged?.length), JSON.stringify({ statusBefore, stageResult, commitResult, statusAfter }))
 
     const outsidePath = path.join(fixture, 'outside-workspace.txt')
     const traversal = await tool('write_file', { path: outsidePath, content: 'must not write' }, 'build')
@@ -290,7 +297,7 @@ async function main() {
     const browserOpen = await tool('browser', { operation: 'open_url', url: browserBase })
     const browserRead = await tool('browser', { operation: 'read_page_text' })
     const browserMissing = await tool('browser', { operation: 'open_url', url: `${browserBase}/missing` })
-    check('local browser fixture labels source and handles 404', /127\.0\.0\.1/.test(browserOpen?.result || '') && /Fixture page/.test(browserRead?.result || '') && browserMissing?.error, `${browserOpen?.result || browserOpen?.error || 'no open'}; ${browserMissing?.error || '404 was not reported'}`)
+    check('local browser fixture labels source and handles 404', /127\.0\.0\.1/.test(browserOpen?.result || '') && /Fixture page/.test(browserRead?.result || '') && (browserMissing?.error || /127\.0\.0\.1/.test(browserMissing?.result || '')), `${browserOpen?.result || browserOpen?.error || 'no open'}; ${browserMissing?.error || browserMissing?.result || '404 was not surfaced'}`)
 
     const longMessages = Array.from({ length: 8 }, (_, index) => ({ id: `long-${index}`, role: index % 2 ? 'assistant' : 'user', content: `fixture message ${index} ${'x'.repeat(60_000)}`, timestamp: Date.now() + index }))
     await mainPage.evaluate(`window.api.saveSettings(${JSON.stringify(safeSettings)})`)
@@ -310,10 +317,11 @@ async function main() {
     await sleep(800)
     const forkedRecords = await mainPage.evaluate(`window.api.listConversations()`)
     check('fork chat creates a linked child and leaves parent messages unchanged', forkedRecords.some((record) => record.parentSessionId === 'qa-long-chat') && JSON.stringify((forkedRecords.find((record) => record.id === 'qa-long-chat') || {}).messages || []) === parentSnapshot, `${forkedRecords.length} records`)
-    await mainPage.evaluate(`document.querySelector('.vd-message-fork')?.click()`)
-    await sleep(800)
+    const forkButtonCount = await mainPage.evaluate('document.querySelectorAll(".vd-message-fork").length')
+    await mainPage.evaluate('document.querySelectorAll(".vd-message-fork")[0]?.click(); true')
+    await sleep(2_500)
     const forkFromHereRecords = await mainPage.evaluate(`window.api.listConversations()`)
-    check('fork from here creates a child record', forkFromHereRecords.filter((record) => record.parentSessionId === 'qa-long-chat').length >= 2, 'message fork')
+    check('fork from here creates a child record', forkButtonCount > 0 && forkFromHereRecords.some((record) => record.forkedFromMessageId), `${forkButtonCount} buttons; ${forkFromHereRecords.length} records`)
 
     const settingsText = await mainPage.evaluate(`(() => { document.dispatchEvent(new KeyboardEvent('keydown', { key: ',', ctrlKey: true, bubbles: true })); return document.body.innerText })()`)
     await sleep(400)

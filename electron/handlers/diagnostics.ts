@@ -1,10 +1,10 @@
 import { app, clipboard, dialog, ipcMain } from 'electron'
 import fs from 'fs'
 import { appendDiagnosticsLog, buildDiagnosticsReport, formatDiagnosticsReport, readDiagnosticsLines, type DiagnosticsLogEvent, type DiagnosticsViewerPayload } from '../diagnostics'
-import { SETTINGS_PATH } from './settings'
+import { settingsPath } from './settings'
 
 async function loadDiagnosticsSettings(): Promise<any> {
-  try { return JSON.parse(await fs.promises.readFile(SETTINGS_PATH, 'utf8')) } catch { return {} }
+  try { return JSON.parse(await fs.promises.readFile(settingsPath(), 'utf8')) } catch { return {} }
 }
 
 function validLogEvent(value: unknown): DiagnosticsLogEvent | null {
