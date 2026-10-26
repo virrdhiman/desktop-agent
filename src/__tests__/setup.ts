@@ -12,6 +12,7 @@ import { getSetupCatalog } from '../lib/prerequisiteSetup'
 if (typeof window !== 'undefined') Object.defineProperty(window, 'api', {
   value: {
     openDirectory: vi.fn(),
+  pickContext: vi.fn(),
     readDirectory: vi.fn(),
     readFile: vi.fn(),
     writeFile: vi.fn(),
