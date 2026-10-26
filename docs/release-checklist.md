@@ -1,6 +1,6 @@
-﻿# Release Gate
+# Release Gate
 
-Generated: 2026-10-25T20:56:41.0572329+05:30
+Generated: 2026-10-26T11:43:34.0590372+05:30
 Fixture root: `C:\vd-vms\qa-fixture` (throwaway only)
 Release verdict: **NO-GO**
 
@@ -22,6 +22,7 @@ Release verdict: **NO-GO**
 | 14 Final checks | PASS | `build/lint/vitest logs` |
 
 ## Automated checks
+- **PASS** build: `C:\vd-vms\qa-fixture\logs\build.log`
 - **PASS** lint: `C:\vd-vms\qa-fixture\logs\lint.log`
 - **PASS** vitest: `C:\vd-vms\qa-fixture\logs\vitest.log`
 - **PASS** isolated-smoke: `C:\vd-vms\qa-fixture\logs\isolated-smoke.log`
@@ -31,3 +32,11 @@ Release verdict: **NO-GO**
 - **PASS** packaged-validator: `C:\vd-vms\qa-fixture\logs\packaged-validator.log`
 
 Manual items remain NO-GO until the operator completes the fixture-only visual checklist. No real sites, accounts, API keys, purchases, or user data are used by this gate.
+
+## Regression and coverage follow-up
+
+- **Full Vitest:** PASS — 552 tests across 74 files, single-worker mode; the normal `npm test` command uses `--maxWorkers=1 --silent` to avoid worker-start flakiness and expected React/jsdom error noise.
+- **Coverage:** PASS — 73.37% statements, 62.88% branches, 74.15% functions, 78.10% lines.
+- **Lowest line coverage (electron/ and src/lib/):** `electron/settings.ts` 24.77%, `electron/dataTools.ts` 74.30%, `src/lib/workingModePolicy.ts` 75.00%, `electron/vscodeBridge.ts` 82.07%, `electron/patchPreview.ts` 86.84%, `electron/checkpointStore.ts` 87.63%, `electron/archiveStore.ts` 88.04%, `src/lib/inlineEdits.ts` 88.07%, `electron/externalLanguageService.ts` 88.95%, `electron/prerequisiteDownload.ts` 89.66%.
+- **New regression coverage:** renderer Node-global scan, xterm fit lifecycle, mode-policy matrix, layout migration/clamping, chat migration/summary/fork, key masking, git clean/conflict/detached fixtures, file-tool traversal, HTML escaping, and shortcut preservation.
+- **Smoke:** PASS — 56/56 checks after updating the harness for the collapsed history-pane default.
