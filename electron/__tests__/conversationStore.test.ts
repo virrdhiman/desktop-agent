@@ -178,6 +178,64 @@ describe('conversationStore', () => {
     expect(JSON.stringify(saved?.resume)).not.toContain('providers')
   })
 
+  it('round-trips workspace and verification state for restart recovery', async () => {
+    await saveConversation(dir, {
+      id: 'session-rich-resume',
+      messages: [msg('1', 'user', 'continue the edit')],
+      resume: {
+        workspacePath: '/repo',
+        tasks: [{ id: 'task-1', status: 'running' }],
+        toolExecutions: [{ name: 'read_file', ok: true, resultSummary: 'loaded' }],
+        lastVerification: { ok: true },
+        checklistState: { setupChecklistDismissed: true },
+      },
+    })
+    const saved = await readConversation(dir, 'session-rich-resume')
+    expect(saved?.resume).toMatchObject({
+      workspacePath: '/repo',
+      tasks: [{ id: 'task-1', status: 'running' }],
+      lastVerification: { ok: true },
+      checklistState: { setupChecklistDismissed: true },
+    })
+    expect(saved?.resume?.toolExecutions).toEqual([{ name: 'read_file', ok: true, resultSummary: 'loaded' }])
+  })
+
+  it('keeps pinned and summary metadata after a restart read', async () => {
+    await saveConversation(dir, {
+      id: 'session-metadata',
+      title: 'Resume this task',
+      pinned: true,
+      summary: 'A bounded handoff summary',
+      messages: [msg('1', 'user', 'continue')],
+    })
+    const saved = await readConversation(dir, 'session-metadata')
+    expect(saved).toMatchObject({ title: 'Resume this task', pinned: true, summary: 'A bounded handoff summary' })
+  })
+
+  it('keeps the original creation time while updating the resume record', async () => {
+    const first = await saveConversation(dir, {
+      id: 'session-created-time',
+      createdAt: 1234,
+      messages: [msg('1', 'user', 'first')],
+    })
+    await saveConversation(dir, {
+      id: 'session-created-time',
+      createdAt: first.createdAt,
+      messages: [msg('1', 'user', 'first'), msg('2', 'assistant', 'continue')],
+      resume: { workspacePath: '/repo', tasks: [{ id: 'task-2', status: 'queued' }] },
+    })
+    const saved = await readConversation(dir, 'session-created-time')
+    expect(saved?.createdAt).toBe(1234)
+    expect(saved?.messages).toHaveLength(2)
+    expect(saved?.resume).toMatchObject({ workspacePath: '/repo', tasks: [{ id: 'task-2', status: 'queued' }] })
+  })
+
+  it('ignores malformed resume values instead of crashing restart hydration', async () => {
+    const saved = normalizeConversation({ messages: [msg('1', 'user', 'continue')], resume: [] }, 'session-invalid-resume', 42)
+    expect(saved?.resume).toBeUndefined()
+    expect(saved?.messages).toHaveLength(1)
+  })
+
   it('normalizeConversation drops invalid messages and returns null when nothing is left', () => {
     expect(normalizeConversation({ messages: [{ role: 'user' }] }, 'ok-id', 1)).toBeNull()
     expect(normalizeConversation(null, 'ok-id', 1)).toBeNull()
