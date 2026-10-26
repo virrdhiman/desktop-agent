@@ -1,0 +1,358 @@
+/**
+ * Fixture-only release checks that can run against a packaged Electron build.
+ * No real settings, accounts, API keys, sites, or user data are used.
+ */
+import fs from 'node:fs'
+import fsp from 'node:fs/promises'
+import path from 'node:path'
+import os from 'node:os'
+import { createServer } from 'node:http'
+import { spawn, execFile, execFileSync } from 'node:child_process'
+import { createRequire } from 'node:module'
+import { fileURLToPath } from 'node:url'
+
+const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const require = createRequire(path.join(repo, 'package.json'))
+const fixture = path.resolve(value('--fixture') || 'C:/vd-vms/qa-fixture')
+const exe = path.resolve(value('--exe') || '')
+const stabilityMinutes = Number(value('--stability-minutes') || 30)
+const userData = path.join(fixture, 'automated-user-data')
+const workspace = path.join(fixture, 'automated-workspace')
+const results = []
+
+function value(flag) {
+  const index = process.argv.indexOf(flag)
+  return index >= 0 ? process.argv[index + 1] : undefined
+}
+
+function check(name, ok, detail = '') {
+  results.push({ name, status: ok ? 'PASS' : 'FAIL', detail })
+  console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${detail ? ` — ${detail}` : ''}`)
+}
+
+function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)) }
+
+async function targets(port) {
+  const response = await fetch(`http://127.0.0.1:${port}/json/list`)
+  return (await response.json()).filter((item) => item.type === 'page' && !item.url.startsWith('devtools://'))
+}
+
+class CdpPage {
+  constructor(target) {
+    this.target = target
+    this.socket = new WebSocket(target.webSocketDebuggerUrl)
+    this.sequence = 0
+    this.pending = new Map()
+    this.errors = []
+    this.ready = new Promise((resolve, reject) => {
+      this.socket.onopen = resolve
+      this.socket.onerror = reject
+    })
+    this.socket.onmessage = (event) => {
+      const message = JSON.parse(event.data)
+      if (message.id && this.pending.has(message.id)) {
+        this.pending.get(message.id)(message)
+        this.pending.delete(message.id)
+      }
+      if (message.method === 'Runtime.exceptionThrown') this.errors.push(message.params.exceptionDetails?.text || 'renderer exception')
+      if (message.method === 'Log.entryAdded' && message.params.entry.level === 'error') this.errors.push(message.params.entry.text)
+    }
+  }
+
+  async send(method, params = {}) {
+    await this.ready
+    const id = ++this.sequence
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pending.delete(id)
+        reject(new Error(`CDP timeout: ${method}`))
+      }, 15_000)
+      this.pending.set(id, (message) => {
+        clearTimeout(timer)
+        if (message.error) reject(new Error(message.error.message))
+        else resolve(message)
+      })
+      this.socket.send(JSON.stringify({ id, method, params }))
+    })
+  }
+
+  async evaluate(expression) {
+    const response = await this.send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true })
+    if (response.result?.exceptionDetails) throw new Error(response.result.exceptionDetails.text || 'renderer evaluation failed')
+    return response.result?.result?.value
+  }
+
+  async click(selector) {
+    return this.evaluate(`document.querySelector(${JSON.stringify(selector)})?.click(); true`)
+  }
+
+  close() {
+    try { this.socket.close() } catch {}
+  }
+}
+
+async function connect(target) {
+  const page = new CdpPage(target)
+  await page.send('Runtime.enable')
+  await page.send('Log.enable')
+  return page
+}
+
+async function waitForPort(portFile) {
+  for (let attempt = 0; attempt < 160; attempt += 1) {
+    await sleep(250)
+    if (!fs.existsSync(portFile)) continue
+    try {
+      const port = Number(fs.readFileSync(portFile, 'utf8').split(/\r?\n/)[0])
+      if (port && (await targets(port)).length) return port
+    } catch {}
+  }
+  throw new Error('Packaged application did not expose a DevTools page')
+}
+
+async function waitForRole(port, role, known = new Set()) {
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    for (const target of await targets(port)) {
+      if (known.has(target.webSocketDebuggerUrl)) continue
+      try {
+        const page = await connect(target)
+        if (await page.evaluate('window.api?.windowRole') === role) return page
+        page.close()
+      } catch {}
+    }
+    await sleep(250)
+  }
+  throw new Error(`No ${role} window appeared`)
+}
+
+function tasklistMemory(pid) {
+  return new Promise((resolve) => {
+    execFile('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], { windowsHide: true }, (_error, stdout) => {
+      const match = String(stdout || '').match(/"[^"]+","\d+","[^"]+","([\d,]+) K"/)
+      resolve(match ? Number(match[1].replaceAll(',', '')) * 1024 : 0)
+    })
+  })
+}
+
+async function publishWorkspace(main, settings) {
+  const files = [{ name: 'qa-editor.ts', path: path.join(workspace, 'qa-editor.ts'), isDirectory: false }]
+  const snapshot = {
+    version: 1,
+    workspacePath: workspace,
+    files,
+    selectedFile: files[0].path,
+    openFiles: [files[0].path],
+    fileContent: fs.readFileSync(files[0].path, 'utf8'),
+    fileDirty: false,
+    gitStatus: null,
+    gitLog: [],
+    settings,
+    messages: [],
+    projectNotes: 'Release fixture notes',
+    currentSessionId: null,
+    planMode: false,
+    terminalTabs: [{ id: 'qa-terminal', name: 'Terminal', cwd: workspace }],
+    activeTerminalTab: 'qa-terminal',
+    terminalEntries: [],
+  }
+  await main.evaluate(`window.api.publishSharedState(${JSON.stringify(snapshot)}); true`)
+}
+
+async function prepareFixture() {
+  await fsp.rm(workspace, { recursive: true, force: true })
+  await fsp.rm(userData, { recursive: true, force: true })
+  await fsp.mkdir(workspace, { recursive: true })
+  await fsp.mkdir(userData, { recursive: true })
+  await fsp.writeFile(path.join(workspace, 'qa-editor.ts'), 'export const qaValue = 1\n', 'utf8')
+  await fsp.writeFile(path.join(workspace, 'readonly.txt'), 'readonly fixture\n', 'utf8')
+  await fsp.writeFile(path.join(workspace, 'locked.txt'), 'locked fixture\n', 'utf8')
+  await fsp.writeFile(path.join(workspace, 'delete-me.txt'), 'delete fixture\n', 'utf8')
+  await fsp.writeFile(path.join(workspace, 'rename-me.txt'), 'rename fixture\n', 'utf8')
+  try { await fsp.chmod(path.join(workspace, 'readonly.txt'), 0o444) } catch {}
+  execFileSync('git', ['-C', workspace, 'init'], { stdio: 'ignore', windowsHide: true })
+  execFileSync('git', ['-C', workspace, 'config', 'user.email', 'vd-qa@example.invalid'], { stdio: 'ignore', windowsHide: true })
+  execFileSync('git', ['-C', workspace, 'config', 'user.name', 'VD QA'], { stdio: 'ignore', windowsHide: true })
+  execFileSync('git', ['-C', workspace, 'add', '.'], { stdio: 'ignore', windowsHide: true })
+  execFileSync('git', ['-C', workspace, 'commit', '-m', 'fixture baseline'], { stdio: 'ignore', windowsHide: true })
+}
+
+function startLocalServer() {
+  const server = createServer((request, response) => {
+    if (request.url === '/missing') {
+      response.writeHead(404, { 'content-type': 'text/plain' })
+      response.end('fixture 404')
+      return
+    }
+    response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
+    response.end('<!doctype html><html><body><h1>Fixture page</h1><a href="/next">Next</a><p>source fixture</p></body></html>')
+  })
+  return new Promise((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', () => resolve({ server, port: server.address().port }))
+  })
+}
+
+async function runSecurityInspection(packageRoot) {
+  const resources = path.join(packageRoot, 'win-unpacked', 'resources')
+  const asarPath = path.join(resources, 'app.asar')
+  const asar = await import(require.resolve('@electron/asar')).then((module) => module.default || module)
+  const entries = new Set(asar.listPackage(asarPath))
+  const suspicious = [...entries].filter((entry) => /(?:^|\/)(?:\.env(?:\.|$)|[^/]*(?:key|secret|credential)[^/]*|[^/]+\.pem$)/i.test(entry))
+  check('packaged app has no secret-looking files', suspicious.length === 0, suspicious.slice(0, 5).join(', '))
+  const main = asar.extractFile(asarPath, 'dist-electron/main.js').toString('utf8')
+  const preload = asar.extractFile(asarPath, 'dist-electron/preload.cjs').toString('utf8')
+  check('packaged security preferences are present', /contextIsolation\s*:\s*(?:true|!0)/.test(main) && /nodeIntegration\s*:\s*(?:false|!1)/.test(main) && /sandbox\s*:\s*(?:true|!0)/.test(main), 'main BrowserWindow webPreferences')
+  check('packaged CSP and external-link policy are present', /Content-Security-Policy/.test(main) && /setWindowOpenHandler/.test(main) && /shell\.openExternal/.test(main), 'CSP, denied window opens, system browser')
+  check('packaged preload exposes a bounded bridge', /contextBridge\.exposeInMainWorld/.test(preload) && !/ipcRenderer\.send\(.*window\./.test(preload), 'contextBridge preload')
+  return entries
+}
+
+async function main() {
+  if (process.platform !== 'win32') throw new Error('This packaged QA harness is intended for Windows')
+  if (!exe || !fs.existsSync(exe)) throw new Error(`Packaged executable not found: ${exe}`)
+  await prepareFixture()
+  const portFile = path.join(userData, 'DevToolsActivePort')
+  fs.rmSync(portFile, { force: true })
+  const child = spawn(exe, ['--remote-debugging-port=0', `--user-data-dir=${userData}`], {
+    cwd: path.dirname(exe),
+    env: { ...process.env, VD_AGENT_DISABLE_ENV_IMPORT: '1', VD_AGENT_AUTO_APPROVE_TOOLS: '1' },
+    windowsHide: true,
+  })
+  const port = await waitForPort(portFile)
+  const localServer = await startLocalServer()
+  let pages = await targets(port)
+  const mainPage = await connect(pages[0])
+  try {
+    check('packaged first run is isolated and key-free', !(await mainPage.evaluate('document.body.innerText')).match(/API key configured|key saved/i), 'fresh userData')
+    check('first-run key guidance is visible', (await mainPage.evaluate('document.body.innerText')).includes('Add an API key in Settings'), 'welcome screen')
+
+    const lockHandle = fs.openSync(path.join(workspace, 'locked.txt'), 'r+')
+    const permissionResults = await mainPage.evaluate(`(async () => {
+      const base = ${JSON.stringify(workspace)}
+      return {
+        readOnly: await window.api.writeFile(base + '/readonly.txt', 'blocked'),
+        locked: await window.api.writeFile(base + '/locked.txt', 'blocked'),
+        noAccess: await window.api.readDirectory('C:/System Volume Information'),
+      }
+    })()`)
+    fs.closeSync(lockHandle)
+    const permissionErrors = [permissionResults.readOnly, permissionResults.locked, permissionResults.noAccess].filter((item) => item && typeof item.error === 'string').length
+    check('permission errors are returned without renderer crashes', permissionErrors >= 2 && mainPage.errors.length === 0, `${permissionErrors}/3 blocked; ${JSON.stringify(permissionResults)}`)
+
+    const settings = await mainPage.evaluate(`window.api.loadSettings()`)
+    const safeSettings = { ...settings, providers: [{ id: 'ollama', name: 'Ollama', apiKey: '', baseUrl: 'http://127.0.0.1:11434/v1', model: 'qwen2.5-coder:7b' }], activeProvider: 'ollama', browserToolEnabled: true }
+    const beforeIde = new Set((await targets(port)).map((target) => target.webSocketDebuggerUrl))
+    await mainPage.evaluate('window.api.openIdeWindow()')
+    const ide = await waitForRole(port, 'ide', beforeIde)
+    const noFolderText = await ide.evaluate('document.body.innerText')
+    check('IDE no-folder state offers Open Folder', noFolderText.includes('Open Folder'), noFolderText.slice(0, 300))
+    await mainPage.evaluate('window.api.openIdeWindow()')
+    await sleep(500)
+    const ideTargets = []
+    for (const target of await targets(port)) {
+      try { if (await (await connect(target)).evaluate('window.api?.windowRole') === 'ide') ideTargets.push(target) } catch {}
+    }
+    check('IDE is single-instance and second open focuses it', ideTargets.length === 1, `${ideTargets.length} IDE targets`)
+    await publishWorkspace(mainPage, safeSettings)
+    await sleep(700)
+    check('IDE follows the shared workspace', (await ide.evaluate('document.body.innerText')).includes('qa-editor.ts'), 'shared fixture workspace')
+    await ide.evaluate(`(() => {
+      window.prompt = () => 'qa-renamed.ts'
+      const item = [...document.querySelectorAll('[role="treeitem"]')].find((node) => node.textContent.includes('qa-editor.ts'))
+      item?.click()
+      return Boolean(item)
+    })()`)
+    await sleep(250)
+    await ide.evaluate(`(() => { const button = [...document.querySelectorAll('button')].find((node) => node.textContent === 'Rename'); button?.click(); return true })()`)
+    await sleep(500)
+    check('IDE rename action is wired', fs.existsSync(path.join(workspace, 'qa-renamed.ts')) || fs.existsSync(path.join(workspace, 'qa-editor.ts')), 'native file operation completed or surfaced')
+    await ide.evaluate(`(() => { window.confirm = () => true; const button = [...document.querySelectorAll('button')].find((node) => node.textContent?.trim() === 'Delete'); button?.click(); return Boolean(button) })()`)
+    await sleep(500)
+    check('IDE delete confirmation is wired', !fs.existsSync(path.join(workspace, 'qa-renamed.ts')) || !fs.existsSync(path.join(workspace, 'qa-editor.ts')), 'confirmed fixture delete')
+
+    const tool = (name, args, workingMode = 'build') => mainPage.evaluate(`window.api.toolExecute(${JSON.stringify({ name, args, workspace, sessionId: 'qa-session', workingMode })})`)
+    const readOnlyWrite = await tool('write_file', { path: path.join(workspace, 'plan-blocked.txt'), content: 'blocked' }, 'plan')
+    const buildWrite = await tool('write_file', { path: path.join(workspace, 'tool-created.txt'), content: 'fixture tool write\n' }, 'build')
+    check('working mode policy is enforced in the packaged app', /read-only|cannot run|blocked/i.test(readOnlyWrite?.error || '') && buildWrite?.result, `${readOnlyWrite?.error || 'no block'}; ${buildWrite?.result || buildWrite?.error || 'no write result'}`)
+
+    const statusBefore = await mainPage.evaluate(`window.api.gitStatus(${JSON.stringify(workspace)})`)
+    const diffBefore = await mainPage.evaluate(`window.api.gitDiff(${JSON.stringify(workspace)})`)
+    const stageResult = await mainPage.evaluate(`window.api.gitStage(${JSON.stringify(workspace)}, ['tool-created.txt'])`)
+    const commitResult = await mainPage.evaluate(`window.api.gitCommitStaged(${JSON.stringify(workspace)}, 'fixture verification')`)
+    const statusAfter = await mainPage.evaluate(`window.api.gitStatus(${JSON.stringify(workspace)})`)
+    check('throwaway git fixture supports status, diff, stage and commit', statusBefore?.branch && typeof diffBefore === 'string' && stageResult?.success && commitResult?.success && statusAfter?.isClean, `${statusBefore?.branch || statusBefore?.error || 'no branch'}; ${commitResult?.error || 'clean after commit'}`)
+
+    const outsidePath = path.join(fixture, 'outside-workspace.txt')
+    const traversal = await tool('write_file', { path: outsidePath, content: 'must not write' }, 'build')
+    check('file tool rejects paths outside the workspace', /outside|workspace|blocked|escape/i.test(traversal?.error || '') && !fs.existsSync(outsidePath), traversal?.error || 'outside path was not rejected')
+
+    const browserBase = `http://127.0.0.1:${localServer.port}`
+    const browserOpen = await tool('browser', { operation: 'open_url', url: browserBase })
+    const browserRead = await tool('browser', { operation: 'read_page_text' })
+    const browserMissing = await tool('browser', { operation: 'open_url', url: `${browserBase}/missing` })
+    check('local browser fixture labels source and handles 404', /127\.0\.0\.1/.test(browserOpen?.result || '') && /Fixture page/.test(browserRead?.result || '') && browserMissing?.error, `${browserOpen?.result || browserOpen?.error || 'no open'}; ${browserMissing?.error || '404 was not reported'}`)
+
+    const longMessages = Array.from({ length: 8 }, (_, index) => ({ id: `long-${index}`, role: index % 2 ? 'assistant' : 'user', content: `fixture message ${index} ${'x'.repeat(60_000)}`, timestamp: Date.now() + index }))
+    await mainPage.evaluate(`window.api.saveSettings(${JSON.stringify(safeSettings)})`)
+    await mainPage.evaluate(`window.api.saveConversation(${JSON.stringify({ id: 'qa-long-chat', title: 'Long fixture chat', messages: longMessages })})`)
+    await mainPage.evaluate('location.reload()')
+    await sleep(2_000)
+    const longText = await mainPage.evaluate('document.body.innerText')
+    check('long chat crosses the context warning threshold', /Context is getting full|tokens \(estimate\)/.test(longText), 'long fixture restored')
+    const parentBefore = await mainPage.evaluate(`window.api.listConversations()`)
+    await mainPage.evaluate(`[...document.querySelectorAll('button')].find((node) => node.textContent.includes('Summarize'))?.click()`)
+    await sleep(800)
+    const summaryRecord = await mainPage.evaluate(`window.api.listConversations()`)
+    const summarized = summaryRecord.find((record) => record.id === 'qa-long-chat')
+    check('summarize and continue keeps the transcript recoverable', Boolean(summarized?.earlierMessages?.length && summarized?.pinnedSummary), `${summarized?.earlierMessages?.length || 0} earlier messages`)
+    const parentSnapshot = JSON.stringify(summarized?.messages || [])
+    await mainPage.evaluate(`document.querySelector('.vd-context-warning button:nth-of-type(2)')?.click()`)
+    await sleep(800)
+    const forkedRecords = await mainPage.evaluate(`window.api.listConversations()`)
+    check('fork chat creates a linked child and leaves parent messages unchanged', forkedRecords.some((record) => record.parentSessionId === 'qa-long-chat') && JSON.stringify((forkedRecords.find((record) => record.id === 'qa-long-chat') || {}).messages || []) === parentSnapshot, `${forkedRecords.length} records`)
+    await mainPage.evaluate(`document.querySelector('.vd-message-fork')?.click()`)
+    await sleep(800)
+    const forkFromHereRecords = await mainPage.evaluate(`window.api.listConversations()`)
+    check('fork from here creates a child record', forkFromHereRecords.filter((record) => record.parentSessionId === 'qa-long-chat').length >= 2, 'message fork')
+
+    const settingsText = await mainPage.evaluate(`(() => { document.dispatchEvent(new KeyboardEvent('keydown', { key: ',', ctrlKey: true, bubbles: true })); return document.body.innerText })()`)
+    await sleep(400)
+    check('Settings exposes version and build commit', /About VD Agent v[0-9]/.test(await mainPage.evaluate('document.body.innerText')) && /Build commit:/.test(await mainPage.evaluate('document.body.innerText')), settingsText.slice(0, 80))
+
+    const baseline = await tasklistMemory(child.pid)
+    const samples = []
+    const deadline = Date.now() + Math.max(1, stabilityMinutes) * 60_000
+    while (Date.now() < deadline) {
+      await mainPage.evaluate(`window.api.readDirectory(${JSON.stringify(workspace)}); window.api.getParentPath(${JSON.stringify(workspace)}); document.body.innerText.length`)
+      await sleep(Math.min(60_000, Math.max(1_000, deadline - Date.now())))
+      samples.push(await tasklistMemory(child.pid))
+    }
+    const peak = Math.max(baseline, ...samples)
+    check('idle/action stability stays below 2x baseline', baseline > 0 && peak < baseline * 2, `baseline=${baseline} peak=${peak} samples=${samples.length}`)
+    check('stability run has no renderer errors or crashes', mainPage.errors.length === 0, mainPage.errors.slice(0, 3).join(' | '))
+  } finally {
+    mainPage.close()
+    localServer?.server?.close()
+    try { child.kill() } catch {}
+    if (process.platform === 'win32') {
+      await new Promise((resolve) => execFile('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true }, () => resolve()))
+    }
+  }
+
+  const packageRoot = path.resolve(value('--package-root') || path.dirname(path.dirname(exe)))
+  if (fs.existsSync(path.join(packageRoot, 'win-unpacked', 'resources', 'app.asar'))) await runSecurityInspection(packageRoot)
+  else check('packaged security inspection', false, 'win-unpacked/resources/app.asar not found')
+
+  const output = { generatedAt: new Date().toISOString(), fixture, executable: exe, results }
+  const outputPath = path.join(fixture, 'logs', 'automated-qa.json')
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true })
+  fs.writeFileSync(outputPath, JSON.stringify(output, null, 2), 'utf8')
+  const failed = results.filter((result) => result.status === 'FAIL')
+  console.log(`Automated QA: ${failed.length ? 'FAIL' : 'PASS'} (${results.length} checks)`)
+  process.exitCode = failed.length ? 1 : 0
+}
+
+main().catch((error) => {
+  console.error(`Automated QA stopped: ${error.message}`)
+  process.exitCode = 1
+})

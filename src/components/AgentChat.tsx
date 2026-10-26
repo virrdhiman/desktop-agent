@@ -1369,6 +1369,11 @@ export default function AgentChat() {
               Autonomous coding agent. Reads and edits your repo, runs commands, manages git,
               and picks the strongest free model available on your API key.
             </div>
+            {!appSettings.providers.some((provider) => provider.hasKey) && (
+              <div role="status" style={{ color: 'var(--text-secondary)', fontSize: 12, textAlign: 'center', maxWidth: 480, marginTop: 8 }}>
+                Add an API key in Settings to use cloud models, or choose Ollama for local work without a key.
+              </div>
+            )}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 12, width: '100%', maxWidth: 480 }}>
               {quickActions.map((qa) => (
                 <button

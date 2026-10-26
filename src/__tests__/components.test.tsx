@@ -15,6 +15,7 @@ import { useStore } from '../store'
 import ErrorBoundary from '../components/ErrorBoundary'
 import SearchResults from '../components/SearchResults'
 import SettingsPanel from '../components/SettingsPanel'
+import AgentChat from '../components/AgentChat'
 import { buildTaskReviewSummary } from '../components/TaskPanel'
 import TaskPanel from '../components/TaskPanel'
 import PrerequisiteSetup from '../components/PrerequisiteSetup'
@@ -105,6 +106,19 @@ describe('Store — Setters work correctly', () => {
 })
 
 describe('SettingsPanel — provider onboarding', () => {
+  it('shows the build commit in the About card', () => {
+    render(<SettingsPanel />)
+    expect(screen.getByText(/Build commit:/)).toBeInTheDocument()
+  })
+
+  it('shows first-run key guidance when only local providers are configured', () => {
+    useStore.getState().setSettings({ ...useStore.getState().settings, providers: [
+      { id: 'ollama', name: 'Ollama', apiKey: '', baseUrl: 'http://127.0.0.1:11434/v1', model: 'qwen2.5-coder:7b' },
+    ], activeProvider: 'ollama' })
+    render(<AgentChat />)
+    expect(screen.getByText(/Add an API key in Settings/)).toBeInTheDocument()
+  })
+
   it('shows a secure-storage error instead of claiming an unsaved provider key', async () => {
     useStore.getState().setSettings({ ...useStore.getState().settings, providers: [
       { id: 'groq', name: 'Groq', apiKey: '', baseUrl: 'https://api.groq.com/openai/v1', model: 'llama' },

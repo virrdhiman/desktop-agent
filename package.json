@@ -70,6 +70,7 @@
     "release:local-cert": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/create-local-test-certificate.ps1",
     "release:secrets": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-release-secrets.ps1",
     "release:vm-qa": "node scripts/clean-vm-qa.mjs",
+    "release:automated-qa": "node scripts/release-automated-qa.mjs",
     "release:vm-prepare": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/prepare-clean-vm-qa.ps1",
     "vm:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-vm-host.ps1",
     "vm:create": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/create-clean-vm.ps1",

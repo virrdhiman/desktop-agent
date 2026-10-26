@@ -6,6 +6,8 @@
  */
 /// <reference types="vite/client" />
 
+declare const __VD_COMMIT_HASH__: string
+
 interface Window {
   api: import('../electron/preload').ElectronAPI
 }
