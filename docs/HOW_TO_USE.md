@@ -17,6 +17,16 @@ signature verification and elevation. Nothing is silently downloaded.
 5. Review changed files, commands, verification, and checkpoint restore options
    in Tasks.
 
+## Composer additions
+
+Use the **+** button, type `/` at the start of the composer, or type `@` to
+open the accessible Add menu. Files and folders are attached as workspace
+context; secret-looking files and protected paths are filtered out. Set a
+persistent **Goal** to keep the outcome visible above the chat, or enable
+**Plan mode** to require an explicit **Approve and run** action before tools
+execute. Tool hints appear only for capabilities available in the current
+build. Arrow keys, Enter, Escape, Tab, and typing all work inside the menu.
+
 ## VS Code
 
 Install VS Code separately, then use the VS Code Bridge panel to install or

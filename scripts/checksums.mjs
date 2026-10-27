@@ -11,47 +11,30 @@
  *
  *   npm run checksums
  */
-import crypto from 'node:crypto'
-import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { releaseFiles, verifyChecksums, writeChecksums } from './checksums-lib.mjs'
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const releaseDir = path.join(repo, 'release')
 const pkg = JSON.parse(fs.readFileSync(path.join(repo, 'package.json'), 'utf8'))
-const DOWNLOADABLE = /\.(exe|msi|dmg|zip|appimage|deb|rpm|tar\.gz|snap)$/i
 const includeAll = process.argv.includes('--all')
-
-if (!fs.existsSync(releaseDir)) {
-  console.error('No release/ folder. Build the app first (Win\\build.bat, Mac/build.sh, or Linux/build.sh).')
-  process.exit(1)
+if (process.argv.includes('--verify')) {
+  const result = await verifyChecksums(releaseDir)
+  if (!result.ok) {
+    for (const failure of result.failures) console.error(failure)
+    process.exit(1)
+  }
+  console.log(`Verified ${result.checked} release artifact${result.checked === 1 ? '' : 's'}.`)
+} else {
+  try {
+    const files = releaseFiles(releaseDir, pkg.version, includeAll)
+    if (files.length === 0) throw new Error(`No ${includeAll ? '' : `${pkg.version} `}installers or archives found in release/.`)
+    const result = await writeChecksums(releaseDir, pkg.version, includeAll)
+    for (const line of result.lines) console.log(line)
+    console.log(`\nWrote release/SHA256SUMS.txt (${files.length} file${files.length === 1 ? '' : 's'})`)
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error))
+    process.exit(1)
+  }
 }
-
-const files = fs.readdirSync(releaseDir, { withFileTypes: true })
-  .filter((e) => e.isFile() && DOWNLOADABLE.test(e.name))
-  .filter((e) => includeAll || e.name.includes(pkg.version))
-  .map((e) => e.name)
-  .sort()
-
-if (files.length === 0) {
-  console.error(`No ${includeAll ? '' : `${pkg.version} `}installers or archives found in release/.`)
-  if (!includeAll) console.error('Use npm run checksums -- --all to hash every downloadable file in release/.')
-  process.exit(1)
-}
-
-const hashFile = (file) => new Promise((resolve, reject) => {
-  const hash = crypto.createHash('sha256')
-  fs.createReadStream(path.join(releaseDir, file))
-    .on('data', (chunk) => hash.update(chunk))
-    .on('end', () => resolve(hash.digest('hex')))
-    .on('error', reject)
-})
-
-const lines = []
-for (const file of files) {
-  const digest = await hashFile(file)
-  lines.push(`${digest}  ${file}`)
-  console.log(`${digest}  ${file}`)
-}
-fs.writeFileSync(path.join(releaseDir, 'SHA256SUMS.txt'), lines.join('\n') + '\n')
-console.log(`\nWrote release/SHA256SUMS.txt (${files.length} file${files.length === 1 ? '' : 's'})`)

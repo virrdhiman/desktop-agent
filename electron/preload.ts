@@ -47,6 +47,7 @@ contextBridge.exposeInMainWorld('api', {
   // Browse, read, write, create, delete files and directories
   // File System
   openDirectory: () => invokeWithTimeout('fs:openDirectory'),
+  pickContext: (workspacePath: string) => invokeWithTimeout('fs:pickContext', workspacePath),
   readDirectory: (dirPath: string) => invokeWithTimeout('fs:readDirectory', dirPath),
   readFile: (filePath: string) => invokeWithTimeout('fs:readFile', filePath),
   writeFile: (filePath: string, content: string) => invokeWithTimeout('fs:writeFile', filePath, content),
@@ -284,6 +285,7 @@ export type ElectronAPI = {
   publishSharedState: (state: SharedAppState) => void
   onSharedState: (cb: (state: SharedAppState) => void) => () => void
   openDirectory: () => Promise<string | null>
+  pickContext: (workspacePath: string) => Promise<string[] | { error: string }>
   readDirectory: (dirPath: string) => Promise<FileEntry[] | { error: string }>
   readFile: (filePath: string) => Promise<{ content: string; path: string } | { error: string }>
   writeFile: (filePath: string, content: string) => Promise<{ success: boolean } | { error: string }>

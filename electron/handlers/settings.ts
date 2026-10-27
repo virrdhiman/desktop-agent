@@ -11,10 +11,11 @@
 import { app, ipcMain, safeStorage } from 'electron'
 import path from 'path'
 import fs from 'fs'
-import { randomUUID } from 'crypto'
+import os from 'os'
+import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from 'crypto'
 import { privateEnvCandidatePaths } from '../privateEnv'
 import { maskProviderForRenderer, secureStoredApiKey } from '../../src/lib/providerKeys'
-import { COMMUNITY_PROVIDER_IDS, omitCommunityProviders, omitRetiredProviders } from '../../src/lib/providers'
+import { COMMUNITY_PROVIDER_IDS, DEFAULT_TASK_ROUTING, omitCommunityProviders, omitRetiredProviders } from '../../src/lib/providers'
 import { closeBrowserSessions } from '../browserTool'
 import { normalizeDataToolSettings } from '../../src/lib/dataToolSettings'
 import { normalizeAdvancedSettings } from '../../src/lib/advancedSettings'
@@ -75,21 +76,45 @@ const DEFAULT_PROVIDERS = [
   { id: 'custom_openai', name: 'Custom OpenAI-Compatible 🔌', apiKey: '', baseUrl: '', model: 'auto', notes: 'Connect any future OpenAI-compatible API. Set the base URL, key, and model, then use Refresh Live Models when the provider supports /models.' },
 ]
 
-/** Encrypt an API key using Electron's safeStorage (OS keychain) */
+function localFallbackKey(): Buffer {
+  let machineId = ''
+  try { machineId = fs.readFileSync('/etc/machine-id', 'utf8').trim() } catch {}
+  let username = ''
+  try { username = os.userInfo().username } catch {}
+  const identity = [process.platform, process.arch, os.hostname(), username, machineId, app.getPath('userData')].join('\0')
+  return createHash('sha256').update(`VD Agent local keyring v1\0${identity}`).digest()
+}
+
+/** Encrypt an API key using Electron's safeStorage (OS keychain), or an encrypted machine-bound fallback. */
 function encryptApiKey(key: string): string {
   if (!key) return ''
-  if (!safeStorage.isEncryptionAvailable() || (process.platform === 'linux' && safeStorage.getSelectedStorageBackend() === 'basic_text')) {
-    throw new Error('Secure OS key storage is unavailable. No API key was saved.')
-  }
   try {
-    const encrypted = safeStorage.encryptString(key)
-    return `enc:${encrypted.toString('base64')}`
+    const backend = process.platform === 'linux' ? safeStorage.getSelectedStorageBackend() : ''
+    if (safeStorage.isEncryptionAvailable() && backend !== 'basic_text') {
+      const encrypted = safeStorage.encryptString(key)
+      return `enc:${encrypted.toString('base64')}`
+    }
+  } catch {}
+
+  try {
+    const iv = randomBytes(12)
+    const cipher = createCipheriv('aes-256-gcm', localFallbackKey(), iv)
+    const encrypted = Buffer.concat([cipher.update(key, 'utf8'), cipher.final()])
+    return `enc:local:v1:${iv.toString('base64url')}:${cipher.getAuthTag().toString('base64url')}:${encrypted.toString('base64url')}`
   } catch { throw new Error('Could not encrypt API key. No settings were saved.') }
 }
 
 /** Decrypt an API key that was encrypted with safeStorage */
 function decryptApiKey(key: string): string {
   if (!key || !key.startsWith('enc:')) return key
+  if (key.startsWith('enc:local:v1:')) {
+    try {
+      const [, , , ivText, tagText, cipherText] = key.split(':')
+      const decipher = createDecipheriv('aes-256-gcm', localFallbackKey(), Buffer.from(ivText, 'base64url'))
+      decipher.setAuthTag(Buffer.from(tagText, 'base64url'))
+      return Buffer.concat([decipher.update(Buffer.from(cipherText, 'base64url')), decipher.final()]).toString('utf8')
+    } catch { return '' }
+  }
   try {
     const buf = Buffer.from(key.slice(4), 'base64')
     return safeStorage.decryptString(buf)
@@ -179,6 +204,7 @@ export async function loadRuntimeSettings(): Promise<any> {
     parsed.teamPreset ??= 'default'
     parsed.teamTokenBudget ??= 'balanced'
     parsed.allowPaidModels ??= false
+    parsed.taskRouting ??= DEFAULT_TASK_ROUTING
     parsed.dynamicTeam ??= true
     if (!parsed.teamProfile || typeof parsed.teamProfile !== 'object') parsed.teamProfile = {}
     parsed.activeProvider = normalizeActiveProvider(parsed.activeProvider, parsed.providers)
@@ -199,6 +225,7 @@ export async function loadRuntimeSettings(): Promise<any> {
       teamPreset: 'default',
       teamTokenBudget: 'balanced',
       allowPaidModels: false,
+      taskRouting: DEFAULT_TASK_ROUTING,
       dynamicTeam: true,
       teamProfile: {},
     }

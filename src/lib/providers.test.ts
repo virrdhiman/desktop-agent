@@ -19,6 +19,7 @@ import {
   recordProviderOutcome,
   refreshProviderModelCatalog,
   withoutApiKeys,
+  DEFAULT_TASK_ROUTING,
 } from './providers'
 
 const p = (id: string, apiKey = '', freeTier = true, model = 'm'): ProviderConfig => ({
@@ -30,6 +31,13 @@ const settings = (providers: ProviderConfig[], activeProvider = providers[0]?.id
 })
 
 describe('buildProviderChain', () => {
+  it('uses benchmark-derived fallback order for coding without changing the active provider', () => {
+    const providers = [p('groq', 'k1'), p('gemini', 'k2'), p('mistral', 'k3'), p('nvidia', 'k4')]
+    expect(buildProviderChain(providers, 'groq', 4, 'coding', Date.now(), DEFAULT_TASK_ROUTING).map((provider) => provider.id)).toEqual([
+      'groq', 'nvidia', 'mistral', 'gemini',
+    ])
+    expect(DEFAULT_TASK_ROUTING.coding).toEqual(['nvidia', 'mistral', 'gemini', 'groq', 'ollama'])
+  })
   it('puts the active provider first, then official free providers with keys', () => {
     const chain = buildProviderChain(
       [p('groq', 'k1'), p('gemini', 'k2'), p('cerebras', ''), p('openai', 'k3', false)],

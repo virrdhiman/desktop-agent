@@ -18,6 +18,7 @@ if (typeof window !== 'undefined') Object.defineProperty(window, 'api', {
     publishSharedState: vi.fn(),
     onSharedState: vi.fn(() => () => {}),
     openDirectory: vi.fn(),
+  pickContext: vi.fn(),
     readDirectory: vi.fn(),
     readFile: vi.fn(),
     writeFile: vi.fn(),

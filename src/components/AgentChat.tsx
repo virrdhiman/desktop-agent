@@ -28,7 +28,7 @@ import ComposerAddMenu from './ComposerAddMenu'
 import ComposerControls from './ComposerControls'
 import { buildConversationSummary, useStore } from '../store'
 import { contextLevel, contextWindowForModel, estimateTokens } from '../lib/chatControl'
-import type { AgentTaskKind, ChatMessage, AgentStep, ProviderConfig } from '../types'
+import { AGENT_TOOLS, type AgentTaskKind, type ChatMessage, type AgentStep, type ProviderConfig } from '../types'
 import {
   applyDiscoveredModel, buildProviderChain, classifyAgentTask, providerIsConfigured, providerPrefersFreeModels, recordProviderOutcome, refreshProviderModelCatalog,
 } from '../lib/providers'
@@ -49,6 +49,10 @@ import {
   maxReviewPassesForBudget, parseTeamReview, resolveTeamProfile, selectDynamicSpecialists, shouldUseTeamMode,
   type TeamReview,
 } from '../lib/multiAgent'
+import {
+  contextHint, filterComposerItems, getComposerMenuItems, isAllowedContextPath, isProtectedContextPath,
+  type ComposerMenuItem,
+} from '../lib/composerAddMenu'
 
 type ChatOutcome =
   | { content: string; provider: ProviderConfig; failed: ProviderAttempt[] }
@@ -64,6 +68,8 @@ type QueuedQuery = {
   status: QueryJobStatus
   createdAt: number
   userMessageId: string
+  contextPaths?: string[]
+  planMode?: boolean
 }
 
 const MAX_ACTIVE_QUERIES = 2
@@ -457,12 +463,17 @@ export default function AgentChat() {
   const [availableModels, setAvailableModels] = useState<string[]>([])
   const [dragOver, setDragOver] = useState(false)
   const [pendingImages, setPendingImages] = useState<{ data: string; name: string }[]>([])
-  const [showMentions, setShowMentions] = useState(false)
-  const [mentionQuery, setMentionQuery] = useState('')
-  const [mentionType, setMentionType] = useState<'file' | 'folder' | 'web'>('file')
   const [voiceStatus, setVoiceStatus] = useState('')
   const [listening, setListening] = useState(false)
   const [showComposerMore, setShowComposerMore] = useState(false)
+  const [showAddMenu, setShowAddMenu] = useState(false)
+  const [addMenuQuery, setAddMenuQuery] = useState('')
+  const [addMenuActiveIndex, setAddMenuActiveIndex] = useState(0)
+  const [addMenuTrigger, setAddMenuTrigger] = useState<'plus' | 'slash' | 'at' | null>(null)
+  const [contextPaths, setContextPaths] = useState<string[]>([])
+  const [goalEditorOpen, setGoalEditorOpen] = useState(false)
+  const [goalDraft, setGoalDraft] = useState('')
+  const [pendingPlan, setPendingPlan] = useState<{ job: QueuedQuery } | null>(null)
   const messagesScrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -489,6 +500,102 @@ export default function AgentChat() {
   const [showProjectNotes, setShowProjectNotes] = useState(false)
   const [notesDraft, setNotesDraft] = useState(projectNotes)
   useEffect(() => setNotesDraft(projectNotes), [projectNotes])
+  const composerItems = getComposerMenuItems(AGENT_TOOLS.map((tool) => tool.name))
+  const contextMenuItems: ComposerMenuItem[] = allFiles
+    .filter((file) => workspacePath && isAllowedContextPath(file.path, workspacePath) && !isProtectedContextPath(file.path))
+    .slice(0, 30)
+    .map((file) => ({
+      id: `context:${file.path}`,
+      section: 'add',
+      label: file.name,
+      description: file.path,
+      icon: file.isDirectory ? '📂' : '📄',
+      hint: file.path,
+    }))
+  const visibleComposerItems = filterComposerItems(
+    addMenuTrigger === 'at' ? contextMenuItems : composerItems,
+    addMenuQuery,
+  )
+
+  const closeAddMenu = useCallback(() => {
+    setShowAddMenu(false)
+    setAddMenuQuery('')
+    setAddMenuActiveIndex(0)
+    setAddMenuTrigger(null)
+    setTimeout(() => inputRef.current?.focus(), 0)
+  }, [])
+
+  const openAddMenu = useCallback((trigger: 'plus' | 'slash' | 'at') => {
+    setAddMenuTrigger(trigger)
+    setAddMenuQuery('')
+    setAddMenuActiveIndex(0)
+    setShowAddMenu(true)
+  }, [])
+
+  const updateGoal = useCallback(async (value: string) => {
+    const next = { ...useStore.getState().settings, composerGoal: value.trim() || undefined }
+    setAppSettings(next)
+    await window.api.saveSettings(next)
+    setGoalEditorOpen(false)
+  }, [setAppSettings])
+
+  const togglePlanMode = useCallback((value = !useStore.getState().planMode) => {
+    setPlanMode(value)
+    const next = { ...useStore.getState().settings, planMode: value }
+    setAppSettings(next)
+    void window.api.saveSettings(next)
+  }, [setAppSettings, setPlanMode])
+
+  const setMenuQuery = useCallback((query: string) => {
+    setAddMenuQuery(query)
+    if (addMenuTrigger === 'slash') setInput(`/${query}`)
+    if (addMenuTrigger === 'at') {
+      setInput((value) => {
+        const at = value.lastIndexOf('@')
+        return at >= 0 ? `${value.slice(0, at + 1)}${query}` : value
+      })
+    }
+  }, [addMenuTrigger])
+
+  const selectComposerItem = useCallback(async (item: ComposerMenuItem) => {
+    if (item.id.startsWith('context:')) {
+      const path = item.id.slice('context:'.length)
+      if (isAllowedContextPath(path, workspacePath)) setContextPaths((paths) => [...new Set([...paths, path])])
+      closeAddMenu()
+      return
+    }
+    if (item.id === 'context') {
+      if (!workspacePath) {
+        setVoiceStatus('Open a workspace before attaching file context.')
+        closeAddMenu()
+        return
+      }
+      const result = await window.api.pickContext(workspacePath)
+      if (Array.isArray(result)) {
+        const safe = result.filter((path) => isAllowedContextPath(path, workspacePath) && !isProtectedContextPath(path))
+        setContextPaths((paths) => [...new Set([...paths, ...safe])])
+      } else if (result?.error) {
+        setVoiceStatus(result.error)
+      }
+      closeAddMenu()
+      return
+    }
+    if (item.id === 'goal') {
+      setGoalDraft(appSettings.composerGoal || '')
+      setGoalEditorOpen(true)
+      closeAddMenu()
+      return
+    }
+    if (item.id === 'plan') {
+      togglePlanMode()
+      closeAddMenu()
+      return
+    }
+    if (item.hint) {
+      setInput((value) => `${value.trim()}${value.trim() ? '\n' : ''}${item.hint}`)
+      closeAddMenu()
+    }
+  }, [appSettings.composerGoal, closeAddMenu, togglePlanMode, workspacePath, setVoiceStatus])
 
   const syncQueryQueue = useCallback((updater: (jobs: QueuedQuery[]) => QueuedQuery[]) => {
     const next = updater(queryQueueRef.current)
@@ -500,10 +607,12 @@ export default function AgentChat() {
     syncQueryQueue((jobs) => jobs.map((job) => job.id === id ? { ...job, ...updates } : job))
   }, [syncQueryQueue])
 
-  const contentForQueuedQuery = useCallback((text: string, images: { data: string; name: string }[]) => {
-    return images.length > 0
-      ? `${text}\n\n[Attached images: ${images.map(img => img.name).join(', ')}]`
-      : text
+  const contentForQueuedQuery = useCallback((text: string, images: { data: string; name: string }[], paths: string[] = []) => {
+    return [
+      text,
+      images.length > 0 ? `[Attached images: ${images.map(img => img.name).join(', ')}]` : '',
+      contextHint(paths),
+    ].filter(Boolean).join('\n\n')
   }, [])
 
   useEffect(() => {
@@ -679,7 +788,7 @@ export default function AgentChat() {
     apiMessages: any[], preferredId?: string, taskKind: AgentTaskKind = 'analysis', stream = true
   ): Promise<ChatOutcome> => {
     const current = useStore.getState().settings
-    const base = buildProviderChain(current.providers, current.activeProvider, undefined, taskKind)
+    const base = buildProviderChain(current.providers, current.activeProvider, undefined, taskKind, Date.now(), current.taskRouting)
     const preferred = base.find((p) => p.id === preferredId)
     const chain = preferred ? [preferred, ...base.filter((p) => p !== preferred)] : base
     if (chain.length === 0) return { error: noProviderNotice() }
@@ -780,6 +889,7 @@ export default function AgentChat() {
     }
     setCancelRequested(false)
     const taskKind = classifyAgentTask(text)
+    const effectivePlanMode = job.planMode ?? planMode
 
     const userContent = job.userContent
     const historyMessages = (() => {
@@ -806,7 +916,7 @@ export default function AgentChat() {
       ].filter(Boolean).join('\n'),
     })
     const systemPrompt = buildSystemPrompt({
-      planMode,
+      planMode: effectivePlanMode,
       context: workspaceContext,
       customRules: appSettings.customRules,
       responseEffort: appSettings.responseEffort || 'medium',
@@ -860,7 +970,9 @@ export default function AgentChat() {
       useStore.getState().settings.providers,
       useStore.getState().settings.activeProvider,
       3,
-      taskKind
+      taskKind,
+      Date.now(),
+      useStore.getState().settings.taskRouting
     ).map((candidate) => candidate.id)
     const callRole = async (
       label: string,
@@ -1065,6 +1177,11 @@ export default function AgentChat() {
       addMessage({ id: `${Date.now()}-a${round}`, role: 'assistant', content: cleanResponse(responseContent), timestamp: Date.now() })
       if (useStore.getState().cancelRequested) { finish('done', 'Generation stopped.'); return }
       if (round >= MAX_TOOL_ROUNDS) { finish('done', maxRoundsNotice()); return }
+      if (effectivePlanMode) {
+        setPendingPlan({ job })
+        finish('done', 'Plan ready. Approve it below before any tool runs.')
+        return
+      }
       round++
       addStepToTask(taskId, { id: `${Date.now()}-t${round}`, type: 'thought', content: `Tool round ${round}`, timestamp: Date.now() })
 
@@ -1113,12 +1230,35 @@ export default function AgentChat() {
     }
   }, [addMessage, runQueuedQuery, setChatLoading, updateQueuedQuery])
 
+  const approvePendingPlan = useCallback(() => {
+    const pending = pendingPlan
+    if (!pending) return
+    setPendingPlan(null)
+    togglePlanMode(false)
+    const resumed: QueuedQuery = {
+      ...pending.job,
+      id: `${Date.now()}-approved`,
+      status: 'queued',
+      planMode: false,
+    }
+    syncQueryQueue((jobs) => [...jobs, resumed])
+    setTimeout(() => pumpQueryQueue(), 0)
+  }, [pendingPlan, pumpQueryQueue, syncQueryQueue, togglePlanMode])
+
   const sendMessage = useCallback(() => {
     const text = input.trim()
     if (!text) return
 
     const provider = getActiveProvider()
     if (!providerIsConfigured(provider)) {
+      // Keep a submitted prompt in local history even when execution cannot start.
+      // This preserves the user's work for resume after configuring a provider.
+      addMessage({
+        id: `${Date.now()}-user`,
+        role: 'user',
+        content: text,
+        timestamp: Date.now(),
+      })
       addMessage({
         id: Date.now().toString(),
         role: 'system',
@@ -1134,7 +1274,8 @@ export default function AgentChat() {
       addMessage({ id: `${Date.now()}-image-error`, role: 'system', content: imageError, timestamp: Date.now() })
       return
     }
-    const userContent = contentForQueuedQuery(text, images)
+    const selectedContext = contextPaths.slice()
+    const userContent = contentForQueuedQuery(text, images, selectedContext)
     const userMessage: ChatMessage = {
       id: `${Date.now()}-user`,
       role: 'user',
@@ -1149,19 +1290,22 @@ export default function AgentChat() {
       status: 'queued',
       createdAt: Date.now(),
       userMessageId: userMessage.id,
+      contextPaths: selectedContext,
+      planMode,
     }
 
     addMessage(userMessage)
     syncQueryQueue((jobs) => [...jobs, job])
     setInput('')
     setPendingImages([])
+    setContextPaths([])
     setTimeout(() => pumpQueryQueue(), 0)
-  }, [input, getActiveProvider, pendingImages, contentForQueuedQuery, addMessage, syncQueryQueue, pumpQueryQueue])
+  }, [input, getActiveProvider, pendingImages, contextPaths, planMode, contentForQueuedQuery, addMessage, syncQueryQueue, pumpQueryQueue])
 
   const editQueuedQuery = useCallback((job: QueuedQuery, text: string) => {
     if (job.status !== 'queued') return
     const clean = text.trimStart()
-    const userContent = contentForQueuedQuery(clean, job.images)
+    const userContent = contentForQueuedQuery(clean, job.images, job.contextPaths)
     updateQueuedQuery(job.id, { text: clean, userContent })
     updateMessage(job.userMessageId, { content: userContent })
   }, [contentForQueuedQuery, updateMessage, updateQueuedQuery])
@@ -1341,6 +1485,19 @@ export default function AgentChat() {
           <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--accent)' }}>
             📎 Drop files here
           </div>
+        </div>
+      )}
+
+      {appSettings.composerGoal && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px',
+          borderBottom: '1px solid var(--border)', background: 'rgba(59,130,246,0.08)',
+        }}>
+          <span aria-hidden="true">🎯</span>
+          <span style={{ flex: 1, minWidth: 0, fontSize: 12, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <strong style={{ color: 'var(--text-primary)' }}>Goal:</strong> {appSettings.composerGoal}
+          </span>
+          <button className="btn btn-sm" onClick={() => { void updateGoal('') }} aria-label="Clear task goal" title="Clear task goal">Clear</button>
         </div>
       )}
 
@@ -1568,23 +1725,47 @@ export default function AgentChat() {
         padding: '10px 14px',
         borderTop: '1px solid var(--border)',
         background: 'var(--bg-secondary)',
+        position: 'relative',
       }}>
+        {goalEditorOpen && (
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8 }}>
+            <input
+              className="input"
+              aria-label="Task goal"
+              value={goalDraft}
+              onChange={(event) => setGoalDraft(event.target.value)}
+              onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void updateGoal(goalDraft) } }}
+              placeholder="What should stay true until this task is finished?"
+              autoFocus
+              style={{ flex: 1, fontSize: 12, height: 32 }}
+            />
+            <button className="btn btn-sm btn-primary" onClick={() => { void updateGoal(goalDraft) }}>Set</button>
+            <button className="btn btn-sm" onClick={() => setGoalEditorOpen(false)}>Cancel</button>
+          </div>
+        )}
+        {contextPaths.length > 0 && (
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 7 }} aria-label="Attached context">
+            {contextPaths.map((path) => (
+              <span key={path} className="badge badge-blue" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, maxWidth: 260 }} title={path}>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{path.split(/[/\\]/).pop() || path}</span>
+                <button
+                  onClick={() => setContextPaths((paths) => paths.filter((candidate) => candidate !== path))}
+                  aria-label={`Remove attached context ${path}`}
+                  title="Remove attached context"
+                  style={{ border: 0, background: 'transparent', color: 'inherit', cursor: 'pointer', padding: 0, lineHeight: 1 }}
+                >×</button>
+              </span>
+            ))}
+          </div>
+        )}
+        {pendingPlan && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '7px 9px', border: '1px solid var(--accent)', borderRadius: 7, background: 'rgba(59,130,246,0.08)' }}>
+            <span style={{ flex: 1, fontSize: 12, color: 'var(--text-secondary)' }}>Plan ready. No tools ran.</span>
+            <button className="btn btn-sm btn-primary" onClick={approvePendingPlan}>Approve and run</button>
+            <button className="btn btn-sm" onClick={() => setPendingPlan(null)}>Dismiss</button>
+          </div>
+        )}
         <div className="vd-composer-toolbar">
-          <ComposerAddMenu
-            input={input}
-            workspacePath={workspacePath}
-            allFiles={allFiles}
-            settings={appSettings}
-            planMode={planMode}
-            onInput={setInput}
-            onSettings={(next) => { setAppSettings(next); void window.api.saveSettings(next) }}
-            onPlanMode={(enabled) => {
-              setPlanMode(enabled)
-              const next = { ...appSettings, planMode: enabled, layout: { ...(appSettings.layout || {}), version: 1, workingMode: enabled ? 'plan' : 'build' } as typeof appSettings.layout }
-              setAppSettings(next)
-              void window.api.saveSettings(next)
-            }}
-          />
           <ComposerControls
             settings={appSettings}
             activeProvider={activeProvider}
@@ -1646,6 +1827,17 @@ export default function AgentChat() {
         </div>
         <div className="vd-composer-input-row">
           <button
+            className="btn btn-sm"
+            onClick={() => openAddMenu('plus')}
+            aria-label="Add to chat"
+            aria-haspopup="menu"
+            aria-expanded={showAddMenu}
+            title="Add files, a goal, plan mode, or a tool hint"
+            style={{ height: 42, minWidth: 42, fontSize: 20, lineHeight: 1 }}
+          >
+            +
+          </button>
+          <button
             className={`btn btn-sm ${listening ? 'btn-success' : ''}`}
             onClick={startVoiceInput}
             title="Dictate prompt"
@@ -1685,52 +1877,16 @@ export default function AgentChat() {
               e.target.value = ''
             }}
           />
-          {/* @mention suggestions */}
-          {showMentions && (
-            <div style={{
-              position: 'absolute', bottom: '100%', left: 14, right: 14,
-              background: 'var(--bg-secondary)', border: '1px solid var(--border)',
-              borderRadius: 8, maxHeight: 200, overflow: 'auto', marginBottom: 4,
-              boxShadow: '0 -4px 12px rgba(0,0,0,0.3)',
-            }}>
-              <div style={{ padding: '6px 10px', fontSize: 11, color: 'var(--text-muted)', borderBottom: '1px solid var(--border)' }}>
-                {mentionType === 'file' ? '📁 Files' : mentionType === 'folder' ? '📂 Folders' : '🌐 Web'}
-              </div>
-              {(mentionType === 'file' ? allFiles.filter(f => !f.isDirectory) : mentionType === 'folder' ? allFiles.filter(f => f.isDirectory) : []).
-                filter(f => !mentionQuery || f.name.toLowerCase().includes(mentionQuery.toLowerCase())).
-                slice(0, 8).map((f) => (
-                <div
-                  key={f.path}
-                  onClick={() => {
-                    setInput(prev => prev.replace(/@\w*$/, `@${f.path} `))
-                    setShowMentions(false)
-                  }}
-                  style={{
-                    padding: '6px 10px', cursor: 'pointer', fontSize: 12,
-                    display: 'flex', alignItems: 'center', gap: 6,
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-tertiary)' }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-                >
-                  <span>{f.isDirectory ? '📂' : '📄'}</span>
-                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
-                  <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{f.path.split(/[/\\]/).slice(-2).join('/')}</span>
-                </div>
-              ))}
-              {mentionType === 'web' && (
-                <div
-                  onClick={() => {
-                    setInput(prev => prev.replace(/@\w*$/, `@web `) + 'Search for: ')
-                    setShowMentions(false)
-                  }}
-                  style={{ padding: '6px 10px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-tertiary)' }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-                >
-                  <span>🌐</span><span>Search the web...</span>
-                </div>
-              )}
-            </div>
+          {showAddMenu && (
+            <ComposerAddMenu
+              items={visibleComposerItems}
+              query={addMenuQuery}
+              activeIndex={Math.min(addMenuActiveIndex, Math.max(0, visibleComposerItems.length - 1))}
+              onQueryChange={(query) => { setAddMenuActiveIndex(0); setMenuQuery(query) }}
+              onMove={(delta) => setAddMenuActiveIndex((index) => visibleComposerItems.length === 0 ? 0 : (index + delta + visibleComposerItems.length) % visibleComposerItems.length)}
+              onSelect={(item) => { void selectComposerItem(item) }}
+              onClose={closeAddMenu}
+            />
           )}
           <textarea
             ref={inputRef}
@@ -1740,25 +1896,37 @@ export default function AgentChat() {
             onChange={(e) => {
               const val = e.target.value
               setInput(val)
-              // Detect @ mentions
+              if (val.startsWith('/') && !/\s/.test(val.slice(1))) {
+                if (!showAddMenu || addMenuTrigger !== 'slash') openAddMenu('slash')
+                setAddMenuQuery(val.slice(1))
+                setAddMenuActiveIndex(0)
+                return
+              }
               const lastAt = val.lastIndexOf('@')
-              if (lastAt >= 0 && lastAt === val.length - 1) {
-                setShowMentions(true)
-                setMentionQuery('')
-                setMentionType('file')
-              } else if (lastAt >= 0 && !val.slice(lastAt).includes(' ')) {
-                const query = val.slice(lastAt + 1)
-                setShowMentions(true)
-                setMentionQuery(query)
-                setMentionType(query.length > 0 && !query.includes('/') ? (query.startsWith('w') ? 'web' : 'file') : 'file')
+              if (lastAt >= 0 && !/[\s]/.test(val.slice(lastAt + 1))) {
+                if (!showAddMenu || addMenuTrigger !== 'at') openAddMenu('at')
+                setAddMenuQuery(val.slice(lastAt + 1))
+                setAddMenuActiveIndex(0)
               } else {
-                setShowMentions(false)
+                if (showAddMenu && addMenuTrigger !== 'plus') closeAddMenu()
               }
             }}
             onInput={resizeComposer}
             onKeyDown={(e) => {
+              if (showAddMenu && ['ArrowDown', 'ArrowUp', 'Enter', 'Escape', 'Tab'].includes(e.key)) {
+                e.preventDefault()
+                if (e.key === 'Escape') closeAddMenu()
+                else if (e.key === 'Enter') {
+                  const item = visibleComposerItems[addMenuActiveIndex]
+                  if (item) void selectComposerItem(item)
+                } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab') {
+                  const delta = e.key === 'ArrowUp' || (e.key === 'Tab' && e.shiftKey) ? -1 : 1
+                  setAddMenuActiveIndex((index) => visibleComposerItems.length === 0 ? 0 : (index + delta + visibleComposerItems.length) % visibleComposerItems.length)
+                }
+                return
+              }
               handleKeyDown(e)
-              if (e.key === 'Escape') setShowMentions(false)
+              if (e.key === 'Escape') closeAddMenu()
             }}
             placeholder="Ask or queue work... Type @ for context, Ctrl+V for images, drag files. (Enter queues immediately)"
             rows={3}
