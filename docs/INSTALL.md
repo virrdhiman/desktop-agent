@@ -110,7 +110,7 @@ Follow [Free API key setup](../README.md#free-api-key-setup) to add a key and se
 
 ## Update
 
-Installed builds check release metadata over HTTPS, verify artifact integrity, and download an available update in the background when automatic updates are enabled in Settings. Official release packages should also be code-signed. VD asks before restarting to install. Your chats, settings, checkpoints, and keys are kept because they live in the user data folder, not the install folder.
+Installed builds check release metadata over HTTPS, verify artifact integrity, and download an available update in the background when automatic updates are enabled in Settings. Official release packages should also be code-signed. PIT Agent asks before restarting to install. Your chats, settings, checkpoints, and keys are kept because they live in the user data folder, not the install folder.
 
 Automatic GitHub updates require anonymously accessible release files. While the official repository is private, automatic checks default to off; use a public release feed or download a newer release manually and install it over the old one. Update checks can be enabled or disabled in Settings.
 

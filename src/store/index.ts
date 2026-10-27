@@ -715,6 +715,7 @@ export const useStore = create<AppState>((set, get) => ({
     indexingEnabled: false,
     responseEffort: 'medium',
     strictGrounding: false,
+    theme: 'system',
     telemetryEnabled: false,
     updateChannel: 'stable',
   },

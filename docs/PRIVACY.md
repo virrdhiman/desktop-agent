@@ -7,7 +7,7 @@
 
 # Privacy and Local Data
 
-PIT Agent has no VD-hosted server or account, and it does not send telemetry, analytics, crash reports, chats, or tool traces to the maintainer. Installed builds can check the configured release host for updates when automatic updates are enabled; this is off by default while the release repository is private.
+PIT Agent has no Productive IT-hosted server or account, and it does not send telemetry, analytics, crash reports, chats, or tool traces to the maintainer. Installed builds can check the configured release host for updates when automatic updates are enabled; this is off by default while the release repository is private.
 
 ## What is stored, and where
 
@@ -25,7 +25,7 @@ Everything is stored in your user data folder:
 | Recovery checkpoints | `checkpoints/<session-id>/` | Bounded pre-edit copies made before agent file writes and deletes; the newest 20 are retained per session. |
 | Project memory | `project-memory/` | A local summary and fingerprint of repository metadata used to rebuild useful context after restart. |
 | Settings | `settings.json` | Provider list, base URLs, models, active provider, local routing outcomes, custom rules, permission mode, update preference, and workspace folder. |
-| API keys | `settings.json` | Encrypted with the OS keychain through Electron `safeStorage` when it is available: DPAPI on Windows, Keychain on macOS, and the Secret Service or KWallet on Linux. If Linux has no usable keyring, VD uses an AES-256-GCM machine-bound fallback; it never writes a new API key as plaintext. |
+| API keys | `settings.json` | Encrypted with the OS keychain through Electron `safeStorage` when it is available: DPAPI on Windows, Keychain on macOS, and the Secret Service or KWallet on Linux. If Linux has no usable keyring, PIT Agent uses an AES-256-GCM machine-bound fallback; it never writes a new API key as plaintext. |
 | Browser data | Other folders in the same directory | Standard Electron/Chromium files such as caches and local storage. |
 
 Settings exports never include API keys. Imports keep the keys already stored on the machine.

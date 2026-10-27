@@ -22,7 +22,7 @@ The latest chat is restored at launch. Opening another item in **Sessions** rest
 
 Before an agent write, edit, create, multi-file edit, or delete, the Electron main process snapshots the targeted files. Checkpoints are stored under `<userData>/checkpoints/` and are independent of the model prompt.
 
-Use **Sessions → Restore** to return those files to their pre-edit state. The restore operation affects only files recorded in that checkpoint. Files larger than 2 MB are skipped and shown in the restore result; a checkpoint is capped at 12 MB, and VD keeps the newest 20 checkpoints per session.
+Use **Sessions → Restore** to return those files to their pre-edit state. The restore operation affects only files recorded in that checkpoint. Files larger than 2 MB are skipped and shown in the restore result; a checkpoint is capped at 12 MB, and PIT Agent keeps the newest 20 checkpoints per session.
 
 Deleting a saved chat also removes its recovery checkpoints.
 

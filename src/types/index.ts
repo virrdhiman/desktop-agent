@@ -18,6 +18,7 @@
  */
 import type { DataToolSettings } from '../lib/dataToolSettings'
 import type { LayoutPreferences } from '../lib/layoutPersistence'
+import type { ThemePreference } from '../lib/theme'
 import { APP_NAME } from '../lib/brand'
 
 export interface FileEntry {
@@ -130,6 +131,8 @@ export interface Settings extends DataToolSettings {
   updateChannel?: 'stable' | 'beta'
   /** Opt-in evidence-only response rules. */
   strictGrounding?: boolean
+  /** System appearance follows the operating system until the user selects a fixed theme. */
+  theme?: ThemePreference
   /** Versioned, per-workspace user-maintained notes. */
   pinnedNotes?: { version: 1; projects: Record<string, string> }
 }

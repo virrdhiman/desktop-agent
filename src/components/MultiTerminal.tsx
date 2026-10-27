@@ -17,6 +17,7 @@ import { useEffect, useRef, useCallback } from 'react'
 import { Terminal } from 'xterm'
 import { FitAddon } from 'xterm-addon-fit'
 import { WebLinksAddon } from 'xterm-addon-web-links'
+import type { ITheme } from 'xterm'
 import 'xterm/css/xterm.css'
 import { useStore } from '../store'
 
@@ -33,10 +34,30 @@ export default function MultiTerminal() {
     workspacePath, terminalTabs, addTerminalTab, removeTerminalTab,
     activeTerminalTab, setActiveTerminalTab,
   } = useStore()
+  const themePreference = useStore((state) => state.settings.theme)
 
   const containerRef = useRef<HTMLDivElement>(null)
   const instancesRef = useRef<Map<string, TermInstance>>(new Map())
   const termCounterRef = useRef(1)
+
+  const readTerminalTheme = useCallback((): ITheme => {
+    const style = window.getComputedStyle(document.documentElement)
+    const read = (name: string, fallback: string) => style.getPropertyValue(name).trim() || fallback
+    return {
+      background: read('--terminal-bg', read('--bg-primary', 'transparent')),
+      foreground: read('--terminal-fg', read('--text-primary', 'currentColor')),
+      cursor: read('--terminal-cursor', read('--accent', 'currentColor')),
+      selectionBackground: read('--terminal-selection', read('--bg-tertiary', 'transparent')),
+      black: read('--bg-secondary', 'currentColor'),
+      red: read('--error', 'currentColor'),
+      green: read('--success', 'currentColor'),
+      yellow: read('--warning', 'currentColor'),
+      blue: read('--accent', 'currentColor'),
+      magenta: read('--category-community', 'currentColor'),
+      cyan: read('--category-local', 'currentColor'),
+      white: read('--text-primary', 'currentColor'),
+    }
+  }, [])
 
   const fitTerminal = useCallback((instance: TermInstance, container?: HTMLElement | null) => {
     const target = container || instance.terminal.element?.parentElement
@@ -54,7 +75,7 @@ export default function MultiTerminal() {
       instance.fitAddon.fit()
       return true
     } catch (err) {
-      console.warn('VD terminal fit skipped:', err)
+      console.warn('PIT Agent terminal fit skipped:', err)
       return false
     }
   }, [])
@@ -64,20 +85,7 @@ export default function MultiTerminal() {
     const term = new Terminal({
       fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
       fontSize: 13,
-      theme: {
-        background: '#0a0e1a',
-        foreground: '#e2e8f0',
-        cursor: '#3b82f6',
-        selectionBackground: '#334155',
-        black: '#1e293b',
-        red: '#ef4444',
-        green: '#22c55e',
-        yellow: '#f59e0b',
-        blue: '#3b82f6',
-        magenta: '#a855f7',
-        cyan: '#06b6d4',
-        white: '#f1f5f9',
-      },
+      theme: readTerminalTheme(),
       cursorBlink: true,
       scrollback: 10000,
     })
@@ -139,7 +147,7 @@ export default function MultiTerminal() {
         return
       }
       term.writeln('\x1b[36m╔═══════════════════════════════════════╗\x1b[0m')
-      term.writeln('\x1b[36m║         VD Terminal                   ║\x1b[0m')
+      term.writeln('\x1b[36m║         PIT Agent Terminal            ║\x1b[0m')
       term.writeln('\x1b[36m╚═══════════════════════════════════════╝\x1b[0m')
       term.writeln('')
       window.api.terminalResize(instance.termId, instance.terminal.cols, instance.terminal.rows)
@@ -159,7 +167,17 @@ export default function MultiTerminal() {
     fitWhenVisible()
     bannerFrame = requestAnimationFrame(writeBanner)
     return instance
-  }, [workspacePath, fitTerminal])
+  }, [workspacePath, fitTerminal, readTerminalTheme])
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      for (const instance of instancesRef.current.values()) {
+        instance.terminal.options.theme = readTerminalTheme()
+        instance.terminal.refresh(0, Math.max(0, instance.terminal.rows - 1))
+      }
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [themePreference, readTerminalTheme])
 
   // Mount active terminal
   useEffect(() => {
@@ -254,7 +272,7 @@ export default function MultiTerminal() {
               display: 'flex', alignItems: 'center', gap: 6,
               padding: '0 12px', height: 34, fontSize: 12, cursor: 'pointer',
               borderRight: '1px solid var(--border)',
-              background: activeTerminalTab === tab.id ? '#0a0e1a' : 'transparent',
+              background: activeTerminalTab === tab.id ? 'var(--terminal-bg)' : 'transparent',
               color: activeTerminalTab === tab.id ? 'var(--text-primary)' : 'var(--text-secondary)',
               whiteSpace: 'nowrap',
               borderBottom: activeTerminalTab === tab.id ? '2px solid var(--accent)' : '2px solid transparent',
@@ -293,7 +311,7 @@ export default function MultiTerminal() {
       {/* Terminal container */}
       <div
         ref={containerRef}
-        style={{ flex: 1, background: '#0a0e1a', padding: '2px 0 0 2px' }}
+        style={{ flex: 1, background: 'var(--terminal-bg)', padding: '2px 0 0 2px' }}
       />
     </div>
   )

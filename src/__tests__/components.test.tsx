@@ -106,6 +106,23 @@ describe('Store — Setters work correctly', () => {
 })
 
 describe('SettingsPanel — provider onboarding', () => {
+  it('shows an Appearance picker with System as the default and saves a selected theme', async () => {
+    useStore.getState().setSettings({ ...useStore.getState().settings, theme: 'system' })
+    vi.mocked(window.api.saveSettings).mockResolvedValueOnce({ success: true })
+    render(<SettingsPanel />)
+
+    expect(useStore.getState().settings.theme).toBe('system')
+    fireEvent.click(screen.getByRole('button', { name: 'Appearance' }))
+    expect(screen.getByRole('radiogroup', { name: 'Appearance theme' })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: /System/ })).toBeChecked()
+    expect(screen.getByRole('radio', { name: /Pink Light/ })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: /Pink Dark/ })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('radio', { name: /Pink Light/ }))
+    await waitFor(() => expect(useStore.getState().settings.theme).toBe('pink-light'))
+    expect(window.api.saveSettings).toHaveBeenCalledWith(expect.objectContaining({ theme: 'pink-light' }))
+  })
+
   it('shows the build commit in the About card', () => {
     render(<SettingsPanel />)
     expect(screen.getByText(/Build commit:/)).toBeInTheDocument()

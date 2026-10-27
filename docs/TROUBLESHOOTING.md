@@ -49,7 +49,7 @@ For a reproducible problem, use **Settings > Export diagnostics**. The JSON repo
 |---------|-----|
 | I clicked a file but don't see it | The editor appears to the right of the **Agent** panel. Switch to 🤖 Agent to see open files. |
 | Editor stuck on "Loading editor..." | Make sure you're on the latest version. Earlier builds loaded the editor from a CDN that the app blocked. |
-| Go to definition or rename is basic in Python/Go/Rust/C/C++/C# | Install the matching language server (`pyright-langserver`, `gopls`, `rust-analyzer`, `clangd`, or `csharp-ls`) and keep it on `PATH`, or set the matching `VD_AGENT_LSP_*` command in `.env.local`. Without it, VD falls back to exact workspace text search. |
+| Go to definition or rename is basic in Python/Go/Rust/C/C++/C# | Install the matching language server (`pyright-langserver`, `gopls`, `rust-analyzer`, `clangd`, or `csharp-ls`) and keep it on `PATH`, or set the matching `VD_AGENT_LSP_*` command in `.env.local`. Without it, PIT Agent falls back to exact workspace text search. |
 | "Not a git repository" | Run `git init` in the workspace, or open a folder that is a git repository. |
 | Push rejected | Pull first (`git pull --rebase`), then push. |
 
@@ -58,7 +58,7 @@ For a reproducible problem, use **Settings > Export diagnostics**. The JSON repo
 | Problem | Fix |
 |---------|-----|
 | A chat is missing after restart | A chat is saved once you've sent at least one message. Open **Sessions**, clear the search, and check pinned items. Files are in `<user data>/conversations/`. |
-| A chat file is corrupt | VD tries the last-known-good `.bak` automatically. Keep both files for diagnosis; import an exported copy or remove the bad pair only if recovery fails. |
+| A chat file is corrupt | PIT Agent tries the last-known-good `.bak` automatically. Keep both files for diagnosis; import an exported copy or remove the bad pair only if recovery fails. |
 | I need to undo an agent edit | Open **Sessions** and use **Restore** on the chat's latest checkpoint. Command and Git side effects may require Git or a manual rollback. |
 | An update is never found | Development builds do not update. A private GitHub repository also cannot serve anonymous client updates; use a public release feed or install the new version manually. |
 

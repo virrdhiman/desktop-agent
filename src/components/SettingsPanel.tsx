@@ -29,16 +29,17 @@ import { TEAM_PRESET_LABELS } from '../lib/multiAgent'
 import { DATA_TOOL_SETTINGS } from '../lib/dataToolSettings'
 import BrandLogo from './BrandLogo'
 import { SMALL_OLLAMA_MODEL, SMALL_OLLAMA_SIZE } from '../../electron/ollamaModels'
+import { THEME_LABELS, THEME_PREFERENCES, normalizeThemePreference } from '../lib/theme'
 
 type Category = 'all' | 'free' | 'local' | 'community' | 'image_video' | 'paid'
 
-const CATEGORY_LABELS: Record<Category, { label: string; icon: string; color: string }> = {
-  all: { label: 'All', icon: '📋', color: 'var(--text-secondary)' },
-  free: { label: 'Free Official', icon: '🆓', color: '#4ade80' },
-  local: { label: 'Local', icon: '🏠', color: '#60a5fa' },
-  community: { label: 'Community', icon: '🏴‍☠️', color: '#c084fc' },
-  image_video: { label: 'Image/Video', icon: '🎨', color: '#f472b6' },
-  paid: { label: 'Paid', icon: '💰', color: '#fbbf24' },
+const CATEGORY_LABELS: Record<Category, { label: string; icon: string; color: string; soft: string }> = {
+  all: { label: 'All', icon: '📋', color: 'var(--text-secondary)', soft: 'var(--bg-tertiary)' },
+  free: { label: 'Free Official', icon: '🆓', color: 'var(--category-free)', soft: 'var(--category-free-soft)' },
+  local: { label: 'Local', icon: '🏠', color: 'var(--category-local)', soft: 'var(--category-local-soft)' },
+  community: { label: 'Community', icon: '🏴‍☠️', color: 'var(--category-community)', soft: 'var(--category-community-soft)' },
+  image_video: { label: 'Image/Video', icon: '🎨', color: 'var(--category-media)', soft: 'var(--category-media-soft)' },
+  paid: { label: 'Paid', icon: '💰', color: 'var(--category-paid)', soft: 'var(--category-paid-soft)' },
 }
 
 const stripEmoji = (name: string) => name.replace(/[^\p{L}\p{N}\s().&-]/gu, '').trim()
@@ -68,6 +69,7 @@ export default function SettingsPanel() {
   const [updateStatus, setUpdateStatus] = useState<Awaited<ReturnType<typeof window.api.updateStatus>> | null>(null)
   const [diagnosticsMessage, setDiagnosticsMessage] = useState('')
   const [advanced, setAdvanced] = useState(false)
+  const [appearanceOpen, setAppearanceOpen] = useState(false)
   const [installedModels, setInstalledModels] = useState<string[]>([])
   const [localModelMessage, setLocalModelMessage] = useState('')
   const [pullConsent, setPullConsent] = useState(false)
@@ -281,10 +283,13 @@ export default function SettingsPanel() {
   return (
     <div style={{ display: 'flex', height: '100%' }}>
       {/* Left: Provider list */}
-      <div style={{ width: 400, borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ width: 400, borderRight: '1px solid var(--border)', display: appearanceOpen ? 'none' : 'flex', flexDirection: 'column' }}>
         <div className="panel-header">
           <div className="vd-settings-heading"><BrandLogo className="vd-settings-logo" /><h2>⚙️ Settings</h2></div>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{settings.providers.length} providers</span>
+          <div className="vd-settings-header-actions">
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{settings.providers.length} providers</span>
+            <button className="btn btn-sm" type="button" onClick={() => { setAppearanceOpen(true); setEditing(null); setAdvanced(false) }}>Appearance</button>
+          </div>
         </div>
           <div className="panel-body">
           {/* Workspace */}
@@ -325,8 +330,8 @@ export default function SettingsPanel() {
               aria-label="Provider setup status"
               style={{
                marginBottom: 12, padding: 12, borderRadius: 'var(--radius)',
-                 background: activeProviderConfigured && (!activeProviderLocal || activeProviderVerified) ? 'rgba(34,197,94,0.07)' : 'rgba(245,158,11,0.08)',
-                 border: `1px solid ${activeProviderConfigured && (!activeProviderLocal || activeProviderVerified) ? 'rgba(34,197,94,0.25)' : 'rgba(245,158,11,0.3)'}`,
+                 background: activeProviderConfigured && (!activeProviderLocal || activeProviderVerified) ? 'var(--success-soft)' : 'var(--warning-soft)',
+                 border: `1px solid ${activeProviderConfigured && (!activeProviderLocal || activeProviderVerified) ? 'var(--success-border)' : 'var(--warning-border)'}`,
                }}
              >
                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
@@ -351,7 +356,7 @@ export default function SettingsPanel() {
              </div>
 
             <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: 10 }}>
-            Paste an API key. VD lists the models that key can call, drops expired IDs, and saves the best working chat model for the selected budget. Pick a specific model in the Agent header to pin it instead.
+              Paste an API key. {APP_NAME} lists the models that key can call, drops expired IDs, and saves the best working chat model for the selected budget. Pick a specific model in the composer to pin it instead.
           </div>
 
           <button className="btn btn-sm" onClick={addCustomProvider} style={{ marginBottom: 10 }}>+ Add compatible provider</button>
@@ -396,7 +401,7 @@ export default function SettingsPanel() {
                     borderRadius: 'var(--radius)',
                     cursor: 'pointer',
                     border: `1px solid ${settings.activeProvider === provider.id ? 'var(--accent)' : 'var(--border)'}`,
-                    background: settings.activeProvider === provider.id ? 'rgba(59,130,246,0.08)' : 'var(--bg-secondary)',
+                    background: settings.activeProvider === provider.id ? 'var(--accent-soft)' : 'var(--bg-secondary)',
                     transition: 'all 0.15s',
                   }}
                 >
@@ -406,7 +411,7 @@ export default function SettingsPanel() {
                       {provider.freeTier && (
                         <span style={{
                           padding: '1px 6px', borderRadius: 8, fontSize: 10, fontWeight: 600,
-                          background: `${catInfo.color}22`,
+                          background: catInfo.soft,
                           color: catInfo.color,
                         }}>
                           {cat === 'local' ? 'LOCAL' : cat === 'image_video' ? 'MEDIA' : 'FREE'}
@@ -437,15 +442,56 @@ export default function SettingsPanel() {
 
       {/* Right: Edit provider */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        {editing ? (
+        {appearanceOpen ? (
+          <section className="vd-appearance-page" aria-labelledby="vd-appearance-title">
+            <header className="vd-appearance-header">
+              <div>
+                <p className="vd-appearance-eyebrow">Settings</p>
+                <h2 id="vd-appearance-title">Appearance</h2>
+                <p>Choose how PIT Agent looks. System follows your operating system and stays the default.</p>
+              </div>
+              <button className="btn" type="button" onClick={() => setAppearanceOpen(false)}>Back to providers</button>
+            </header>
+            <fieldset className="vd-theme-options">
+              <legend>Theme</legend>
+              <div className="vd-theme-grid" role="radiogroup" aria-label="Appearance theme">
+                {THEME_PREFERENCES.map((theme) => {
+                  const selectedTheme = normalizeThemePreference(settings.theme)
+                  const preview = theme
+                  return (
+                    <label className="vd-theme-choice" key={theme}>
+                      <input
+                        type="radio"
+                        name="pit-agent-theme"
+                        value={theme}
+                        checked={selectedTheme === theme}
+                        onChange={() => void savePreference({ theme })}
+                      />
+                      <span className="vd-theme-card">
+                        <span className={`vd-theme-preview vd-theme-preview-${preview}`} aria-hidden="true">
+                          <span className="vd-theme-preview-sidebar" />
+                          <span className="vd-theme-preview-content"><span /><span /></span>
+                          <span className="vd-theme-preview-accent" />
+                        </span>
+                        <span className="vd-theme-choice-label">{THEME_LABELS[theme]}</span>
+                        {theme === 'system' && <span className="vd-theme-choice-description">Follows your device setting</span>}
+                      </span>
+                    </label>
+                  )
+                })}
+              </div>
+              <p className="vd-appearance-note" role="status">Changes apply immediately and are saved with your settings.</p>
+            </fieldset>
+          </section>
+        ) : editing ? (
           <div style={{ padding: 24, maxWidth: 640 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
               <div style={{ fontSize: 18, fontWeight: 600 }}>{editing.name}</div>
               {editing.freeTier && (
                 <span style={{
                   padding: '2px 10px', borderRadius: 10, fontSize: 12, fontWeight: 700,
-                  background: getProviderCategory(editing) === 'paid' ? 'rgba(245,158,11,0.2)' : 'rgba(34,197,94,0.2)',
-                  color: getProviderCategory(editing) === 'paid' ? '#fbbf24' : '#4ade80',
+                  background: getProviderCategory(editing) === 'paid' ? 'var(--category-paid-soft)' : 'var(--category-free-soft)',
+                  color: getProviderCategory(editing) === 'paid' ? 'var(--category-paid)' : 'var(--category-free)',
                 }}>
                   {getProviderCategory(editing) === 'local' ? '🏠 LOCAL' :
                    getProviderCategory(editing) === 'image_video' ? '🎨 MEDIA' :
@@ -457,8 +503,8 @@ export default function SettingsPanel() {
             {editing.notes && (
               <div style={{
                 padding: '12px 14px', marginBottom: 16, borderRadius: 'var(--radius)',
-                background: 'rgba(59,130,246,0.08)',
-                border: '1px solid rgba(59,130,246,0.2)',
+                background: 'var(--accent-soft)',
+                border: '1px solid var(--accent-border)',
                 fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6,
               }}>
                 ℹ️ {editing.notes}
@@ -516,7 +562,7 @@ export default function SettingsPanel() {
                   onChange={(e) => setEditing({ ...editing, model: e.target.value })}
                 />
                 <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                  Fallback model. Refreshing live models makes VD drop stale IDs and use the best accessible chat model for your budget.
+                  Fallback model. Refreshing live models makes {APP_NAME} drop stale IDs and use the best accessible chat model for your budget.
                  </div>
                </div>
 
@@ -525,8 +571,8 @@ export default function SettingsPanel() {
                   role="note"
                   style={{
                     padding: '10px 12px', borderRadius: 'var(--radius)',
-                    background: 'rgba(245,158,11,0.08)',
-                    border: '1px solid rgba(245,158,11,0.25)',
+                    background: 'var(--warning-soft)',
+                    border: '1px solid var(--warning-border)',
                     fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5,
                   }}
                 >
@@ -633,19 +679,19 @@ export default function SettingsPanel() {
             <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.7, marginBottom: 20 }}>
               Configure API keys for <strong style={{ color: 'var(--text-primary)' }}>{settings.providers.length} providers</strong>.
               Free tiers from official providers or a local model are enough to use the agent; free-tier limits are set by each provider and change often.
-              If the active provider fails with a rate limit or unavailable model, VD tries other official free providers that have keys.
+              If the active provider fails with a rate limit or unavailable model, {APP_NAME} tries other official free providers that have keys.
               An invalid key stops the request so you can fix it.
             </div>
 
             {/* Category summaries */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
               {([
-                { cat: 'free', title: '🆓 Free Official', color: '#4ade80', rgb: '34,197,94', note: 'Used for automatic fallback when they have a key.' },
-                { cat: 'local', title: '🏠 Local', color: '#60a5fa', rgb: '96,165,250', note: 'Ollama, LM Studio, llama.cpp, or another OpenAI-compatible server.' },
-                { cat: 'image_video', title: '🎨 Image/Video', color: '#f472b6', rgb: '244,114,182', note: 'Official media APIs. Not used for chat.' },
-                { cat: 'paid', title: '💰 Paid', color: '#fbbf24', rgb: '245,158,11', note: 'Billed by the provider.' },
-              ] as const).map(({ cat, title, color, rgb, note }) => (
-                <div key={cat} style={{ padding: 12, borderRadius: 'var(--radius)', background: `rgba(${rgb},0.05)`, border: `1px solid rgba(${rgb},0.2)` }}>
+                { cat: 'free', title: '🆓 Free Official', color: 'var(--category-free)', soft: 'var(--category-free-soft)', border: 'var(--category-free-border)', note: 'Used for automatic fallback when they have a key.' },
+                { cat: 'local', title: '🏠 Local', color: 'var(--category-local)', soft: 'var(--category-local-soft)', border: 'var(--category-local-border)', note: 'Ollama, LM Studio, llama.cpp, or another OpenAI-compatible server.' },
+                { cat: 'image_video', title: '🎨 Image/Video', color: 'var(--category-media)', soft: 'var(--category-media-soft)', border: 'var(--category-media-border)', note: 'Official media APIs. Not used for chat.' },
+                { cat: 'paid', title: '💰 Paid', color: 'var(--category-paid)', soft: 'var(--category-paid-soft)', border: 'var(--category-paid-border)', note: 'Billed by the provider.' },
+              ] as const).map(({ cat, title, color, soft, border, note }) => (
+                <div key={cat} style={{ padding: 12, borderRadius: 'var(--radius)', background: soft, border: `1px solid ${border}` }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color, marginBottom: 4 }}>{title} ({counts[cat]})</div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>
                     {settings.providers.filter((p) => getProviderCategory(p) === cat).map((p) => stripEmoji(p.name)).join(', ')}
@@ -823,7 +869,7 @@ export default function SettingsPanel() {
                     void window.api.saveSettings(next)
                   }}
                 />
-                Let VD add read-only specialist agents when the task calls for them
+                Let {APP_NAME} add read-only specialist agents when the task calls for them
               </label>
               <div style={{ marginTop: 12, padding: 12, borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--bg-secondary)' }}>
                 <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Custom agent roles</div>

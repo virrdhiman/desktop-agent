@@ -17,6 +17,7 @@
 import { useStore } from '../store'
 import type { Panel } from '../types'
 import { APP_NAME, APP_VERSION, AUTHOR_NAME, AUTHOR_URL } from '../lib/brand'
+import BrandLogo from './BrandLogo'
 
 const PANELS: { id: Panel; icon: string; label: string; shortcut?: string }[] = [
   { id: 'chat', icon: '🤖', label: 'Agent', shortcut: 'Ctrl+Shift+A' },
@@ -40,18 +41,7 @@ export default function Sidebar() {
   return (
     <nav className="sidebar" role="navigation" aria-label="Main navigation">
       {/* Logo */}
-      <div
-        role="img"
-        aria-label="PIT Agent logo"
-        style={{
-          width: 32, height: 32, borderRadius: 8, display: 'flex',
-          alignItems: 'center', justifyContent: 'center',
-          background: 'linear-gradient(135deg, var(--accent), #a855f7)',
-          fontSize: 11, fontWeight: 700, color: 'white', marginBottom: 8,
-        }}
-      >
-        VD
-      </div>
+      <BrandLogo variant="mark" className="vd-sidebar-brand-mark" alt={`${APP_NAME} logo`} />
 
       {/* Search / command palette */}
       <button

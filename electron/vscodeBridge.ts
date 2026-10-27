@@ -287,7 +287,7 @@ async function detectVsCodeBridgeSetup(): Promise<VsCodeBridgeSetup> {
     installCommand: `code --install-extension "${vsixPath}" --force`,
     downloadUrl: VSCODE_DOWNLOAD_URL,
     message: installReady
-      ? 'VS Code is available. The VD installer bundled the bridge package, but does not install it into VS Code automatically. Click Install Bridge, then open this workspace in VS Code. Restricted Mode supports active-editor export/autocomplete; trust the workspace for indexing and edit/apply commands.'
+      ? 'VS Code is available. The PIT Agent installer bundled the bridge package, but does not install it into VS Code automatically. Click Install Bridge, then open this workspace in VS Code. Restricted Mode supports active-editor export/autocomplete; trust the workspace for indexing and edit/apply commands.'
       : 'VS Code is available, but the bridge package is missing. Run npm run vscode:package.',
   }
 }

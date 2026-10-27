@@ -10,12 +10,14 @@ vi.mock('xterm', () => ({
     element = document.createElement('div')
     cols = 80
     rows = 24
+    options = { theme: {} }
     _core = { _renderService: { dimensions: { css: { cell: { width: 8, height: 16 } } } } }
     loadAddon() {}
     open(container: HTMLElement) { container.appendChild(this.element) }
     onData() { return { dispose() {} } }
     write() {}
     writeln() {}
+    refresh() {}
     dispose() {}
   },
 }))

@@ -44,20 +44,20 @@ Custom instructions for the Prompt Analyst, Worker, Reviewer, and Final Verifier
 
 ## Dynamic specialists
 
-When enabled, VD can add read-only specialists based on the request and selected preset. Examples include a Security Specialist, Data Specialist, Research Specialist, or Test Planner. Dynamic specialists never call tools or edit files; they provide compact guidance to the Executor. The selected token budget caps how many can run.
+When enabled, PIT Agent can add read-only specialists based on the request and selected preset. Examples include a Security Specialist, Data Specialist, Research Specialist, or Test Planner. Dynamic specialists never call tools or edit files; they provide compact guidance to the Executor. The selected token budget caps how many can run.
 
 ## Safety and evidence
 
 - Only the Executor may call tools or modify the workspace. Analyst, Reviewer, and Verifier tool requests are rejected.
 - Reviewers receive bounded tool-result summaries, including success or failure and relevant output, rather than trusting the Executor's claims.
-- A malformed or empty specialist response does not erase valid executor work. VD falls back to the evidence-backed executor answer.
+- A malformed or empty specialist response does not erase valid executor work. PIT Agent falls back to the evidence-backed executor answer.
 - The review loop is capped at two reviews and one repair pass.
 - **Stop** is honored between every role and during model calls.
 - Existing tool permissions, workspace boundaries, checkpoints, response checks, and provider fallback remain in force.
 
 ## Providers and free keys
 
-When several official free providers are configured, VD prefers different providers for independent specialist passes. With one configured provider, Agentic mode still works by giving isolated role contexts to separate model calls.
+When several official free providers are configured, PIT Agent prefers different providers for independent specialist passes. With one configured provider, Agentic mode still works by giving isolated role contexts to separate model calls.
 
 Agentic mode does not require a paid service, but it uses more API requests and tokens than standard chat. **Smart** is the recommended setting for free keys because it keeps simple questions on one model call. Provider rate limits still apply, and adding more than one official free provider improves resilience.
 

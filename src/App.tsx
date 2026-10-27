@@ -4,7 +4,7 @@
  * @project PIT Agent
  * @license Proprietary. See LICENSE.
  */
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { useStore } from './store'
 import LeftRail from './components/LeftRail'
 import WorkspaceSidebar from './components/WorkspaceSidebar'
@@ -32,6 +32,7 @@ import { isTerminalPanelShortcut, mergeLayoutPreferences, normalizeLayoutPrefere
 import { initialSharedStateReady } from './lib/sharedStateSync'
 import type { Panel, SharedAppState } from './types'
 import { APP_NAME } from './lib/brand'
+import { applyThemePreference } from './lib/theme'
 
 type StoreSnapshot = ReturnType<typeof useStore.getState>
 
@@ -106,6 +107,10 @@ export default function App() {
   const sharedHydrated = useRef(false)
   const syncTimer = useRef<number | null>(null)
   const lastPublishedState = useRef('')
+
+  useLayoutEffect(() => {
+    applyThemePreference(document.documentElement, settings.theme)
+  }, [settings.theme])
 
   const persistTerminalToggle = () => {
     const current = useStore.getState()

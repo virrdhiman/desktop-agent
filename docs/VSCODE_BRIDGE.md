@@ -102,7 +102,7 @@ The extension also adds no-cost VS Code-side polish:
   checking Restricted Mode behavior without applying edits.
 - The PIT Agent activity-bar sidebar provides ask, task status, index, dashboard,
   and terminal controls inside VS Code.
-- Editor context actions add `Fix with VD`, `Explain Selection`,
+- Editor context actions add `Fix with PIT Agent`, `Explain Selection`,
   `Refactor Selection`, and `Generate Tests`.
 - Native VS Code commands for `Go to Definition`, `Find References`, and
   `Rename Symbol` are available from the Command Palette, editor context menu,
@@ -110,7 +110,7 @@ The extension also adds no-cost VS Code-side polish:
 - `PIT Agent: Review Last Previewed Edit`, `Accept Last Previewed Edit`, and
   `Reject Last Previewed Edit` let users inspect preview hunks in VS Code
   before applying the remaining edit.
-- Preview files show CodeLens actions for accepting or rejecting the latest VD
+- Preview files show CodeLens actions for accepting or rejecting the latest PIT Agent
   Agent preview directly above the diff content.
 - `PIT Agent: Open Bridge Dashboard` opens a local dashboard with context,
   pending commands, index, and preview controls.

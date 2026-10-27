@@ -415,7 +415,7 @@ export default function CodeEditor() {
             kind: monaco.languages.CompletionItemKind.Text,
             insertText: item,
             range,
-            detail: 'VD local workspace',
+            detail: 'PIT Agent workspace',
             sortText: item.toLowerCase().startsWith(prefix) ? `0${item}` : `1${item}`,
           }))
         return { suggestions }
@@ -423,19 +423,19 @@ export default function CodeEditor() {
     })
     editor.addAction({
       id: 'vd.goToDefinition',
-      label: 'VD: Go to Definition',
+      label: 'PIT Agent: Go to Definition',
       keybindings: [monaco.KeyCode.F12],
       run: () => { void handleGoToDefinition() },
     })
     editor.addAction({
       id: 'vd.findWorkspaceReferences',
-      label: 'VD: Find Workspace References',
+      label: 'PIT Agent: Find Workspace References',
       keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.F12],
       run: () => { void handleFindReferences() },
     })
     editor.addAction({
       id: 'vd.renameWorkspaceSymbol',
-      label: 'VD: Rename Workspace Symbol',
+      label: 'PIT Agent: Rename Workspace Symbol',
       keybindings: [monaco.KeyCode.F2],
       run: () => { void handleRenameSymbol() },
     })
@@ -611,7 +611,7 @@ export default function CodeEditor() {
                 border: 'none',
                 borderBottom: '1px solid var(--border)',
                 background: 'transparent',
-                color: diag.severity === 'error' ? '#f87171' : diag.severity === 'warning' ? '#fbbf24' : 'var(--text-secondary)',
+                color: diag.severity === 'error' ? 'var(--error)' : diag.severity === 'warning' ? 'var(--warning)' : 'var(--text-secondary)',
                 cursor: 'pointer',
                 fontFamily: 'inherit',
                 fontSize: 12,
@@ -626,8 +626,8 @@ export default function CodeEditor() {
 
       {latestInlineEdit && latestInlineEditSummary && (
         <div style={{
-          background: 'rgba(59,130,246,0.10)',
-          borderBottom: '1px solid rgba(59,130,246,0.25)',
+          background: 'var(--accent-soft)',
+          borderBottom: '1px solid var(--accent-border)',
           padding: '8px 10px',
           flexShrink: 0,
         }}>
@@ -646,9 +646,9 @@ export default function CodeEditor() {
           <div style={{ display: 'grid', gap: 6, maxHeight: 240, overflow: 'auto' }}>
             {inlineEditHunks.slice(0, 8).map((hunk) => (
               <div key={hunk.id} style={{
-                border: '1px solid rgba(148,163,184,0.20)',
+                border: '1px solid var(--border)',
                 borderRadius: 6,
-                background: 'rgba(15,23,42,0.35)',
+                background: 'var(--bg-primary)',
                 overflow: 'hidden',
               }}>
                 <div style={{
@@ -657,7 +657,7 @@ export default function CodeEditor() {
                   gap: 8,
                   alignItems: 'center',
                   padding: '5px 7px',
-                  borderBottom: '1px solid rgba(148,163,184,0.16)',
+                  borderBottom: '1px solid var(--border)',
                 }}>
                   <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                     Lines {hunk.newEnd >= hunk.newStart ? `${hunk.newStart}-${hunk.newEnd}` : `${hunk.newStart}`}

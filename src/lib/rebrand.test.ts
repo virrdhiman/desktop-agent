@@ -11,7 +11,7 @@ function sourceFiles(root: string): string[] {
   for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
     const target = path.join(root, entry.name)
     if (entry.isDirectory()) result.push(...sourceFiles(target))
-    else if (/\.(ts|tsx)$/.test(entry.name)) result.push(target)
+    else if (/\.(ts|tsx)$/.test(entry.name) && !/\.(test|spec)\.(ts|tsx)$/.test(entry.name)) result.push(target)
   }
   return result
 }
@@ -19,12 +19,19 @@ function sourceFiles(root: string): string[] {
 describe('PIT Agent identity', () => {
   it('uses one shared visible name while keeping package and app identifiers stable', () => {
     const packageJson = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8'))
+    const extensionPackage = JSON.parse(fs.readFileSync(path.join(repoRoot, 'vscode-extension/package.json'), 'utf8'))
+    const userDataSource = fs.readFileSync(path.join(repoRoot, 'electron/userDataPath.ts'), 'utf8')
     expect(APP_NAME).toBe('PIT Agent')
     expect(LEGACY_APP_NAME).not.toBe(APP_NAME)
     expect(packageJson.productName).toBe(APP_NAME)
     expect(packageJson.build.productName).toBe(APP_NAME)
+    expect(packageJson.version).toBe('1.2.0')
+    expect(packageJson.author.name).toBe('Productive IT')
     expect(packageJson.build.appId).toBe('com.vd.agent')
     expect(packageJson.name).toBe('vd-agent')
+    expect(extensionPackage.displayName).toBe(`${APP_NAME} Bridge`)
+    expect(userDataSource).toContain("LEGACY_USER_DATA_FOLDER = 'VD Agent'")
+    expect(fs.readFileSync(path.join(repoRoot, 'build/installer.nsh'), 'utf8')).toContain('Delete "$DESKTOP\\VD Agent.lnk"')
   })
 
   it('has no stale visible legacy name in source or Electron code', () => {
@@ -43,5 +50,12 @@ describe('PIT Agent identity', () => {
       }
     }
     expect(hits).toEqual([])
+  })
+
+  it('does not expose the old short name in VS Code command labels', () => {
+    const extensionPackage = JSON.parse(fs.readFileSync(path.join(repoRoot, 'vscode-extension/package.json'), 'utf8'))
+    const visibleCommands = JSON.stringify(extensionPackage.contributes)
+    expect(visibleCommands).not.toMatch(/Fix with VD|VD Agent:/)
+    expect(visibleCommands).toContain(`${APP_NAME}: Fix selection`)
   })
 })

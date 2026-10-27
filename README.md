@@ -13,7 +13,7 @@ PIT Agent by [Virender Dhiman](https://virender.in) · [PIT Agent License](./LIC
 
 [![GitHub stars](https://img.shields.io/github/stars/virrdhiman/desktop-agent?style=social)](https://github.com/virrdhiman/desktop-agent/stargazers)
 [![Latest release](https://img.shields.io/github/v/release/virrdhiman/desktop-agent?include_prereleases&label=release)](https://github.com/virrdhiman/desktop-agent/releases)
-![License](https://img.shields.io/badge/license-VD%20Agent%20License-blueviolet)
+![License](https://img.shields.io/badge/license-PIT%20Agent%20License-blueviolet)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 
 ![PIT Agent welcome screen](./docs/images/welcome.png)

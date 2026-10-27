@@ -74,7 +74,7 @@ For OpenAI-compatible providers, on each request:
 2. It drops non-chat models: embeddings, rerank, moderation, audio, speech, transcription, image, and video.
 3. It ranks the rest by coding quality, budget, then efficiency. On free-tier aggregators with explicit `:free` model IDs, Auto stays on those models in every budget. To let Auto use other model IDs on such providers, enable **Allow paid model IDs** in Settings. Selecting a paid provider explicitly also allows its models. Providers without explicit free model IDs may still charge for usage; check their terms.
 4. It tries the best model first, then the next few. If `/models` returns a usable list, stale saved model IDs are dropped instead of retried.
-5. It moves to the next model on 404, 429, 503, overload, capacity, quota, model-not-found, unsupported-model, and intermediate empty-answer errors. A final empty answer goes through VD's corrective retry. Failed model IDs are cooled down for two minutes; explicitly retired IDs for an hour.
+5. It moves to the next model on 404, 429, 503, overload, capacity, quota, model-not-found, unsupported-model, and intermediate empty-answer errors. A final empty answer goes through PIT Agent's corrective retry. Failed model IDs are cooled down for two minutes; explicitly retired IDs for an hour.
 6. On an invalid key (401 or an auth error) it **stops** and tells you, without trying other models or providers.
 7. The refreshed live model list and the model that worked are saved, unless you pinned one.
 
@@ -85,14 +85,14 @@ When **Auto** is selected, PIT Agent does not cling to an expired or deprecated 
 **Anthropic** uses its own Messages API and has no model discovery, so PIT Agent uses the model set in Settings.
 
 Screenshots pasted or dropped into the current chat request are sent as image content
-to compatible chat models. VD converts the same request for Anthropic's Messages API.
+to compatible chat models. PIT Agent converts the same request for Anthropic's Messages API.
 It accepts up to four PNG, JPEG, WebP, or GIF images totaling 10 MB. Saved chat
 history keeps attachment names; the image bytes are used only for the current
 request and are not stored in the text history.
 
 ## Provider fallback
 
-If the active provider fails for a reason other than an invalid key, PIT Agent tries compatible fallbacks with keys. Free providers fall back only to other **Free Official** providers so Auto does not spend money unexpectedly. Paid providers are used only when you intentionally select one; then VD can fall back across your configured paid and free providers. The active provider remains first and fallbacks are ordered by locally observed reliability and latency; repeated failures create a short cooldown. When another provider answers, the chat says which one, and the rest of that request stays on it. If every provider fails, the chat lists each provider's error with next steps. Local servers and image/video services are only used when you make them the active provider.
+If the active provider fails for a reason other than an invalid key, PIT Agent tries compatible fallbacks with keys. Free providers fall back only to other **Free Official** providers so Auto does not spend money unexpectedly. Paid providers are used only when you intentionally select one; then PIT Agent can fall back across your configured paid and free providers. The active provider remains first and fallbacks are ordered by locally observed reliability and latency; repeated failures create a short cooldown. When another provider answers, the chat says which one, and the rest of that request stays on it. If every provider fails, the chat lists each provider's error with next steps. Local servers and image/video services are only used when you make them the active provider.
 
 The catalog does not include unofficial or reverse-engineered proxies. Older settings files drop those entries on the next load. If one of them was the active provider, PIT Agent switches back to Groq.
 

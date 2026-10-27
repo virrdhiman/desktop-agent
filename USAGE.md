@@ -137,7 +137,7 @@ Agentic mode works with one provider, but separate configured official free prov
 
 ### Free keys and automatic model selection
 
-For OpenAI-compatible providers, on each request VD does the following:
+For OpenAI-compatible providers, on each request PIT Agent does the following:
 
 1. Lists the models your key can call (`/models`, cached for 10 minutes).
 2. Drops non-chat models (embeddings, audio, speech, image, moderation, rerank).
@@ -151,7 +151,7 @@ To pin a specific model, choose it in the **model picker** in the Agent header. 
 
 ### Provider fallback
 
-If the active provider fails for a non-auth reason, VD tries up to three other **official free** providers that have keys. The selected provider is always first; fallbacks are ordered by local reliability and latency, and repeatedly failing providers receive a short cooldown. When another provider answers, the chat says which one. The rest of that request stays on the provider that answered, so a rate-limited provider isn't retried on every tool round. If every provider fails, the chat lists each provider's error and suggests next steps. Local servers are never used as fallbacks. Unofficial proxies are not in the catalog.
+If the active provider fails for a non-auth reason, PIT Agent tries up to three other **official free** providers that have keys. The selected provider is always first; fallbacks are ordered by local reliability and latency, and repeatedly failing providers receive a short cooldown. When another provider answers, the chat says which one. The rest of that request stays on the provider that answered, so a rate-limited provider isn't retried on every tool round. If every provider fails, the chat lists each provider's error and suggests next steps. Local servers are never used as fallbacks. Unofficial proxies are not in the catalog.
 
 ### Answer quality
 
@@ -161,7 +161,7 @@ The agent is instructed to lead with the answer, skip filler, ask questions only
 - Obvious action narration such as "I'll start by inspecting the repo" is removed; the tool runs directly. Brief handoff/status messages do not trigger a generic "what next?" question.
 - If a model returns an empty reply, the next model is tried. If a reply is still empty, only pleasantries, stuck repeating itself, generically asks for a task already supplied, or denies restored chat context, the agent is asked once to answer again. If that also fails, the chat says so and suggests what to try.
 - If a reply says files were changed, commands were run, or tests passed, but no tool call in that request did so, the agent is asked once to do the work or say what was not done. If the claim remains, the chat adds a "Check this reply" notice.
-- Failed tools, failed commands (with exit code and output), and malformed tool calls are reported to the model so it can adapt instead of guessing. VD accepts its fenced format plus common Qwen/native and known bare-JSON tool-call variants from free models.
+- Failed tools, failed commands (with exit code and output), and malformed tool calls are reported to the model so it can adapt instead of guessing. PIT Agent accepts its fenced format plus common Qwen/native and known bare-JSON tool-call variants from free models.
 
 ### What the agent can do
 
@@ -245,9 +245,9 @@ Commands include panel navigation, toggling the terminal, **New Chat**, and **Go
   - Linux: `~/.config/VD Agent/conversations`
 - On startup the most recent chat is restored, including its workspace, open files, tasks, recent tool outcomes, provider/model, terminal summary, verification result, and recovery checkpoint.
 - The **Sessions** panel can search, rename, pin, import, export, open, and delete chats. **＋ New chat** starts a fresh conversation, and the previous one stays in history.
-- Before agent file edits or deletes, VD stores a bounded pre-change checkpoint. Use **Restore** on the session to return the recorded files to that state. Command and Git side effects are not included.
+- Before agent file edits or deletes, PIT Agent stores a bounded pre-change checkpoint. Use **Restore** on the session to return the recorded files to that state. Command and Git side effects are not included.
 - Deleting a chat asks for confirmation, then removes its file from disk.
-- Configured API keys and common key formats are redacted before saving. If the current file is corrupt, VD attempts its `.bak` copy. Files from older versions still load.
+- Configured API keys and common key formats are redacted before saving. If the current file is corrupt, PIT Agent attempts its `.bak` copy. Files from older versions still load.
 - Chats that contain only system notices (for example "No API key is configured") are not saved.
 - Use **📤 Export** in the Agent header to download the current chat as Markdown.
 
@@ -357,7 +357,7 @@ The most common fixes:
 | Problem | Solution |
 |---------|----------|
 | "No API key is configured" | Settings → add a key for the active provider |
-| "rejected the API key" | The key is invalid or revoked. Re-copy it from the provider. VD does not fall back on auth errors on purpose. |
+| "rejected the API key" | The key is invalid or revoked. Re-copy it from the provider. PIT Agent does not fall back on auth errors on purpose. |
 | Can't see the file you opened | The editor appears beside the 🤖 Agent panel |
 | Blank screen | Open DevTools (`Ctrl+Shift+I`) and check the console |
 
@@ -372,7 +372,7 @@ The app is free to download and use, including for commercial work, under the [P
 When you share, review, or demo it, use: `PIT Agent by Virender Dhiman - https://virender.in` and link to https://github.com/virrdhiman/desktop-agent. A ⭐ on GitHub is appreciated.
 
 **Can I use several providers?**
-Yes. Add keys for several official free providers and VD falls back between them on rate limits or unavailable models. Invalid keys are reported instead of skipped.
+Yes. Add keys for several official free providers and PIT Agent falls back between them on rate limits or unavailable models. Invalid keys are reported instead of skipped.
 
 **Where are my API keys stored?**
 In `<userData>/settings.json`, encrypted with the OS keychain via Electron `safeStorage` when available. They are never written to chat history or settings exports.

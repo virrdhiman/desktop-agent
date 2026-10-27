@@ -96,7 +96,7 @@
       },
       {
         "command": "vdAgent.fixWithVD",
-        "title": "PIT Agent: Fix with VD"
+        "title": "PIT Agent: Fix selection"
       },
       {
         "command": "vdAgent.explainWithVD",
