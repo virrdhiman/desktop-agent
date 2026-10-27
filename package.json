@@ -1,10 +1,10 @@
 {
   "name": "vd-agent",
-  "productName": "VD Agent",
-  "version": "1.1.0",
+  "productName": "PIT Agent",
+  "version": "1.2.0",
   "type": "module",
   "private": true,
-  "description": "VD Agent: desktop AI coding agent with free API key model selection, git, terminal, and local chat history",
+  "description": "PIT Agent: desktop AI coding agent with free API key model selection, git, terminal, and local chat history",
   "license": "SEE LICENSE IN LICENSE",
   "engines": {
     "node": ">=22.19.0"
@@ -13,7 +13,7 @@
     "node-pty": true
   },
   "author": {
-    "name": "Virender Dhiman",
+    "name": "Productive IT",
     "email": "virrdhiman@gmail.com",
     "url": "https://virender.in"
   },
@@ -129,14 +129,14 @@
     "npmRebuild": false,
     "forceCodeSigning": false,
     "appId": "com.vd.agent",
-    "productName": "VD Agent",
+    "productName": "PIT Agent",
     "electronUpdaterCompatibility": ">=2.16",
     "publish": {
       "provider": "github",
       "owner": "virrdhiman",
       "repo": "desktop-agent"
     },
-    "copyright": "Copyright © 2025-2026 Virender Dhiman (virender.in). All rights reserved.",
+    "copyright": "Copyright © 2025-2026 Productive IT. All rights reserved.",
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -209,7 +209,8 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "VD Agent"
+      "shortcutName": "PIT Agent",
+      "include": "build/installer.nsh"
     }
   }
 }

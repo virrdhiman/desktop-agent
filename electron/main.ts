@@ -1,11 +1,11 @@
 /**
  * @author Virender Dhiman
  * @year 2025
- * @project VD Agent
+ * @project PIT Agent
  * @license Proprietary. See LICENSE.
  */
 /**
- * VD Agent — Electron Main Process (Slim Orchestrator)
+ * PIT Agent — Electron Main Process (Slim Orchestrator)
  *
  * Creates the BrowserWindow and registers all IPC handler modules:
  * - handlers/fs.ts     — File system operations
@@ -41,7 +41,8 @@ import { closeBrowserSessions } from './browserTool'
 import { appendDiagnosticsLog } from './diagnostics'
 import { SingleIdeWindow } from './ideWindow'
 import { SharedStateStore } from './sharedState'
-import { userDataOverride } from './userDataPath'
+import { stableUserDataPath, userDataOverride } from './userDataPath'
+import { APP_NAME } from '../shared/brand'
 import { isSafeWorkspaceFile, nextQaDialogChoice, type UnsavedChoice } from './windowClose'
 import type { SharedAppState } from '../src/types'
 import { shouldAcceptSharedStateUpdate } from '../src/lib/sharedStateSync'
@@ -49,7 +50,7 @@ import { shouldAcceptSharedStateUpdate } from '../src/lib/sharedStateSync'
 // package.json has "type": "module", so the main bundle is ESM and has no CommonJS __dirname.
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const qaUserData = userDataOverride()
-if (qaUserData) app.setPath('userData', qaUserData)
+app.setPath('userData', qaUserData || stableUserDataPath(app.getPath('appData')))
 
 /** Main BrowserWindow reference — passed to handlers that need to send events to renderer */
 let mainWindow: BrowserWindow | null = null
@@ -99,12 +100,12 @@ function recordUnhandledDiagnostic(message: string, stack?: string): void {
 
 process.on('uncaughtException', (error) => {
   recordUnhandledDiagnostic(error?.message || String(error), error?.stack)
-  originalConsoleError('VD Agent uncaught exception:', error)
+  originalConsoleError(`${APP_NAME} uncaught exception:`, error)
 })
 process.on('unhandledRejection', (reason) => {
   const error = reason instanceof Error ? reason : new Error(typeof reason === 'string' ? reason : JSON.stringify(reason))
   recordUnhandledDiagnostic(error.message, error.stack)
-  originalConsoleError('VD Agent unhandled rejection:', reason)
+  originalConsoleError(`${APP_NAME} unhandled rejection:`, reason)
 })
 
 // ─── Window Management ────────────────────────────────────────────────────
@@ -215,7 +216,7 @@ function createIdeWindow(): BrowserWindow {
     ...readIdeBounds(),
     minWidth: 1000,
     minHeight: 600,
-    title: 'VD Agent — Code',
+    title: `${APP_NAME} — Code`,
     titleBarStyle: 'hiddenInset',
     backgroundColor: '#0f172a',
     ...(icon ? { icon } : {}),
@@ -272,10 +273,10 @@ function createWindow() {
     rendererRecoveryAttempts++
     const choice = await dialog.showMessageBox(mainWindow, {
       type: 'error',
-      title: 'VD Agent recovered from a crash',
+      title: `${APP_NAME} recovered from a crash`,
       message: 'The interface process stopped unexpectedly. Your saved chats and pre-edit checkpoints are still on disk.',
       detail: `Reason: ${details.reason}. Exit code: ${details.exitCode}.`,
-      buttons: rendererRecoveryAttempts <= 2 ? ['Close', 'Reload VD Agent'] : ['Close'],
+      buttons: rendererRecoveryAttempts <= 2 ? ['Close', `Reload ${APP_NAME}`] : ['Close'],
       defaultId: rendererRecoveryAttempts <= 2 ? 1 : 0,
       cancelId: 0,
     })
