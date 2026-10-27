@@ -194,6 +194,11 @@ async function publishWorkspace(main, settings) {
     terminalEntries: [],
   }
   await main.evaluate(`window.api.publishSharedState(${JSON.stringify(snapshot)}); true`)
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const published = await main.evaluate('window.api.getSharedState()')
+    if (published?.workspacePath === workspace) return
+    await sleep(250)
+  }
 }
 
 async function prepareFixture() {
@@ -354,24 +359,29 @@ async function main() {
       const dirtySet = await mainPage.evaluate(`window.api.qaSetDirtyState(${JSON.stringify(dialogFile)}, ${JSON.stringify('export const qaValue = 2\n')})`)
       check('QA dirty-state fixture is accepted', dirtySet?.success === true, JSON.stringify({ dirtySet, workspace: dirtyShared?.workspacePath, dialogFile }))
       await sleep(250)
-      await ide.evaluate('(async () => { await window.api.qaSetDialogSequence(["cancel"]); void window.api.qaCloseWindow(); return true })()')
+      await mainPage.evaluate('window.api.qaSetDialogSequence(["cancel"])')
+      await ide.evaluate('void window.api.qaCloseWindow(); true')
       await sleep(500)
       check('IDE dirty close Cancel keeps the window open', await hasRole(port, 'ide'), 'cancelled close')
       await mainPage.evaluate(`window.api.qaSetDirtyState(${JSON.stringify(dialogFile)}, ${JSON.stringify('export const qaValue = 2\n')})`)
       await sleep(100)
-      await ide.evaluate('(async () => { await window.api.qaSetDialogSequence(["save"]); void window.api.qaCloseWindow(); return true })()')
+      await mainPage.evaluate('window.api.qaSetDialogSequence(["save"])')
+      await ide.evaluate('void window.api.qaCloseWindow(); true')
       await sleep(700)
       check('IDE dirty close Save writes the file and closes', fs.readFileSync(path.join(workspace, 'dialog-file.ts'), 'utf8').includes('qaValue = 2') && !(await hasRole(port, 'ide')), 'saved fixture content')
       const reopened = new Set((await targets(port)).map((target) => target.webSocketDebuggerUrl))
       await mainPage.evaluate('window.api.openIdeWindow()')
       ide = await waitForRole(port, 'ide', reopened)
+      await sleep(750)
       await mainPage.evaluate(`window.api.qaSetDirtyState(${JSON.stringify(dialogFile)}, ${JSON.stringify('export const qaValue = 3\n')})`)
       await sleep(250)
-      await ide.evaluate('(async () => { await window.api.qaSetDialogSequence(["dont-save"]); void window.api.qaCloseWindow(); return true })()')
+      await mainPage.evaluate('window.api.qaSetDialogSequence(["dont-save"])')
+      await ide.evaluate('void window.api.qaCloseWindow(); true')
       await sleep(700)
       check('IDE dirty close Don\'t save closes without another write', !(await hasRole(port, 'ide')), 'discarded close')
       await mainPage.evaluate('(async () => { const state = await window.api.getSharedState(); if (state) { state.fileDirty = true; window.api.publishSharedState(state) } return true })()')
-      await mainPage.evaluate('(async () => { await window.api.qaSetDialogSequence(["cancel"]); void window.api.qaCloseWindow(); return true })()')
+      await mainPage.evaluate('window.api.qaSetDialogSequence(["cancel"])')
+      await mainPage.evaluate('void window.api.qaCloseWindow(); true')
       await sleep(500)
       check('Main dirty close Cancel keeps the Agent window open', await hasRole(port, 'main'), 'cancelled main close')
     }

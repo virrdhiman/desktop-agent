@@ -13,6 +13,7 @@ describe('shared window state hydration', () => {
 
   it('does not let an IDE startup snapshot erase the active workspace', () => {
     expect(shouldAcceptSharedStateUpdate('ide', 'C:/workspace', '')).toBe(false)
+    expect(shouldAcceptSharedStateUpdate('ide', '', '')).toBe(false)
     expect(shouldAcceptSharedStateUpdate('ide', 'C:/workspace', 'C:/other')).toBe(true)
     expect(shouldAcceptSharedStateUpdate('main', 'C:/workspace', '')).toBe(true)
   })
