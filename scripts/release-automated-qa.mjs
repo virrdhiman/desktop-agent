@@ -273,7 +273,7 @@ async function main() {
     check('packaged first run is isolated and key-free', !firstRunText.match(/API key configured|key saved/i), `fresh userData; configured providers=${(firstRunSettings.providers || []).filter((provider) => provider.hasKey).length}`)
     check('first-run key guidance is visible', firstRunText.includes('Add an API key in Settings'), 'welcome screen')
     await mainPage.evaluate(`(() => {
-      const skip = [...document.querySelectorAll('button')].find((node) => /skip to use defaults/i.test(node.textContent || ''))
+      const skip = [...document.querySelectorAll('button')].find((node) => /skip(?: to)? use defaults|continue to vd agent/i.test(node.textContent || ''))
       skip?.click()
       return Boolean(skip)
     })()`)
