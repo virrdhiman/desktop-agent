@@ -3,6 +3,6 @@ export function initialSharedStateReady(isIdeWindow: boolean, snapshot: unknown)
 }
 
 export function shouldAcceptSharedStateUpdate(senderRole: 'main' | 'ide', currentWorkspace: string, nextWorkspace: string): boolean {
-  void currentWorkspace
-  return !(senderRole === 'ide' && !nextWorkspace)
+  if (!nextWorkspace && (senderRole === 'ide' || currentWorkspace)) return false
+  return true
 }

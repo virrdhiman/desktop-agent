@@ -11,10 +11,12 @@ describe('shared window state hydration', () => {
     expect(initialSharedStateReady(false, null)).toBe(true)
   })
 
-  it('does not let an IDE startup snapshot erase the active workspace', () => {
+  it('does not let a stale empty snapshot erase the active workspace', () => {
     expect(shouldAcceptSharedStateUpdate('ide', 'C:/workspace', '')).toBe(false)
     expect(shouldAcceptSharedStateUpdate('ide', '', '')).toBe(false)
     expect(shouldAcceptSharedStateUpdate('ide', 'C:/workspace', 'C:/other')).toBe(true)
-    expect(shouldAcceptSharedStateUpdate('main', 'C:/workspace', '')).toBe(true)
+    expect(shouldAcceptSharedStateUpdate('main', 'C:/workspace', '')).toBe(false)
+    expect(shouldAcceptSharedStateUpdate('main', '', '')).toBe(true)
+    expect(shouldAcceptSharedStateUpdate('main', '', 'C:/workspace')).toBe(true)
   })
 })
