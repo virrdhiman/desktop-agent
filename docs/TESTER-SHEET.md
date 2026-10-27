@@ -1,5 +1,7 @@
 # VD Agent 1.1.0 tester sheet
 
+Packaged application commit: `27aad96dffcd65ed52189e1631f7718c2b06a512`
+
 This is an unsigned Windows test build for a local, fixture-only evaluation. It is not a public release.
 
 ## Install and first run
