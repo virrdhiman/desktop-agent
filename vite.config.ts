@@ -1,7 +1,7 @@
 /**
  * @author Virender Dhiman
  * @year 2025
- * @project VD Agent
+ * @project PIT Agent
  * @license Proprietary. See LICENSE.
  */
 import { defineConfig } from 'vite'

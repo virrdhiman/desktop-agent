@@ -448,6 +448,31 @@ kbd {
 .vd-message-code-block pre { max-width: 100%; margin: 0; padding: 12px; overflow: auto; background: #0d1117; color: #e2e8f0; font: 12px/1.5 'JetBrains Mono', 'Fira Code', monospace; white-space: pre; }
 .vd-chat-column p, .vd-chat-column li { overflow-wrap: anywhere; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+
+/* Keep the shell usable when a tester emulates a narrow viewport. The right
+   tools remain reachable as an overlay instead of forcing the chat wider than
+   the viewport; normal desktop layouts are unchanged. */
+@media (max-width: 900px) {
+  .vd-app-shell { min-width: 0; overflow: hidden; }
+  .vd-sidebar-slot, .vd-resize-sidebar, .vd-history-pane, .vd-resize-history { display: none !important; }
+  .vd-primary-pane, .vd-chat-column, .vd-main-shell { min-width: 0; }
+  .vd-right-tools { position: absolute; z-index: 30; top: 0; right: 0; bottom: 0; width: min(360px, calc(100vw - 58px)) !important; box-shadow: -12px 0 30px rgba(0, 0, 0, .28); }
+  .vd-launcher-rail { width: 48px; flex-basis: 48px; }
+  .vd-topbar { gap: 4px; padding: 0 6px; }
+  .top-menus { gap: 0; overflow: hidden; }
+  .top-menus button { padding-inline: 6px; }
+  .surface-switch { flex: 0 0 auto; }
+  .surface-switch button { padding-inline: 6px; }
+}
+
+@media (max-width: 620px) {
+  .vd-left-rail { width: 48px; flex-basis: 48px; }
+  .vd-top-tabs { display: none; }
+  .top-menus button:nth-child(n + 3) { display: none; }
+  .vd-right-tools { width: min(320px, calc(100vw - 48px)) !important; }
+  .vd-composer-controls { gap: 4px; }
+  .vd-composer-chip { max-width: 150px; }
+}
 .vd-code-workspace { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; background: var(--bg-primary); }
 .vd-code-menubar { display: flex; align-items: center; gap: 2px; min-height: 30px; flex: 0 0 30px; padding: 0 8px; border-bottom: 1px solid var(--border); background: var(--bg-secondary); }
 .vd-code-menu-item { position: relative; }

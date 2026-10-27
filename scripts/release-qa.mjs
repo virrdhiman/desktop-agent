@@ -210,7 +210,7 @@ function checkIcons() {
   requiredFile('build/icon.ico', 'Windows icon')
   requiredFile('build/icon.icns', 'macOS icon')
   requiredFile('build/icon.png', 'Linux icon')
-  requiredFile('build/icon.svg', 'source icon')
+  requiredFile('src/assets/pit-logo.png', 'source logo')
 }
 
 function checkSigning() {

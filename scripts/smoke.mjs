@@ -33,6 +33,8 @@ const yazl = require('yazl')
 const pkg = JSON.parse(fs.readFileSync(path.join(repo, 'package.json'), 'utf8'))
 const REPO_URL = 'https://github.com/virrdhiman/desktop-agent'
 const AUTHOR_URL = 'https://virender.in/'
+// Product renames must not make the smoke test touch a second real profile.
+const LEGACY_USER_DATA_FOLDER = 'VD Agent'
 
 const argValue = (name) => {
   const i = process.argv.indexOf(name)
@@ -94,7 +96,7 @@ const smokeArchive = path.join(workspace, 'order-api-raw.zip')
 await writeSmokeZip(smokeArchive)
 
 function realUserDataDir() {
-  const name = pkg.productName || pkg.name
+  const name = LEGACY_USER_DATA_FOLDER
   if (process.platform === 'win32') return path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), name)
   if (process.platform === 'darwin') return path.join(os.homedir(), 'Library', 'Application Support', name)
   return path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), name)
@@ -396,7 +398,7 @@ try {
     missing: ['saveConversation','listConversations','deleteConversation','updateConversation','exportConversation','importConversations','exportDiagnostics','loadSettings','aiChat','aiCancel','aiListModels','onAIStream','toolExecute','projectMemoryLoad','listCheckpoints','restoreCheckpoint','updateStatus'].filter(k => typeof window.api?.[k] !== 'function'),
     hasNode: typeof require !== 'undefined' || typeof process !== 'undefined',
     links: [...document.querySelectorAll('a')].map(x => x.href),
-    credit: /by Virender Dhiman/.test(document.body.innerText),
+    credit: /by Productive IT/.test(document.body.innerText),
     layout: (() => { const r = document.getElementById('root')?.getBoundingClientRect(); return { width: r?.width || 0, height: r?.height || 0, bodyWidth: document.body.scrollWidth, viewportWidth: innerWidth } })(),
   })`)
   check('window title is "PIT Agent"', info.title === 'PIT Agent', info.title)
@@ -420,7 +422,7 @@ try {
     card?.scrollIntoView()
     return { found: !!card, text: card?.innerText ?? '', links: card ? [...card.querySelectorAll('a')].map(x => x.href) : [] }
   })()`)
-  check('Settings shows the About card with credit and links', about.found && /Virender Dhiman/.test(about.text) && /All rights reserved/.test(about.text)
+  check('Settings shows the About card with credit and links', about.found && /Productive IT/.test(about.text) && /All rights reserved/.test(about.text)
     && about.links.includes(AUTHOR_URL) && about.links.includes(REPO_URL) && about.links.some((l) => l.endsWith('/LICENSE')))
   await sleep(300)
   await a.screenshot('settings.png')
