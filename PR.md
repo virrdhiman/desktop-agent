@@ -5,7 +5,7 @@ feat: deepen trust, diagnostics, indexing, and session recovery
 ## Summary
 
 - Add human-style Playwright Electron and Windows UI Automation harnesses for
-  packaged VD Agent flows.
+  packaged PIT Agent flows.
 - Add the VS Code bridge feel test, real typing latency evidence, and stale
   completion regression coverage for bridge version 0.4.7.
 - Add a local Ollama two-server failover test covering a killed mid-stream

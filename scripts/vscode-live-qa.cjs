@@ -30,7 +30,7 @@ async function run() {
     assert.ok(root, 'VS Code test workspace is missing')
     assert.equal(vscode.workspace.isTrusted, true, 'VS Code test workspace is not trusted')
     const extension = vscode.extensions.getExtension('virender-dhiman.vd-agent-vscode-bridge')
-    assert.ok(extension, 'VD Agent extension is not loaded')
+    assert.ok(extension, 'PIT Agent extension is not loaded')
     await extension.activate()
 
     const config = vscode.workspace.getConfiguration('vdAgentBridge')

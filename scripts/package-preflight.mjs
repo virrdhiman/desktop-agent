@@ -153,11 +153,11 @@ function readEntries(target) {
 function pathCandidates(output, version) {
   return [
     output,
-    path.join(output, `VD Agent Setup ${version}.exe`),
-    path.join(output, `VD Agent ${version}.exe`),
-    path.join(output, `VD Agent-${version}.dmg`),
-    path.join(output, `VD Agent-${version}-mac.zip`),
-    path.join(output, `VD Agent-${version}.AppImage`),
+    path.join(output, `PIT Agent Setup ${version}.exe`),
+    path.join(output, `PIT Agent ${version}.exe`),
+    path.join(output, `PIT Agent-${version}.dmg`),
+    path.join(output, `PIT Agent-${version}-mac.zip`),
+    path.join(output, `PIT Agent-${version}.AppImage`),
     path.join(output, `vd-agent_${version}_amd64.deb`),
   ]
 }
@@ -432,7 +432,7 @@ export async function runPackagePreflight({
 }
 
 function printText(resultData) {
-  console.log('VD Agent package preflight (read-only)')
+  console.log('PIT Agent package preflight (read-only)')
   console.log('======================================')
   for (const item of resultData.checks) {
     console.log(`${item.level.padEnd(5)} ${item.label}${item.detail ? ` - ${item.detail}` : ''}`)

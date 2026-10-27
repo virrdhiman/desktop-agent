@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { LEGACY_USER_DATA_FOLDER, stableUserDataPath, userDataOverride } from '../userDataPath'
+import { LEGACY_APP_NAME } from '../../shared/brand'
 
 describe('userDataOverride', () => {
   it('accepts an equals-form QA path without exposing any settings values', () => {
@@ -17,7 +18,7 @@ describe('userDataOverride', () => {
 
 describe('stable product data location', () => {
   it('keeps the legacy folder so a renamed product upgrades in place', () => {
-    expect(LEGACY_USER_DATA_FOLDER).toBe('VD Agent')
-    expect(stableUserDataPath('C:\\Users\\qa\\AppData\\Roaming')).toBe('C:\\Users\\qa\\AppData\\Roaming\\VD Agent')
+    expect(LEGACY_USER_DATA_FOLDER).toBe(LEGACY_APP_NAME)
+    expect(stableUserDataPath('C:\\Users\\qa\\AppData\\Roaming')).toBe(`C:\\Users\\qa\\AppData\\Roaming\\${LEGACY_APP_NAME}`)
   })
 })

@@ -46,11 +46,11 @@ function line(ok, label, detail = '') {
   console.log(`${icon} ${label}${detail ? ` - ${detail}` : ''}`)
 }
 
-console.log('VD Agent clean VM QA preflight')
+console.log('PIT Agent clean VM QA preflight')
 console.log('================================')
 
-const installer = path.join(releaseDir, `VD Agent Setup ${version}.exe`)
-const portable = path.join(releaseDir, `VD Agent ${version}.exe`)
+const installer = path.join(releaseDir, `PIT Agent Setup ${version}.exe`)
+const portable = path.join(releaseDir, `PIT Agent ${version}.exe`)
 const vsix = path.join(releaseDir, bridgeResource?.to || `vd-agent-vscode-bridge-${version}.vsix`)
 
 line(await exists(installer), 'Windows installer artifact', installer)
@@ -77,7 +77,7 @@ if (!hasVmConfig) {
   console.log('Manual clean-machine QA path:')
   console.log('1. Create or start a clean Windows VM with VS Code installed.')
   console.log('2. Copy release artifacts into the VM.')
-  console.log(`3. Install VD Agent Setup ${version}.exe.`)
+  console.log(`3. Install PIT Agent Setup ${version}.exe.`)
   console.log(`4. Install the VSIX with the explicit packaged path: ${vsix}`)
   console.log('5. Open a repo in both apps, export VS Code context, run smoke prompts for file open, diff preview, and exact edit. Restricted Mode supports active-editor export/autocomplete; trust the workspace for indexing and edit/apply commands.')
   if (requireVm) process.exit(1)

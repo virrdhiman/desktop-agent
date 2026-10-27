@@ -1,11 +1,11 @@
 /**
  * @author Virender Dhiman
  * @year 2026
- * @project VD Agent
+ * @project PIT Agent
  * @license Proprietary. See LICENSE.
  */
 /**
- * VD Agent — Preload Script
+ * PIT Agent — Preload Script
  *
  * Exposes a safe, typed API bridge between the renderer (React app)
  * and the main process (Node.js). Uses contextBridge for security.

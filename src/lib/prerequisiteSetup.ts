@@ -36,19 +36,19 @@ export const SETUP_ITEMS: SetupDefinition[] = [
   {
     id: 'vscode',
     title: 'VS Code',
-    detail: 'Optional editor integration host. VD Agent works without it.',
+    detail: `Optional editor integration host. ${APP_NAME} works without it.`,
     size: 'Approx. 100–200 MB',
     disk: 'Allow at least 500 MB',
     officialUrl: 'https://code.visualstudio.com/download',
   },
   {
     id: 'bridge',
-    title: 'VD Agent Bridge',
+    title: `${APP_NAME} Bridge`,
     detail: 'The signed/packaged VSIX connects the same workspace to VS Code.',
     size: 'Less than 1 MB',
     disk: 'Allow at least 5 MB',
     officialUrl: 'https://code.visualstudio.com/docs/editor/extension-marketplace',
-    unavailableReason: 'The signed bridge package is bundled with VD Agent; no external download is configured.',
+    unavailableReason: `The signed bridge package is bundled with ${APP_NAME}; no external download is configured.`,
   },
   {
     id: 'ollama',
@@ -126,3 +126,5 @@ export function canDownloadInstaller(item: SetupDefinition, expectedSha256: unkn
     isAllowlistedOfficialUrl(item.downloadUrl) &&
     isExpectedSha256(expectedSha256)
 }
+import { APP_NAME } from './brand'
+

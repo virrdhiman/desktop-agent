@@ -1,14 +1,14 @@
 <!--
   @author Virender Dhiman
   @year 2026
-  @project VD Agent
+  @project PIT Agent
   @license Proprietary. See LICENSE.
 -->
 
-# VD Agent Usage Guide
+# PIT Agent Usage Guide
 
 **Author:** [Virender Dhiman](https://virender.in)
-**License:** [VD Agent License](./LICENSE) (proprietary, free to use with credit)
+**License:** [PIT Agent License](./LICENSE) (proprietary, free to use with credit)
 
 ---
 
@@ -78,18 +78,18 @@ The layout has a **sidebar** (left) for switching panels, the **main area** for 
 
 1. Go to [console.groq.com/keys](https://console.groq.com/keys).
 2. Create an API key (starts with `gsk_`).
-3. In VD Agent: Settings → Groq → paste the key → Save.
+3. In PIT Agent: Settings → Groq → paste the key → Save.
 
 ### Google Gemini (free tier, multimodal)
 
 1. Go to [aistudio.google.com/apikey](https://aistudio.google.com/apikey).
 2. Create an API key (starts with `AIza`).
-3. In VD Agent: Settings → Google Gemini → paste the key → Save.
+3. In PIT Agent: Settings → Google Gemini → paste the key → Save.
 
 ### No key: local models
 
 1. Install [Ollama](https://ollama.com/download) and pull a model, for example `ollama pull qwen2.5-coder:7b`.
-2. In VD Agent: Settings → Ollama (Local) → Save and make it active.
+2. In PIT Agent: Settings → Ollama (Local) → Save and make it active.
 3. Prompts stay on your machine.
 
 See [docs/PROVIDERS.md](./docs/PROVIDERS.md) for the provider categories and more free options.
@@ -155,7 +155,7 @@ If the active provider fails for a non-auth reason, VD tries up to three other *
 
 ### Answer quality
 
-The agent is instructed to lead with the answer, skip filler, ask questions only when the answer changes what it would do, explain failed tool calls, and end with concrete next steps when work remains. VD Agent also enforces a few of these itself:
+The agent is instructed to lead with the answer, skip filler, ask questions only when the answer changes what it would do, explain failed tool calls, and end with concrete next steps when work remains. PIT Agent also enforces a few of these itself:
 
 - Stock openers and closers ("Certainly!", "I hope this helps!") are removed from replies. Code blocks are never changed.
 - Obvious action narration such as "I'll start by inspecting the repo" is removed; the tool runs directly. Brief handoff/status messages do not trigger a generic "what next?" question.
@@ -283,7 +283,7 @@ Image contents are not sent to the model yet. The message lists the attached fil
 
 ### ZIP and CSV workflows
 
-For a request such as "check every file in this ZIP and provide the relevant common data as CSV," add the ZIP path to the message and open the folder containing it as the workspace. VD Agent can:
+For a request such as "check every file in this ZIP and provide the relevant common data as CSV," add the ZIP path to the message and open the folder containing it as the workspace. PIT Agent can:
 
 1. Inventory the archive before extraction and reject unsafe paths, links, or excessive expansion.
 2. Extract it into a new workspace folder without replacing existing files by default.
@@ -366,10 +366,10 @@ The most common fixes:
 ## 17. FAQ
 
 **Is it free?**
-The app is free to download and use, including for commercial work, under the [VD Agent License](./LICENSE). It is proprietary, source-available software owned by Virender Dhiman: you may not resell, redistribute, or rebrand it, and you must keep the credit. Many providers have free tiers, and their limits are set by the provider and change over time. Local models cost nothing.
+The app is free to download and use, including for commercial work, under the [PIT Agent License](./LICENSE). It is proprietary, source-available software owned by Virender Dhiman: you may not resell, redistribute, or rebrand it, and you must keep the credit. Many providers have free tiers, and their limits are set by the provider and change over time. Local models cost nothing.
 
-**How do I credit VD Agent?**
-When you share, review, or demo it, use: `VD Agent by Virender Dhiman - https://virender.in` and link to https://github.com/virrdhiman/desktop-agent. A ⭐ on GitHub is appreciated.
+**How do I credit PIT Agent?**
+When you share, review, or demo it, use: `PIT Agent by Virender Dhiman - https://virender.in` and link to https://github.com/virrdhiman/desktop-agent. A ⭐ on GitHub is appreciated.
 
 **Can I use several providers?**
 Yes. Add keys for several official free providers and VD falls back between them on rate limits or unavailable models. Invalid keys are reported instead of skipped.

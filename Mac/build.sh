@@ -1,10 +1,10 @@
 #!/bin/bash
 # ============================================================
-# VD Agent - macOS Build Script
+# PIT Agent - macOS Build Script
 # Builds a .dmg installer and a .zip archive into release/
 # ============================================================
 # @author Virender Dhiman
-# @project VD Agent
+# @project PIT Agent
 # @license Proprietary. See LICENSE.
 
 set -euo pipefail
@@ -14,7 +14,7 @@ VERSION=$(node -p "require('./package.json').version")
 
 echo ""
 echo "  ========================================"
-echo "   VD Agent ${VERSION} - macOS Build"
+echo "   PIT Agent ${VERSION} - macOS Build"
 echo "  ========================================"
 echo ""
 
@@ -54,8 +54,8 @@ echo "   BUILD COMPLETE"
 echo "  ========================================"
 echo ""
 echo "  Output (release/):"
-echo "    - VD Agent-${VERSION}.dmg       (installer)"
-echo "    - VD Agent-${VERSION}-mac.zip   (archive)"
+echo "    - PIT Agent-${VERSION}.dmg       (installer)"
+echo "    - PIT Agent-${VERSION}-mac.zip   (archive)"
 echo "    - SHA256SUMS.txt                (checksums to publish with the release)"
 echo ""
 echo "  Before publishing, follow docs/RELEASE_CHECKLIST.md"

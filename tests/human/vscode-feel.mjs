@@ -87,7 +87,7 @@ const app = await _electron.launch({
   executablePath: code,
   // The portable QA profile is a documented fixture: trust is enabled for
   // this throwaway workspace and Copilot's first-run sign-in sheet is disabled
-  // so the test reaches VD Agent's native provider path deterministically.
+  // so the test reaches PIT Agent's native provider path deterministically.
   args: [`--user-data-dir=${data}`, `--extensions-dir=${extensions}`, '--new-window', '--disable-gpu', '--disable-workspace-trust', '--disable-extension=github.copilot-chat', '--skip-welcome', workspace],
   env: { ...process.env },
 })
@@ -145,7 +145,7 @@ try {
     if (evidence.restrictedMode) evidence.skipped.push({ item: 'workspace-trust', reason: 'Trust this folder control was not exposed in the portable VS Code UI; restricted mode remained active.' })
   }
 
-  await runCommand(page, 'VD Agent: Export Workspace Context', 'export-context')
+  await runCommand(page, 'PIT Agent: Export Workspace Context', 'export-context')
   await action(page, 'dismiss-sign-in-after-export', async () => {
     const viewport = page.viewportSize() || { width: 1800, height: 1000 }
     const withoutSignIn = page.getByText(/Continue without Signing In/i).last()
@@ -199,10 +199,10 @@ try {
     // Wait for the real provider response before judging the visible ghost text.
     await page.waitForTimeout(7500)
     evidence.ghostTextVisible = await page.locator('[class*="ghost-text"], .ghost-text').count() > 0
-    evidence.inlineStatusText = (await page.locator('body').innerText()).split('\n').filter((line) => line.includes('VD Agent')).slice(-5)
+    evidence.inlineStatusText = (await page.locator('body').innerText()).split('\n').filter((line) => line.includes('PIT Agent')).slice(-5)
   }
 
-  await runCommand(page, 'VD Agent: Run Inline Autocomplete Smoke Test', 'autocomplete-smoke')
+  await runCommand(page, 'PIT Agent: Run Inline Autocomplete Smoke Test', 'autocomplete-smoke')
   evidence.autocompleteSmokeMessage = (await page.locator('body').innerText()).split('\n').filter((line) => /autocomplete smoke/i.test(line)).slice(-3)
 } catch (error) {
   evidence.errors.push({ source: 'runner', message: String(error.stack || error) })

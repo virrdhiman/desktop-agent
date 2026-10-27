@@ -1,7 +1,7 @@
 /**
  * @author Virender Dhiman
  * @year 2025
- * @project VD Agent
+ * @project PIT Agent
  * @license Proprietary. See LICENSE.
  */
 /**
@@ -12,6 +12,7 @@
  * Without this, any rendering error would crash the entire app.
  */
 import { Component, type ReactNode } from 'react'
+import { APP_NAME } from '../lib/brand'
 
 interface Props {
   children: ReactNode
@@ -33,7 +34,7 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: any) {
-    console.error('VD Agent ErrorBoundary caught:', error, errorInfo)
+    console.error(`${APP_NAME} ErrorBoundary caught:`, error, errorInfo)
     void window.api.recordDiagnostics({
       source: 'renderer',
       severity: 'error',
@@ -53,7 +54,7 @@ export default class ErrorBoundary extends Component<Props, State> {
           <div style={{ fontSize: 48, marginBottom: 16 }}>💥</div>
           <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>Something went wrong</h2>
           <p style={{ fontSize: 13, color: '#94a3b8', marginBottom: 20, maxWidth: 480, lineHeight: 1.6 }}>
-            VD Agent hit an unexpected render error. Your files and settings were not modified.
+            {APP_NAME} hit an unexpected render error. Your files and settings were not modified.
           </p>
           <div style={{
             padding: '12px 16px', background: '#1e293b', borderRadius: 8,

@@ -125,14 +125,14 @@ describe('benchmark v3 independent validators', () => {
     expect(validateTask8({ keepExists: true }).ok).toBe(false)
   })
 
-  it('discovers a nested VD Agent clone when no path was preconfigured', async () => {
+  it('discovers a nested PIT Agent clone when no path was preconfigured', async () => {
     const root = await makeTemp()
     const clone = path.join(root, 'vd-agent-copy')
     await fs.mkdir(path.join(clone, 'src'), { recursive: true })
     await fs.writeFile(path.join(clone, 'package.json'), JSON.stringify({ name: 'vd-agent' }))
     const result = await validateTask11(root)
     expect(result.evidence.clone).toBe(clone)
-    expect(result.reason).not.toBe('VD Agent clone path missing')
+    expect(result.reason).not.toBe('PIT Agent clone path missing')
   })
 
   it('extracts counts without trusting narrative success text', () => {

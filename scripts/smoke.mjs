@@ -1,7 +1,7 @@
 /**
  * @author Virender Dhiman
  * @year 2026
- * @project VD Agent
+ * @project PIT Agent
  * @license Proprietary. See LICENSE.
  */
 /**
@@ -11,13 +11,13 @@
  * (filler stripping, tool-failure reporting, fallback, retries, error messages).
  *
  *   npm run smoke                                  # dev build (runs `npm run build` first)
- *   npm run smoke -- --exe "release/win-unpacked/VD Agent.exe"   # packaged app
+ *   npm run smoke -- --exe "release/win-unpacked/PIT Agent.exe"   # packaged app
  *   npm run smoke -- --screenshots --out ./smoke-shots  # capture screenshots
  *   node scripts/smoke.mjs --live-failover             # real invalid key/outage -> local Ollama
  *
  * Needs a desktop session (a window opens briefly). On headless Linux use xvfb-run.
  * Screenshots are opt-in because CDP capture can perturb some Electron renderers.
- * Never touches the real VD Agent settings or chat history.
+ * Never touches the real PIT Agent settings or chat history.
  */
 import { spawn, execSync } from 'node:child_process'
 import fs from 'node:fs'
@@ -302,7 +302,7 @@ function startMockProvider() {
   const server = http.createServer((req, res) => {
     if (req.method === 'GET' && req.url === '/browser-fixture') {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
-      res.end('<!doctype html><html><head><title>VD Agent browser fixture</title></head><body><main><h1>SMOKE-BROWSER-TITLE</h1><p>SMOKE-BROWSER-BODY local browser verification.</p></main></body></html>')
+      res.end('<!doctype html><html><head><title>PIT Agent browser fixture</title></head><body><main><h1>SMOKE-BROWSER-TITLE</h1><p>SMOKE-BROWSER-BODY local browser verification.</p></main></body></html>')
       return
     }
     const provider = req.url.split('/')[1]
@@ -380,7 +380,7 @@ const smokeMessages = `[
   { id: 'm2', role: 'assistant', content: 'SMOKE-REPLY acknowledged', timestamp: Date.now() }
 ]`
 
-console.log(`VD Agent smoke test (${exe ? `packaged: ${exe}` : 'dev build'})\n`)
+console.log(`PIT Agent smoke test (${exe ? `packaged: ${exe}` : 'dev build'})\n`)
 let a
 let b
 let c
@@ -399,7 +399,7 @@ try {
     credit: /by Virender Dhiman/.test(document.body.innerText),
     layout: (() => { const r = document.getElementById('root')?.getBoundingClientRect(); return { width: r?.width || 0, height: r?.height || 0, bodyWidth: document.body.scrollWidth, viewportWidth: innerWidth } })(),
   })`)
-  check('window title is "VD Agent"', info.title === 'VD Agent', info.title)
+  check('window title is "PIT Agent"', info.title === 'PIT Agent', info.title)
   check('React UI rendered', info.rootChildren > 0)
   check('preload bridge exposes the expected API', info.api === 'object' && info.missing.length === 0, info.missing.join(', '))
   check('renderer has no Node globals (context isolation)', !info.hasNode)
@@ -416,7 +416,7 @@ try {
   await a.evaluate(`document.querySelector('[aria-label^="Settings"]')?.click()`)
   await sleep(800)
   const about = await a.evaluate(`(() => {
-    const card = document.querySelector('[aria-label="About VD Agent"]')
+    const card = document.querySelector('[aria-label="About PIT Agent"]')
     card?.scrollIntoView()
     return { found: !!card, text: card?.innerText ?? '', links: card ? [...card.querySelectorAll('a')].map(x => x.href) : [] }
   })()`)

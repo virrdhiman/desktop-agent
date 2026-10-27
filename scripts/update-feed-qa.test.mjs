@@ -14,10 +14,10 @@ function metadataFor(content, version = '1.1.0') {
   const digest = crypto.createHash('sha512').update(content).digest('base64')
   return `version: ${version}
 files:
-  - url: VD-Agent-Setup-${version}.exe
+  - url: PIT-Agent-Setup-${version}.exe
     sha512: ${digest}
     size: ${Buffer.byteLength(content)}
-path: VD-Agent-Setup-${version}.exe
+path: PIT-Agent-Setup-${version}.exe
 sha512: ${digest}
 releaseDate: '2026-10-11T04:53:50.886Z'
 `
@@ -37,7 +37,7 @@ describe('local update-feed QA', () => {
   it('verifies an explicit local artifact without network or installer execution', async () => {
     const root = fixtureRoot()
     const version = '1.1.0'
-    const name = `VD-Agent-Setup-${version}.exe`
+    const name = `PIT-Agent-Setup-${version}.exe`
     const content = Buffer.from('local-fixture-installer-bytes')
     fs.writeFileSync(path.join(root, name), content)
     const report = await validateUpdateFeed({
@@ -51,7 +51,7 @@ describe('local update-feed QA', () => {
   })
 
   it('rejects traversal and digest mismatches', async () => {
-    const content = metadataFor('bytes').replace('VD-Agent-Setup-1.1.0.exe', '../outside.exe')
+    const content = metadataFor('bytes').replace('PIT-Agent-Setup-1.1.0.exe', '../outside.exe')
     const report = await validateUpdateFeed({ text: content })
     expect(report.ok).toBe(false)
     expect(report.failures.map((item) => item.label)).toContain('feed file 1 URL')

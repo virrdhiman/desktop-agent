@@ -52,7 +52,7 @@ if (Test-Path -LiteralPath $resources) {
 
 $automatedQaOk = $false
 $automatedQaReport = Join-Path $FixtureRoot 'automated\logs\automated-qa.json'
-$packagedExe = Join-Path $repo "$packageOutput/win-unpacked/VD Agent.exe"
+$packagedExe = Join-Path $repo "$packageOutput/win-unpacked/PIT Agent.exe"
 if ($packageOk -and (Test-Path -LiteralPath $packagedExe)) {
   $automatedCommand = "node scripts/release-automated-qa.mjs --exe `"$packagedExe`" --package-root `"$(Join-Path $repo $packageOutput)`" --fixture `"$(Join-Path $FixtureRoot 'automated')`" --stability-minutes $StabilityMinutes"
   $automatedQaOk = Run-Check 'automated-packaged-qa' $automatedCommand { node scripts/release-automated-qa.mjs --exe $packagedExe --package-root (Join-Path $repo $packageOutput) --fixture (Join-Path $FixtureRoot 'automated') --stability-minutes $StabilityMinutes }

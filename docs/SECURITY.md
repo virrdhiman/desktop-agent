@@ -1,7 +1,7 @@
 <!--
   @author Virender Dhiman
   @year 2026
-  @project VD Agent
+  @project PIT Agent
   @license Proprietary. See LICENSE.
 -->
 
@@ -9,7 +9,7 @@
 
 ## What the agent can do
 
-VD Agent is a coding agent. When you ask it to, it can **read and write files, run shell commands, and run git commands with your user permissions**. File writes are restricted to the open workspace; reads outside it require approval unless the workspace is trusted. Commands are not OS-sandboxed. `run_command` starts in the workspace with a 30-second timeout and can still access anything your account can access.
+PIT Agent is a coding agent. When you ask it to, it can **read and write files, run shell commands, and run git commands with your user permissions**. File writes are restricted to the open workspace; reads outside it require approval unless the workspace is trusted. Commands are not OS-sandboxed. `run_command` starts in the workspace with a 30-second timeout and can still access anything your account can access.
 
 The system prompt tells the agent to inspect before acting and to ask before destructive actions, but a model can still make mistakes or be misled.
 
@@ -32,9 +32,9 @@ The system prompt tells the agent to inspect before acting and to ask before des
 - Chat session IDs are validated so a chat file can't be read or deleted outside the conversations folder.
 - Agent file tools cannot write or delete outside the open workspace. The main process evaluates every tool call instead of trusting renderer or model-provided paths.
 - The default **Ask for risky actions** mode shows an approval window for shell commands, file deletion, and Git mutations. The full command is shown in a scrollable view. **Ask for all writes** also confirms normal file edits. **Trusted workspace** reduces prompts but does not add an OS sandbox.
-- Before agent file writes and deletes, VD Agent stores a bounded local checkpoint that can be restored from Sessions. Shell commands and Git operations can have effects that checkpoints cannot capture.
+- Before agent file writes and deletes, PIT Agent stores a bounded local checkpoint that can be restored from Sessions. Shell commands and Git operations can have effects that checkpoints cannot capture.
 - Installed builds use electron-updater with HTTPS and SHA-512 artifact integrity. Release packages are code-signed when the required certificates are configured. Update checks can be disabled. A private GitHub repository cannot serve anonymous updates to normal clients, so public distribution needs public releases or a separate public update feed.
-- Renderer permission requests are denied by default. VD Agent does not load remote application code or send telemetry.
+- Renderer permission requests are denied by default. PIT Agent does not load remote application code or send telemetry.
 
 ## Verifying downloads
 
@@ -48,7 +48,7 @@ Security fixes go into the latest release. Please update before reporting a prob
 
 Please **don't open a public issue** for security problems. Contact the maintainer privately through [virender.in](https://virender.in), with:
 
-- the VD Agent version and your OS,
+- the PIT Agent version and your OS,
 - steps to reproduce, and
 - the impact you expect.
 

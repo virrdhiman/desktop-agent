@@ -1,13 +1,13 @@
 <!--
   @author Virender Dhiman
   @year 2026
-  @project VD Agent
+  @project PIT Agent
   @license Proprietary. See LICENSE.
 -->
 
 # AI Agent Testing
 
-VD Agent is tested with a three-tier strategy: deterministic unit checks,
+PIT Agent is tested with a three-tier strategy: deterministic unit checks,
 trajectory/tool checks, and visual end-to-end checks against the real Electron
 app.
 
@@ -110,7 +110,7 @@ Goal: verify real desktop behavior.
 
 Covered by `scripts/smoke.mjs` using Electron plus the Chrome DevTools Protocol:
 
-- the window opens as "VD Agent",
+- the window opens as "PIT Agent",
 - the preload API exists and Node globals are blocked in the renderer,
 - external links cannot navigate the app window,
 - settings and chat history survive restart in a throwaway profile,
@@ -131,7 +131,7 @@ npm run smoke
 Use a packaged app:
 
 ```bash
-npm run smoke -- --exe "release/win-unpacked/VD Agent.exe"
+npm run smoke -- --exe "release/win-unpacked/PIT Agent.exe"
 ```
 
 ## Optional external frameworks
@@ -139,20 +139,20 @@ npm run smoke -- --exe "release/win-unpacked/VD Agent.exe"
 These are not release blockers because they need accounts, external services, or
 interactive vision automation.
 
-| Tool | Useful for VD Agent | Default status |
+| Tool | Useful for PIT Agent | Default status |
 |------|---------------------|----------------|
 | Kane CLI / Testmu AI | Vision-based walkthroughs of packaged Windows/macOS/Linux builds. Good for checking that dialogs, file pickers, and editor layout are visually usable. | Optional manual run |
-| EvalView-style regression | Snapshotting agent traces and comparing later runs. VD Agent's local equivalent is `evals/agent-golden.json` plus smoke assertions. | Local pattern implemented |
+| EvalView-style regression | Snapshotting agent traces and comparing later runs. PIT Agent's local equivalent is `evals/agent-golden.json` plus smoke assertions. | Local pattern implemented |
 | Arize AI / AX | Hosted trace and trajectory analysis across many model/provider runs. | Optional, disabled unless explicitly configured |
 | LangSmith | LLM-as-judge scoring over saved prompts/tool traces. Useful for larger prompt benchmarks. | Optional, disabled unless explicitly configured |
 
-Keep external eval exports opt-in. VD Agent's default promise is local storage,
+Keep external eval exports opt-in. PIT Agent's default promise is local storage,
 no telemetry, and no account, so tests must not silently upload prompts, traces,
 code, or screenshots.
 
 ### Hosted eval export
 
-VD Agent can prepare local JSONL datasets for hosted dashboards without
+PIT Agent can prepare local JSONL datasets for hosted dashboards without
 uploading anything:
 
 ```bash

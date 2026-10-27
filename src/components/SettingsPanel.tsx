@@ -1,7 +1,7 @@
 /**
  * @author Virender Dhiman
  * @year 2025
- * @project VD Agent
+ * @project PIT Agent
  * @license Proprietary. See LICENSE.
  */
 /**
@@ -674,9 +674,9 @@ export default function SettingsPanel() {
              >
                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>📦 Bundled support vs separate installs</div>
                <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                 These prerequisites are separate on Windows, macOS, and Linux. VD Agent bundles integration support; it does not install the external applications or local model files for you.
+                 These prerequisites are separate on Windows, macOS, and Linux. {APP_NAME} bundles integration support; it does not install the external applications or local model files for you.
                  <ul style={{ margin: '8px 0 0', paddingLeft: 20 }}>
-                   <li><strong>VS Code:</strong> the VD Agent Bridge VSIX and bridge support are bundled in packaged builds. Install the VS Code application separately, then use the <strong>VS Code Bridge</strong> panel to load the bridge and open your workspace.</li>
+                   <li><strong>VS Code:</strong> the {APP_NAME} Bridge VSIX and bridge support are bundled in packaged builds. Install the VS Code application separately, then use the <strong>VS Code Bridge</strong> panel to load the bridge and open your workspace.</li>
                    <li><strong>Ollama:</strong> the provider entry and OpenAI-compatible support are bundled. Install the Ollama runtime separately, start it, and pull the model named in Settings. A placeholder key means configured, not verified.</li>
                  </ul>
                </div>
@@ -1031,13 +1031,13 @@ export default function SettingsPanel() {
             </div>
 
             {/* About */}
-            <div className="card" style={{ marginTop: 20, padding: 16 }} aria-label="About VD Agent">
+            <div className="card" style={{ marginTop: 20, padding: 16 }} aria-label={`About ${APP_NAME}`}>
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>ℹ️ About {APP_NAME} v{APP_VERSION}</div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>Build commit: {APP_COMMIT}</div>
               <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: 10 }}>
                 Built by <strong style={{ color: 'var(--text-primary)' }}>{AUTHOR_NAME}</strong>. {COPYRIGHT}
                 <br />
-                Free to download and use under the VD Agent License. Please keep the credit when you share it, and star the repository if it helps you.
+                Free to download and use under the PIT Agent License. Please keep the credit when you share it, and star the repository if it helps you.
               </div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <a className="btn btn-sm" href={AUTHOR_URL} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>

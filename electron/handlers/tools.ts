@@ -1,7 +1,7 @@
 /**
  * @author Virender Dhiman
  * @year 2025
- * @project VD Agent
+ * @project PIT Agent
  * @license Proprietary. See LICENSE.
  */
 /**
@@ -22,6 +22,7 @@ import { archiveOutputPaths, extractZipArchive, inspectZipArchive, type ArchiveI
 import { buildRepoIndex, buildRepoMap, findRepoUsages, goToRepoDefinition, onRepoIndexStatus, repoIndexStats, searchCode, searchRepo, startRepoIndexWatcher } from '../repoIndex'
 import { planRepoChange } from '../repoPlanner'
 import { previewEdits } from '../patchPreview'
+import { APP_NAME } from '../../shared/brand'
 import { formatVsCodeContext, installVsCodeBridge, openWorkspaceInVsCode, readVsCodeBridgeStatus, sendVsCodeBridgeCommand } from '../vscodeBridge'
 import { executeApiRequest } from '../apiTesting'
 import { closeBrowserSessions, executeBrowserTool } from '../browserTool'
@@ -192,7 +193,7 @@ export function registerToolHandlers() {
           let detail = preview?.detail || toolApprovalDetail(tool.name, tool.args, decision)
           let editable = preview?.editable
           while (true) {
-            const approval = await confirmAgentAction(owner, `Review VD Agent ${tool.name}`, detail, editable)
+            const approval = await confirmAgentAction(owner, `Review ${APP_NAME} ${tool.name}`, detail, editable)
             if (approval.action === 'reject') return { error: `User declined ${tool.name}` }
             if (approval.action === 'approve') break
             if (approval.payload === undefined) return { error: `User declined ${tool.name}` }

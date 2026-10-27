@@ -1,13 +1,13 @@
 <!--
   @author Virender Dhiman
   @year 2026
-  @project VD Agent
+  @project PIT Agent
   @license Proprietary. See LICENSE.
 -->
 
-# Installing VD Agent
+# Installing PIT Agent
 
-VD Agent is free to download and use under the [VD Agent License](../LICENSE). Only download it from the official sources:
+PIT Agent is free to download and use under the [PIT Agent License](../LICENSE). Only download it from the official sources:
 
 - Releases: https://github.com/virrdhiman/desktop-agent/releases
 - Source: https://github.com/virrdhiman/desktop-agent
@@ -25,11 +25,11 @@ From the [latest release](https://github.com/virrdhiman/desktop-agent/releases),
 
 | System | File | Notes |
 |--------|------|-------|
-| Windows | `VD Agent Setup <version>.exe` | Installer. Shows the license, lets you pick a folder, and adds Start menu and desktop shortcuts. |
-| Windows | `VD Agent <version>.exe` | Portable. Runs without installing. |
-| macOS | `VD Agent-<version>.dmg` | Drag VD Agent into Applications. |
-| macOS | `VD Agent-<version>-mac.zip` | The same app as a zip archive. |
-| Linux | `VD Agent-<version>.AppImage` | Runs on most distributions. |
+| Windows | `PIT Agent Setup <version>.exe` | Installer. Shows the license, lets you pick a folder, and adds Start menu and desktop shortcuts. |
+| Windows | `PIT Agent <version>.exe` | Portable. Runs without installing. |
+| macOS | `PIT Agent-<version>.dmg` | Drag PIT Agent into Applications. |
+| macOS | `PIT Agent-<version>-mac.zip` | The same app as a zip archive. |
+| Linux | `PIT Agent-<version>.AppImage` | Runs on most distributions. |
 | Linux | `vd-agent_<version>_amd64.deb` | For Debian and Ubuntu. |
 
 ## Verify your download
@@ -38,12 +38,12 @@ Each release includes `SHA256SUMS.txt`. Compare the SHA-256 hash of your file wi
 
 ```powershell
 # Windows (PowerShell)
-Get-FileHash ".\VD Agent Setup 1.1.0.exe" -Algorithm SHA256
+Get-FileHash ".\PIT Agent Setup 1.1.0.exe" -Algorithm SHA256
 ```
 
 ```bash
 # macOS
-shasum -a 256 "VD Agent-1.1.0.dmg"
+shasum -a 256 "PIT Agent-1.1.0.dmg"
 
 # Linux: checks every file listed in SHA256SUMS.txt that is in the current folder
 sha256sum -c SHA256SUMS.txt --ignore-missing
@@ -53,33 +53,33 @@ If the hashes don't match, delete the file and download it again from the Releas
 
 ## Install
 
-- **Windows installer**: run `VD Agent Setup <version>.exe`, accept the license, and choose an install folder. Installing for just yourself does not need administrator rights.
-- **Windows portable**: put `VD Agent <version>.exe` anywhere and run it.
-- **macOS**: open the `.dmg` and drag **VD Agent** into **Applications**.
-- **Linux AppImage**: `chmod +x "VD Agent-<version>.AppImage"`, then run it. On Ubuntu 22.04 and later you may need `sudo apt install libfuse2`.
+- **Windows installer**: run `PIT Agent Setup <version>.exe`, accept the license, and choose an install folder. Installing for just yourself does not need administrator rights.
+- **Windows portable**: put `PIT Agent <version>.exe` anywhere and run it.
+- **macOS**: open the `.dmg` and drag **PIT Agent** into **Applications**.
+- **Linux AppImage**: `chmod +x "PIT Agent-<version>.AppImage"`, then run it. On Ubuntu 22.04 and later you may need `sudo apt install libfuse2`.
 - **Linux .deb**: `sudo apt install ./vd-agent_<version>_amd64.deb`
 
 ## What The Installer Includes
 
-The Windows installer installs **VD Agent** only. It includes the local
-`vd-agent-vscode-bridge` VSIX package inside the app resources so VD Agent can
+The Windows installer installs **PIT Agent** only. It includes the local
+`vd-agent-vscode-bridge` VSIX package inside the app resources so PIT Agent can
 install it later from the **VS Code Bridge** panel.
 
 The installer does **not** silently install these on the user's machine:
 
 - Visual Studio Code
-- the VD Agent VS Code extension inside VS Code
+- the PIT Agent VS Code extension inside VS Code
 - Ollama
 - local Ollama models such as `qwen2.5-coder`
 - API keys or private provider settings
 
 This is intentional. VS Code, extensions, local model runtimes, and API keys are
 user-level tools/settings and should be installed or connected explicitly. After
-VD Agent is installed, open **VS Code Bridge** and use:
+PIT Agent is installed, open **VS Code Bridge** and use:
 
 1. **Install VS Code** if VS Code is missing.
 2. **Load Bridge into VS Code** to install the bundled VSIX into VS Code.
-3. **Open Workspace** and run `VD Agent: Export Workspace Context` in VS Code.
+3. **Open Workspace** and run `PIT Agent: Export Workspace Context` in VS Code.
 4. **Test Autocomplete** to verify the bridge can produce local inline
    completion candidates in the active VS Code file.
 
@@ -118,8 +118,8 @@ If you run from source: `git pull`, `npm install`, then `npm run dev`.
 
 ## Uninstall
 
-- **Windows**: Settings → Apps → VD Agent → Uninstall. For the portable build, delete the `.exe`.
-- **macOS**: move VD Agent from Applications to the Trash.
+- **Windows**: Settings → Apps → PIT Agent → Uninstall. For the portable build, delete the `.exe`.
+- **macOS**: move PIT Agent from Applications to the Trash.
 - **Linux**: delete the AppImage, or `sudo apt remove vd-agent`.
 
 Uninstalling leaves your user data in place. To remove chats, settings, and stored keys too, delete the user data folder listed above.

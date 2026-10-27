@@ -8,7 +8,7 @@ const value = (name) => {
   const index = process.argv.indexOf(name)
   return index >= 0 ? process.argv[index + 1] : undefined
 }
-const exe = path.resolve(value('--exe') || path.join(process.env.LOCALAPPDATA || '', 'Programs', 'VD Agent', 'VD Agent.exe'))
+const exe = path.resolve(value('--exe') || path.join(process.env.LOCALAPPDATA || '', 'Programs', 'PIT Agent', 'PIT Agent.exe'))
 const userData = path.resolve(value('--user-data') || fs.mkdtempSync(path.join(os.tmpdir(), 'vd-agent-updater-e2e-')))
 const expectedCurrent = value('--current') || '1.0.1'
 const expectedUpdate = value('--update') || '1.1.0'

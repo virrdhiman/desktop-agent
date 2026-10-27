@@ -3,6 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import { redactSecrets } from './conversationStore'
+import { APP_NAME } from '../shared/brand'
 
 export const DIAGNOSTICS_LOG_DIRECTORY = 'logs'
 export const DIAGNOSTICS_LOG_BASENAME = 'diagnostics.log'
@@ -166,7 +167,7 @@ export type DiagnosticsViewerPayload = {
 export function formatDiagnosticsReport(report: DiagnosticsReport, lines: string[]): string {
   const boundedLines = lines.slice(-DIAGNOSTICS_LOG_MAX_LINES).map(redactDiagnosticText)
   return redactDiagnosticText([
-    'VD Agent diagnostics',
+    `${APP_NAME} diagnostics`,
     `Application: ${report.application.name} ${report.application.version}`,
     `OS: ${report.application.platform} ${report.application.osRelease} (${report.application.architecture})`,
     `Electron: ${report.application.electron} · Node: ${report.application.node}`,
@@ -264,7 +265,7 @@ export async function buildDiagnosticsReport(input: {
       sourceCodeExcluded: true,
     },
     application: {
-      name: 'VD Agent',
+      name: APP_NAME,
       version: safeText(input.appVersion, 'unknown'),
       packaged: input.packaged,
       platform: process.platform,

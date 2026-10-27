@@ -1,7 +1,7 @@
 /**
  * @author Virender Dhiman
  * @year 2025
- * @project VD Agent
+ * @project PIT Agent
  * @license Proprietary. See LICENSE.
  */
 import { useCallback, useEffect, useRef } from 'react'
@@ -31,6 +31,7 @@ import CodeWorkspace from './components/CodeWorkspace'
 import { isTerminalPanelShortcut, mergeLayoutPreferences, normalizeLayoutPreferences, type LayoutPreferences, type RightPanelTab } from './lib/layoutPersistence'
 import { initialSharedStateReady } from './lib/sharedStateSync'
 import type { Panel, SharedAppState } from './types'
+import { APP_NAME } from './lib/brand'
 
 type StoreSnapshot = ReturnType<typeof useStore.getState>
 
@@ -141,7 +142,7 @@ export default function App() {
         window.api.walkDirectory(activeWorkspace).then((files) => { setFiles(files); setAllFiles(files) })
         if (loadedSettings.indexingEnabled === true) void window.api.toolExecute({ name: 'repo_index', args: {}, workspace: activeWorkspace }).catch(() => {})
       } catch (err: any) {
-        console.warn(`Failed to initialize VD Agent: ${err?.message || err}`)
+        console.warn(`Failed to initialize ${APP_NAME}: ${err?.message || err}`)
       }
     }
     void initialize()

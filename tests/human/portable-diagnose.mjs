@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
 
-const exe = path.resolve(process.argv[2] || 'release/VD Agent 1.1.0.exe')
+const exe = path.resolve(process.argv[2] || 'release/PIT Agent 1.1.0.exe')
 const root = path.resolve(process.argv[3] || '.work/vm-results/portable-diagnostic')
 const userData = path.join(root, 'userdata')
 fs.mkdirSync(root, { recursive: true })

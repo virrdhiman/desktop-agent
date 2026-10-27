@@ -1,13 +1,13 @@
 <!--
   @author Virender Dhiman
   @year 2026
-  @project VD Agent
+  @project PIT Agent
   @license Proprietary. See LICENSE.
 -->
 
 # Agent Evaluations
 
-This folder contains VD Agent's golden agent-evaluation data.
+This folder contains PIT Agent's golden agent-evaluation data.
 
 The dataset currently contains 88 cases across functional, trajectory, and
 visual tiers. Twenty-six cases preserve prompts from real user conversations;

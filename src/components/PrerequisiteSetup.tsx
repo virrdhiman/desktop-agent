@@ -11,6 +11,7 @@ import {
 } from '../lib/prerequisiteSetup'
 import type { PrerequisiteProgress } from '../../electron/preload'
 import BrandLogo from './BrandLogo'
+import { APP_NAME } from '../lib/brand'
 
 type ItemProgress = PrerequisiteProgress & { message?: string }
 
@@ -104,8 +105,8 @@ export default function PrerequisiteSetup() {
     <div role="dialog" aria-modal="true" aria-labelledby="setup-title" style={{ position: 'fixed', inset: 0, zIndex: 30, background: 'rgba(0,0,0,.72)', display: 'grid', placeItems: 'center', padding: 24 }}>
       <section style={{ maxWidth: 760, width: '100%', maxHeight: '90vh', overflow: 'auto', background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 12, padding: 24, boxShadow: '0 20px 80px rgba(0,0,0,.45)' }}>
         <BrandLogo className="vd-setup-logo" />
-        <h2 id="setup-title" style={{ marginTop: 0 }}>Customize VD Agent</h2>
-        <p>Skip to use defaults. Model and provider controls, autocomplete, OCR, indexing, update channel and telemetry are in Settings &gt; Advanced. Optional installations below are independent and require explicit consent. Downloads use only the fixed official HTTPS source selected by VD Agent, are kept in VD Agent user data, and are verified before the operating system opens them.</p>
+        <h2 id="setup-title" style={{ marginTop: 0 }}>Customize {APP_NAME}</h2>
+        <p>Skip to use defaults. Model and provider controls, autocomplete, OCR, indexing, update channel and telemetry are in Settings &gt; Advanced. Optional installations below are independent and require explicit consent. Downloads use only the fixed official HTTPS source selected by {APP_NAME}, are kept in the existing app data folder, and are verified before the operating system opens them.</p>
         {items.map((item) => {
           const itemProgress = progress[item.id]
           const expectedSha256 = expectedHashes[item.id] || ''
@@ -150,7 +151,7 @@ export default function PrerequisiteSetup() {
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
           <button type="button" onClick={() => void skip()}>Skip use defaults</button>
           <button type="button" onClick={() => void skip(true)}>Customize settings and models</button>
-          <button type="button" onClick={() => void skip()}>Continue to VD Agent</button>
+          <button type="button" onClick={() => void skip()}>Continue to {APP_NAME}</button>
         </div>
         {skipError && <div role="alert">{skipError}</div>}
         <p className="muted" style={{ marginBottom: 0 }}>No arbitrary URL, silent elevation, workspace output, or unverified launch is allowed. Any OS permission prompt comes from the official installer after it opens.</p>

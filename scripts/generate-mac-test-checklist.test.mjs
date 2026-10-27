@@ -7,7 +7,8 @@ import { generateChecklist, parseArguments } from './generate-mac-test-checklist
 describe('macOS checklist generator', () => {
   it('defaults to a unique ignored .work destination', () => {
     const options = parseArguments([], new Date('2026-10-11T12:34:56.000Z'))
-    expect(options.output.replaceAll(path.sep, '/')).toContain('.work/mac-test/macos-1.1.0-')
+    const version = JSON.parse(fs.readFileSync(path.resolve('package.json'), 'utf8')).version
+    expect(options.output.replaceAll(path.sep, '/')).toContain(`.work/mac-test/macos-${version}-`)
   })
 
   it('writes once and refuses to overwrite an explicit checklist', () => {
@@ -16,8 +17,8 @@ describe('macOS checklist generator', () => {
     const options = { output, artifactRoot: 'release', appPath: 'release/app', resourcesPath: 'release/resources' }
     const generated = generateChecklist({ options, template: 'version={{VERSION}} root={{ARTIFACT_ROOT}} app={{APP_PATH}} resources={{RESOURCES_PATH}}' })
     expect(generated).toBe(output)
-    expect(fs.readFileSync(output, 'utf8')).toContain('version=1.1.0')
+    expect(fs.readFileSync(output, 'utf8')).toContain(`version=${JSON.parse(fs.readFileSync(path.resolve('package.json'), 'utf8')).version}`)
     expect(() => generateChecklist({ options, template: 'replacement' })).toThrow('Refusing to overwrite')
-    expect(fs.readFileSync(output, 'utf8')).toContain('version=1.1.0')
+    expect(fs.readFileSync(output, 'utf8')).toContain(`version=${JSON.parse(fs.readFileSync(path.resolve('package.json'), 'utf8')).version}`)
   })
 })

@@ -1,11 +1,11 @@
 /**
  * @author Virender Dhiman
  * @year 2025
- * @project VD Agent
+ * @project PIT Agent
  * @license Proprietary. See LICENSE.
  */
 /**
- * VD Agent — Zustand State Store
+ * PIT Agent — Zustand State Store
  *
  * Centralized state management for the entire application.
  * All UI state flows through this store — no prop drilling.

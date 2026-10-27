@@ -17,17 +17,17 @@ describe('explicit-path VM QA harness', () => {
 
   it('inspects Windows artifacts without invoking a VM manager', () => {
     const root = fixtureRoot()
-    fs.writeFileSync(path.join(root, 'VD Agent Setup 1.1.0.exe'), 'installer')
-    fs.writeFileSync(path.join(root, 'VD Agent 1.1.0.exe'), 'portable')
-    const evidence = inspectVmQaInputs({ platform: 'windows', artifactRoot: root })
+    fs.writeFileSync(path.join(root, 'PIT Agent Setup 1.2.0.exe'), 'installer')
+    fs.writeFileSync(path.join(root, 'PIT Agent 1.2.0.exe'), 'portable')
+    const evidence = inspectVmQaInputs({ platform: 'windows', artifactRoot: root, version: '1.2.0' })
     expect(evidence.artifacts.every((item) => item.file && item.size > 0)).toBe(true)
     expect(evidence.vsix.path).toContain('vscode-extension')
   })
 
   it('writes an explicit Ubuntu checklist once and preserves it', () => {
     const root = fixtureRoot()
-    fs.writeFileSync(path.join(root, 'VD Agent-1.1.0.AppImage'), 'appimage')
-    fs.writeFileSync(path.join(root, 'vd-agent_1.1.0_amd64.deb'), 'deb')
+    fs.writeFileSync(path.join(root, 'PIT Agent-1.2.0.AppImage'), 'appimage')
+    fs.writeFileSync(path.join(root, 'vd-agent_1.2.0_amd64.deb'), 'deb')
     const output = path.join(root, 'ubuntu-checklist.md')
     const evidence = inspectVmQaInputs({ platform: 'ubuntu', artifactRoot: root })
     generateVmChecklist({ evidence, output })

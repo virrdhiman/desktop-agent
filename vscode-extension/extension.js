@@ -42,7 +42,7 @@ function activate(context) {
   context.subscriptions.push(
     vscode.commands.registerCommand('vdAgent.exportContext', async () => {
       const target = await exportContext()
-      if (target) vscode.window.showInformationMessage(`VD Agent context exported: ${vscode.workspace.asRelativePath(target)}`)
+      if (target) vscode.window.showInformationMessage(`PIT Agent context exported: ${vscode.workspace.asRelativePath(target)}`)
     }),
     vscode.commands.registerCommand('vdAgent.openBridgeFile', async () => {
       const target = await exportContext()
@@ -50,11 +50,11 @@ function activate(context) {
     }),
     vscode.commands.registerCommand('vdAgent.processCommands', async () => {
       await processAllCommands()
-      vscode.window.showInformationMessage('VD Agent bridge commands processed.')
+      vscode.window.showInformationMessage('PIT Agent bridge commands processed.')
     }),
     vscode.commands.registerCommand('vdAgent.rebuildIndex', async () => {
       const target = await rebuildIndex()
-      if (target) vscode.window.showInformationMessage(`VD Agent local index rebuilt: ${vscode.workspace.asRelativePath(target)}`)
+      if (target) vscode.window.showInformationMessage(`PIT Agent local index rebuilt: ${vscode.workspace.asRelativePath(target)}`)
     }),
     vscode.commands.registerCommand('vdAgent.openIndexFile', async () => {
       const target = await rebuildIndex()
@@ -138,12 +138,12 @@ function scheduleIndex() {
   const config = vscode.workspace.getConfiguration('vdAgentBridge')
   if (!config.get('autoIndex', true)) return
   if (!isWorkspaceTrusted()) {
-    updateStatusBar('$(shield) VD Agent limited mode')
+    updateStatusBar('$(shield) PIT Agent limited mode')
     return
   }
   clearTimeout(indexTimer)
   indexTimer = setTimeout(() => { void rebuildIndex().catch(() => updateStatusBar()) }, 900)
-  updateStatusBar('$(sync~spin) VD Agent indexing')
+  updateStatusBar('$(sync~spin) PIT Agent indexing')
 }
 
 async function exportContext() {
@@ -183,7 +183,7 @@ async function exportContext() {
 }
 
 async function rebuildIndex() {
-  if (!requireWorkspaceTrust('rebuild the VD Agent workspace index')) return null
+  if (!requireWorkspaceTrust('rebuild the PIT Agent workspace index')) return null
   const folder = activeWorkspaceFolder()
   if (!folder) return null
   const root = folder.uri.fsPath
@@ -445,7 +445,7 @@ async function requestAiInlineCompletion(document, position, token) {
   const after = text.slice(offset, Math.min(text.length, offset + 2200))
   const related = relatedIndexContext(document.uri.fsPath, 6)
   const prompt = [
-    'You are VD Agent inline autocomplete. Return only the code/text that should be inserted at the cursor.',
+    'You are PIT Agent inline autocomplete. Return only the code/text that should be inserted at the cursor.',
     'Do not use markdown fences. Do not repeat code already before the cursor. Keep the completion short.',
     `Language: ${document.languageId}`,
     `File: ${vscode.workspace.asRelativePath(document.uri)}`,
@@ -491,7 +491,7 @@ function trimCompletionCache() {
 
 async function processAllCommands() {
   if (!isWorkspaceTrusted()) {
-    updateStatusBar('$(shield) VD Agent limited mode')
+    updateStatusBar('$(shield) PIT Agent limited mode')
     return
   }
   for (const folder of vscode.workspace.workspaceFolders || []) {
@@ -528,7 +528,7 @@ async function requestAiText(prompt, options = {}) {
         body: JSON.stringify({
           model,
           messages: [
-            { role: 'system', content: 'You are VD Agent inside VS Code. Be concise and return only the requested output.' },
+            { role: 'system', content: 'You are PIT Agent inside VS Code. Be concise and return only the requested output.' },
             { role: 'user', content: prompt },
           ],
           temperature: options.temperature ?? 0.15,
@@ -640,7 +640,7 @@ async function showAiStatus() {
     `Inline completions: ${status.inline.ai} AI, ${status.inline.local} local fallback, ${status.inline.failed} failed`,
     status.models.length ? `Installed/available models: ${status.models.slice(0, 20).join(', ')}` : 'Installed/available models: none detected',
   ].join('\n')
-  vscode.window.showInformationMessage(status.message || 'VD Agent AI status checked.', { modal: true, detail })
+  vscode.window.showInformationMessage(status.message || 'PIT Agent AI status checked.', { modal: true, detail })
   assistantProvider?.refresh?.()
 }
 
@@ -650,14 +650,14 @@ async function selectAiModel() {
     return vscode.window.showWarningMessage('No local/provider models were found. For Ollama, run: ollama pull qwen2.5-coder:1.5b')
   }
   const selected = await vscode.window.showQuickPick(status.models, {
-    title: 'VD Agent AI model',
+    title: 'PIT Agent AI model',
     placeHolder: 'Choose the model used for inline autocomplete and editor actions',
   })
   if (!selected) return
   await vscode.workspace.getConfiguration('vdAgentBridge').update('aiModel', selected, vscode.ConfigurationTarget.Workspace)
   lastAiStatus = null
   await checkAiStatus({ maxAgeMs: 0 })
-  vscode.window.showInformationMessage(`VD Agent model set to ${selected}`)
+  vscode.window.showInformationMessage(`PIT Agent model set to ${selected}`)
   assistantProvider?.refresh?.()
 }
 
@@ -700,7 +700,7 @@ async function processCommandFile(commandFile, root) {
     const id = path.basename(commandFile, '.json')
     await writeCommandResult(root, id, {
       ok: false,
-      message: 'VS Code is in Restricted Mode. Trust this workspace before VD Agent processes bridge commands.',
+      message: 'VS Code is in Restricted Mode. Trust this workspace before PIT Agent processes bridge commands.',
       action: 'restricted',
     })
     return
@@ -741,7 +741,7 @@ async function executeBridgeCommand(root, command) {
   if (command.action === 'show_diff') {
     const file = resolveInside(root, args.path)
     const preview = await writeDiffPreview(root, file, String(args.old_string || ''), String(args.new_string || ''), args.content)
-    const title = typeof args.title === 'string' && args.title.trim() ? args.title.trim() : `VD Agent Preview: ${path.basename(file)}`
+    const title = typeof args.title === 'string' && args.title.trim() ? args.title.trim() : `PIT Agent Preview: ${path.basename(file)}`
     await vscode.commands.executeCommand('vscode.diff', vscode.Uri.file(file), vscode.Uri.file(preview), title)
     return `Opened VS Code diff for ${vscode.workspace.asRelativePath(file)}`
   }
@@ -751,7 +751,7 @@ async function executeBridgeCommand(root, command) {
     const result = await vscode.commands.executeCommand(name, ...(Array.isArray(args.args) ? args.args : []))
     return `VS Code command executed: ${name}${result === undefined ? '' : ` (${safeSummary(result)})`}`
   }
-  throw new Error(`Unknown VD Agent bridge action: ${command.action}`)
+  throw new Error(`Unknown PIT Agent bridge action: ${command.action}`)
 }
 
 async function openFileAt(file, line, column) {
@@ -809,12 +809,12 @@ async function writeDiffPreview(root, file, oldString, newString, content) {
 }
 
 async function acceptLastPreview() {
-  if (!requireWorkspaceTrust('accept VD Agent preview edits')) return
+  if (!requireWorkspaceTrust('accept PIT Agent preview edits')) return
   const folder = activeWorkspaceFolder()
-  if (!folder) return vscode.window.showWarningMessage('Open a workspace before accepting a VD Agent preview.')
+  if (!folder) return vscode.window.showWarningMessage('Open a workspace before accepting a PIT Agent preview.')
   const metaPath = path.join(folder.uri.fsPath, BRIDGE_DIR, LAST_PREVIEW_FILE)
   const meta = await readJson(metaPath)
-  if (!meta?.file || !meta?.preview) return vscode.window.showWarningMessage('No VD Agent preview is waiting to accept.')
+  if (!meta?.file || !meta?.preview) return vscode.window.showWarningMessage('No PIT Agent preview is waiting to accept.')
   const file = resolveInside(folder.uri.fsPath, meta.file)
   const preview = resolveInside(folder.uri.fsPath, meta.preview)
   const after = await fs.promises.readFile(preview, 'utf8')
@@ -829,27 +829,27 @@ async function acceptLastPreview() {
   await fs.promises.unlink(preview).catch(() => {})
   await exportContext()
   scheduleIndex()
-  vscode.window.showInformationMessage(`VD Agent preview accepted: ${vscode.workspace.asRelativePath(file)}`)
+  vscode.window.showInformationMessage(`PIT Agent preview accepted: ${vscode.workspace.asRelativePath(file)}`)
 }
 
 async function rejectLastPreview() {
-  if (!requireWorkspaceTrust('reject VD Agent preview edits')) return
+  if (!requireWorkspaceTrust('reject PIT Agent preview edits')) return
   const folder = activeWorkspaceFolder()
-  if (!folder) return vscode.window.showWarningMessage('Open a workspace before rejecting a VD Agent preview.')
+  if (!folder) return vscode.window.showWarningMessage('Open a workspace before rejecting a PIT Agent preview.')
   const metaPath = path.join(folder.uri.fsPath, BRIDGE_DIR, LAST_PREVIEW_FILE)
   const meta = await readJson(metaPath)
-  if (!meta?.preview) return vscode.window.showWarningMessage('No VD Agent preview is waiting to reject.')
+  if (!meta?.preview) return vscode.window.showWarningMessage('No PIT Agent preview is waiting to reject.')
   const preview = resolveInside(folder.uri.fsPath, meta.preview)
   await fs.promises.unlink(metaPath).catch(() => {})
   await fs.promises.unlink(preview).catch(() => {})
   updateStatusBar()
-  vscode.window.showInformationMessage('VD Agent preview rejected.')
+  vscode.window.showInformationMessage('PIT Agent preview rejected.')
 }
 
 async function openPreviewReview() {
-  if (!requireWorkspaceTrust('review VD Agent patch previews')) return
+  if (!requireWorkspaceTrust('review PIT Agent patch previews')) return
   const folder = activeWorkspaceFolder()
-  if (!folder) return vscode.window.showWarningMessage('Open a workspace before reviewing a VD Agent preview.')
+  if (!folder) return vscode.window.showWarningMessage('Open a workspace before reviewing a PIT Agent preview.')
   if (previewReviewPanel) {
     previewReviewPanel.reveal(vscode.ViewColumn.Beside)
     previewReviewPanel.webview.html = await previewReviewHtml(folder.uri.fsPath)
@@ -857,7 +857,7 @@ async function openPreviewReview() {
   }
   previewReviewPanel = vscode.window.createWebviewPanel(
     'vdAgentPreviewReview',
-    'VD Agent Patch Review',
+    'PIT Agent Patch Review',
     vscode.ViewColumn.Beside,
     { enableScripts: true },
   )
@@ -876,17 +876,17 @@ async function openLastPreviewDiff() {
   const folder = activeWorkspaceFolder()
   if (!folder) return
   const meta = await readJson(path.join(folder.uri.fsPath, BRIDGE_DIR, LAST_PREVIEW_FILE))
-  if (!meta?.file || !meta?.preview) return vscode.window.showWarningMessage('No VD Agent preview is waiting to review.')
+  if (!meta?.file || !meta?.preview) return vscode.window.showWarningMessage('No PIT Agent preview is waiting to review.')
   const file = resolveInside(folder.uri.fsPath, meta.file)
   const preview = resolveInside(folder.uri.fsPath, meta.preview)
-  await vscode.commands.executeCommand('vscode.diff', vscode.Uri.file(file), vscode.Uri.file(preview), `VD Agent Preview: ${path.basename(file)}`)
+  await vscode.commands.executeCommand('vscode.diff', vscode.Uri.file(file), vscode.Uri.file(preview), `PIT Agent Preview: ${path.basename(file)}`)
 }
 
 async function discardPreviewHunk(index) {
   const folder = activeWorkspaceFolder()
   if (!folder) return
   const meta = await readJson(path.join(folder.uri.fsPath, BRIDGE_DIR, LAST_PREVIEW_FILE))
-  if (!meta?.file || !meta?.preview) return vscode.window.showWarningMessage('No VD Agent preview is waiting to review.')
+  if (!meta?.file || !meta?.preview) return vscode.window.showWarningMessage('No PIT Agent preview is waiting to review.')
   const file = resolveInside(folder.uri.fsPath, meta.file)
   const preview = resolveInside(folder.uri.fsPath, meta.preview)
   const document = await vscode.workspace.openTextDocument(vscode.Uri.file(file))
@@ -894,14 +894,14 @@ async function discardPreviewHunk(index) {
   if (!previewMatches(meta, before)) return
   const after = await fs.promises.readFile(preview, 'utf8')
   const nextAfter = discardHunk(before, after, index)
-  if (nextAfter === null) return vscode.window.showWarningMessage('That VD Agent preview hunk no longer exists.')
+  if (nextAfter === null) return vscode.window.showWarningMessage('That PIT Agent preview hunk no longer exists.')
   await fs.promises.writeFile(preview, nextAfter, 'utf8')
   await fs.promises.writeFile(path.join(folder.uri.fsPath, BRIDGE_DIR, LAST_PREVIEW_FILE), `${JSON.stringify({
     ...meta,
     updatedAt: Date.now(),
     stats: diffStats(before, nextAfter),
   }, null, 2)}\n`, 'utf8')
-  vscode.window.showInformationMessage(`Discarded VD Agent preview hunk ${index + 1}.`)
+  vscode.window.showInformationMessage(`Discarded PIT Agent preview hunk ${index + 1}.`)
 }
 
 async function readPreviewSummary(root) {
@@ -925,7 +925,7 @@ async function readPreviewSummary(root) {
 
 function previewMatches(meta, text) {
   if (meta.baseHash === contentHash(text)) return true
-  vscode.window.showWarningMessage('The file changed after this VD Agent preview was created. Review or reject it and request a fresh preview; your newer edits were not overwritten.')
+  vscode.window.showWarningMessage('The file changed after this PIT Agent preview was created. Review or reject it and request a fresh preview; your newer edits were not overwritten.')
   return false
 }
 
@@ -935,7 +935,7 @@ async function previewReviewHtml(root) {
   if (!meta?.file || !meta?.preview) {
     return htmlPage(nonce, `
       <main class="empty">
-        <h1>VD Agent Patch Review</h1>
+        <h1>PIT Agent Patch Review</h1>
         <p>No preview is waiting. Ask VD to show a diff preview first.</p>
       </main>
     `)
@@ -993,30 +993,30 @@ function provideVdCodeActions(document, range, context) {
   if (document.uri.scheme !== 'file' || !folder || !isFileInside(folder.uri.fsPath, document.uri.fsPath)) return []
   const actions = []
   if (context.diagnostics?.length) {
-    const fix = new vscode.CodeAction('Fix with VD Agent', vscode.CodeActionKind.QuickFix)
-    fix.command = { command: 'vdAgent.fixWithVD', title: 'Fix with VD Agent' }
+    const fix = new vscode.CodeAction('Fix with PIT Agent', vscode.CodeActionKind.QuickFix)
+    fix.command = { command: 'vdAgent.fixWithVD', title: 'Fix with PIT Agent' }
     fix.diagnostics = context.diagnostics
     actions.push(fix)
   }
   if (!range.isEmpty) {
-    const explain = new vscode.CodeAction('Explain with VD Agent', vscode.CodeActionKind.RefactorRewrite)
-    explain.command = { command: 'vdAgent.explainWithVD', title: 'Explain with VD Agent' }
-    const refactor = new vscode.CodeAction('Refactor with VD Agent', vscode.CodeActionKind.RefactorRewrite)
-    refactor.command = { command: 'vdAgent.refactorWithVD', title: 'Refactor with VD Agent' }
+    const explain = new vscode.CodeAction('Explain with PIT Agent', vscode.CodeActionKind.RefactorRewrite)
+    explain.command = { command: 'vdAgent.explainWithVD', title: 'Explain with PIT Agent' }
+    const refactor = new vscode.CodeAction('Refactor with PIT Agent', vscode.CodeActionKind.RefactorRewrite)
+    refactor.command = { command: 'vdAgent.refactorWithVD', title: 'Refactor with PIT Agent' }
     actions.push(explain, refactor)
   }
-  const tests = new vscode.CodeAction('Generate tests with VD Agent', vscode.CodeActionKind.RefactorRewrite)
-  tests.command = { command: 'vdAgent.generateTestsWithVD', title: 'Generate tests with VD Agent' }
+  const tests = new vscode.CodeAction('Generate tests with PIT Agent', vscode.CodeActionKind.RefactorRewrite)
+  tests.command = { command: 'vdAgent.generateTestsWithVD', title: 'Generate tests with PIT Agent' }
   actions.push(tests)
   return actions
 }
 
 async function runNativeEditorAction(kind, promptOverride) {
-  if (!requireWorkspaceTrust('use VD Agent native editor actions')) return
+  if (!requireWorkspaceTrust('use PIT Agent native editor actions')) return
   const editor = vscode.window.activeTextEditor
-  if (!editor || editor.document.uri.scheme !== 'file') return vscode.window.showWarningMessage('Open a file before using VD Agent editor actions.')
+  if (!editor || editor.document.uri.scheme !== 'file') return vscode.window.showWarningMessage('Open a file before using PIT Agent editor actions.')
   const folder = vscode.workspace.getWorkspaceFolder(editor.document.uri)
-  if (!folder) return vscode.window.showWarningMessage('Open a workspace before using VD Agent editor actions.')
+  if (!folder) return vscode.window.showWarningMessage('Open a workspace before using PIT Agent editor actions.')
   const document = editor.document
   const selection = editor.selection
   const selectedText = selection.isEmpty ? '' : document.getText(selection)
@@ -1030,14 +1030,14 @@ async function runNativeEditorAction(kind, promptOverride) {
     : buildNativeActionPrompt(kind, document, selectedText, diagnostics)
   const task = await recordTask(kind, document.uri.fsPath, prompt)
   assistantProvider?.refresh?.()
-  await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: `VD Agent ${kind}`, cancellable: true }, async (_progress, token) => {
+  await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: `PIT Agent ${kind}`, cancellable: true }, async (_progress, token) => {
     const result = await requestAiText(prompt, { timeoutMs: 25_000, token, maxTokens: kind === 'explain' ? 800 : 1200, temperature: 0.18 })
-    if (!result.trim()) throw new Error('No AI response. Check VD Agent Bridge AI settings or local Ollama.')
+    if (!result.trim()) throw new Error('No AI response. Check PIT Agent Bridge AI settings or local Ollama.')
     await finishNativeAction(kind, editor, selectedText, result)
     await updateTask(task.id, { status: 'done', result: result.slice(0, 2000), updatedAt: Date.now() })
   }).catch(async (err) => {
     await updateTask(task.id, { status: 'failed', error: String(err?.message || err), updatedAt: Date.now() })
-    vscode.window.showWarningMessage(`VD Agent ${kind} failed: ${err?.message || err}`)
+    vscode.window.showWarningMessage(`PIT Agent ${kind} failed: ${err?.message || err}`)
   })
   assistantProvider?.refresh?.()
 }
@@ -1064,7 +1064,7 @@ function buildNativeActionPrompt(kind, document, selectedText, diagnostics, cust
 async function finishNativeAction(kind, editor, selectedText, result) {
   const document = editor.document
   if (kind === 'explain') {
-    const doc = await vscode.workspace.openTextDocument({ language: 'markdown', content: `# VD Agent Explanation\n\n${result.trim()}\n` })
+    const doc = await vscode.workspace.openTextDocument({ language: 'markdown', content: `# PIT Agent Explanation\n\n${result.trim()}\n` })
     await vscode.window.showTextDocument(doc, { preview: true, viewColumn: vscode.ViewColumn.Beside })
     return
   }
@@ -1083,7 +1083,7 @@ async function finishNativeAction(kind, editor, selectedText, result) {
   const root = vscode.workspace.getWorkspaceFolder(document.uri)?.uri.fsPath
   if (!root) throw new Error('Workspace folder not found.')
   const preview = await writeDiffPreview(root, document.uri.fsPath, '', '', content)
-  await vscode.commands.executeCommand('vscode.diff', document.uri, vscode.Uri.file(preview), `VD Agent ${kind}: ${path.basename(document.uri.fsPath)}`)
+  await vscode.commands.executeCommand('vscode.diff', document.uri, vscode.Uri.file(preview), `PIT Agent ${kind}: ${path.basename(document.uri.fsPath)}`)
 }
 
 function cleanReplacement(value) {
@@ -1091,9 +1091,9 @@ function cleanReplacement(value) {
 }
 
 async function openWorkspaceTerminal() {
-  if (!requireWorkspaceTrust('open a VD Agent workspace terminal')) return
+  if (!requireWorkspaceTrust('open a PIT Agent workspace terminal')) return
   const folder = activeWorkspaceFolder()
-  const terminal = vscode.window.createTerminal({ name: 'VD Agent', cwd: folder?.uri.fsPath })
+  const terminal = vscode.window.createTerminal({ name: 'PIT Agent', cwd: folder?.uri.fsPath })
   terminal.show()
 }
 
@@ -1101,14 +1101,14 @@ async function runBuiltInEditorCommand(command, label) {
   if (!requireWorkspaceTrust(label)) return
   const editor = vscode.window.activeTextEditor
   if (!editor || editor.document.uri.scheme !== 'file') {
-    return vscode.window.showWarningMessage(`Open a code file before using VD Agent ${label}.`)
+    return vscode.window.showWarningMessage(`Open a code file before using PIT Agent ${label}.`)
   }
   await vscode.commands.executeCommand(command)
 }
 
 async function showBridgeStatus() {
   const folder = activeWorkspaceFolder()
-  if (!folder) return vscode.window.showWarningMessage('No workspace is open for VD Agent Bridge.')
+  if (!folder) return vscode.window.showWarningMessage('No workspace is open for PIT Agent Bridge.')
   const root = folder.uri.fsPath
   const pending = (await fs.promises.readdir(path.join(root, COMMAND_DIR)).catch(() => []))
     .filter((entry) => entry.endsWith('.json')).length
@@ -1121,23 +1121,23 @@ async function showBridgeStatus() {
     `Index: ${index ? `${index.files} files, ${index.symbols} symbols` : 'not built yet'}`,
     `Preview: ${preview?.file ? vscode.workspace.asRelativePath(preview.file) : 'none'}`,
   ].join('\n')
-  vscode.window.showInformationMessage('VD Agent Bridge status', { modal: true, detail })
+  vscode.window.showInformationMessage('PIT Agent Bridge status', { modal: true, detail })
 }
 
 function previewCodeLenses(document) {
   if (!document.uri.fsPath.includes(`${path.sep}${BRIDGE_DIR}${path.sep}diff-previews${path.sep}`)) return []
   const top = new vscode.Range(0, 0, 0, 0)
   return [
-    new vscode.CodeLens(top, { title: '$(diff) Review VD Agent Hunks', command: 'vdAgent.reviewLastPreview' }),
-    new vscode.CodeLens(top, { title: '$(check) Accept VD Agent Preview', command: 'vdAgent.acceptLastPreview' }),
-    new vscode.CodeLens(top, { title: '$(close) Reject VD Agent Preview', command: 'vdAgent.rejectLastPreview' }),
+    new vscode.CodeLens(top, { title: '$(diff) Review PIT Agent Hunks', command: 'vdAgent.reviewLastPreview' }),
+    new vscode.CodeLens(top, { title: '$(check) Accept PIT Agent Preview', command: 'vdAgent.acceptLastPreview' }),
+    new vscode.CodeLens(top, { title: '$(close) Reject PIT Agent Preview', command: 'vdAgent.rejectLastPreview' }),
     new vscode.CodeLens(top, { title: '$(info) Bridge Status', command: 'vdAgent.showStatus' }),
   ]
 }
 
 async function openDashboard() {
   const folder = activeWorkspaceFolder()
-  if (!folder) return vscode.window.showWarningMessage('Open a workspace before opening the VD Agent dashboard.')
+  if (!folder) return vscode.window.showWarningMessage('Open a workspace before opening the PIT Agent dashboard.')
   if (dashboardPanel) {
     dashboardPanel.reveal(vscode.ViewColumn.Beside)
     dashboardPanel.webview.html = await dashboardHtml(folder.uri.fsPath)
@@ -1145,7 +1145,7 @@ async function openDashboard() {
   }
   dashboardPanel = vscode.window.createWebviewPanel(
     'vdAgentBridge',
-    'VD Agent Bridge',
+    'PIT Agent Bridge',
     vscode.ViewColumn.Beside,
     { enableScripts: true },
   )
@@ -1199,7 +1199,7 @@ async function dashboardHtml(root) {
 <body>
   <div class="hero">
     <div>
-      <h1>VD Agent Bridge</h1>
+      <h1>PIT Agent Bridge</h1>
       <p>${trusted ? 'Native VS Code context, edits, autocomplete, and review controls.' : 'Restricted Mode: active-editor export and autocomplete are available. Trust the workspace for indexing, terminals, commands, and edit workflows.'}</p>
     </div>
     <span class="pill ${ai.ok ? 'ok' : 'bad'}">${ai.ok ? 'AI ready' : 'AI needs attention'}</span>
@@ -1343,8 +1343,8 @@ async function assistantHtml() {
 </style>
 </head>
 <body>
-  <h3>VD Agent</h3>
-  <div class="muted">${root ? escapeHtml(root) : 'Open a workspace to use VD Agent.'}</div>
+  <h3>PIT Agent</h3>
+  <div class="muted">${root ? escapeHtml(root) : 'Open a workspace to use PIT Agent.'}</div>
   ${trusted ? '' : '<div class="panel"><strong>Limited mode</strong><div class="muted">Active-editor export and inline autocomplete are available. Trust this workspace to enable indexing, terminals, command execution, and edit/apply workflows.</div></div>'}
   <div class="metrics">
     <div class="metric"><span class="muted">AI</span><strong class="${ai.ok ? 'ok' : 'bad'}">${ai.ok ? 'Ready' : 'Check'}</strong><div class="muted">${escapeHtml(ai.model || 'no model')}</div></div>
@@ -1416,10 +1416,10 @@ function updateStatusBar(text) {
   const indexText = latestIndex ? `${latestIndex.fileCount} files` : 'ready'
   const aiText = lastAiStatus ? (lastAiStatus.ok ? lastAiStatus.model : 'AI check') : 'AI'
   const modeText = isWorkspaceTrusted() ? indexText : 'limited'
-  statusBar.text = text || `$(sparkle) VD Agent ${modeText} · ${aiText}`
+  statusBar.text = text || `$(sparkle) PIT Agent ${modeText} · ${aiText}`
   statusBar.tooltip = lastAiStatus
-    ? `VD Agent Bridge\nMode: ${isWorkspaceTrusted() ? 'trusted' : 'limited restricted workspace'}\n${lastAiStatus.message}\nAI completions: ${inlineStats.ai}; local fallbacks: ${inlineStats.local}; failed: ${inlineStats.failed}`
-    : 'VD Agent Bridge: export context, process commands, accept previews, and maintain local index.'
+    ? `PIT Agent Bridge\nMode: ${isWorkspaceTrusted() ? 'trusted' : 'limited restricted workspace'}\n${lastAiStatus.message}\nAI completions: ${inlineStats.ai}; local fallbacks: ${inlineStats.local}; failed: ${inlineStats.failed}`
+    : 'PIT Agent Bridge: export context, process commands, accept previews, and maintain local index.'
   statusBar.show()
 }
 
@@ -1429,8 +1429,8 @@ function isWorkspaceTrusted() {
 
 function requireWorkspaceTrust(action) {
   if (isWorkspaceTrusted()) return true
-  vscode.window.showWarningMessage(`VD Agent limited mode: trust this workspace before VD Agent can ${action}.`)
-  updateStatusBar('$(shield) VD Agent limited mode')
+  vscode.window.showWarningMessage(`PIT Agent limited mode: trust this workspace before PIT Agent can ${action}.`)
+  updateStatusBar('$(shield) PIT Agent limited mode')
   return false
 }
 

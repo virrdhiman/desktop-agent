@@ -71,7 +71,7 @@ describe('package preflight', () => {
     const pkg = packageFixture(root)
     const output = path.join(root, 'release')
     fs.mkdirSync(output, { recursive: true })
-    const active = path.join(output, 'VD Agent Setup 1.1.0.exe')
+    const active = path.join(output, 'PIT Agent Setup 1.1.0.exe')
     const stale = path.join(output, 'latest.yml')
     fs.writeFileSync(active, 'active-artifact')
     fs.writeFileSync(stale, 'stale-metadata')
@@ -90,7 +90,7 @@ describe('package preflight', () => {
     })
 
     expect(report.ok).toBe(true)
-    expect(report.checks.find((item) => item.label === 'active package artifacts')?.detail).toContain('VD Agent Setup 1.1.0.exe')
+    expect(report.checks.find((item) => item.label === 'active package artifacts')?.detail).toContain('PIT Agent Setup 1.1.0.exe')
     expect(report.checks.find((item) => item.label === 'stale package/temp entries')?.detail).toContain('latest.yml')
     expect(fs.existsSync(active)).toBe(true)
     expect(fs.existsSync(stale)).toBe(true)

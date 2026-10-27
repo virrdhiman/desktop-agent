@@ -3,6 +3,7 @@ import { app, ipcMain, type BrowserWindow } from 'electron'
 import electronUpdater from 'electron-updater'
 import fs from 'fs'
 import path from 'path'
+import { APP_NAME } from '../../shared/brand'
 
 export type UpdateStatus = {
   state: 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'current' | 'error' | 'unavailable'
@@ -53,10 +54,10 @@ export function registerUpdateHandlers(getWindows: () => BrowserWindow[]) {
     autoUpdater.autoDownload = true
     autoUpdater.autoInstallOnAppQuit = true
     autoUpdater.on('checking-for-update', () => publish({ state: 'checking', message: 'Checking for a verified release update...' }))
-    autoUpdater.on('update-available', (info) => publish({ state: 'available', message: `Downloading VD Agent ${info.version}...`, version: info.version }))
-    autoUpdater.on('update-not-available', (info) => publish({ state: 'current', message: `VD Agent ${info.version} is current.`, version: info.version }))
+    autoUpdater.on('update-available', (info) => publish({ state: 'available', message: `Downloading ${APP_NAME} ${info.version}...`, version: info.version }))
+    autoUpdater.on('update-not-available', (info) => publish({ state: 'current', message: `${APP_NAME} ${info.version} is current.`, version: info.version }))
     autoUpdater.on('download-progress', (progress) => publish({ state: 'downloading', message: `Downloading update: ${Math.round(progress.percent)}%`, percent: progress.percent }))
-    autoUpdater.on('update-downloaded', (info) => publish({ state: 'downloaded', message: `VD Agent ${info.version} is ready. Restart to install.`, version: info.version }))
+    autoUpdater.on('update-downloaded', (info) => publish({ state: 'downloaded', message: `${APP_NAME} ${info.version} is ready. Restart to install.`, version: info.version }))
     autoUpdater.on('error', (error) => publish({ state: 'error', message: `Update check failed: ${error.message}` }))
   }
 

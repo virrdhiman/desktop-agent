@@ -1,4 +1,4 @@
-# VD Agent capabilities
+# PIT Agent capabilities
 
 Status uses **implemented**, **scaffolded**, or **planned**. “Tested” means the
 named automated or manual check actually ran; it does not imply every OS or
@@ -66,7 +66,7 @@ provider was exercised.
   started download, and cancelled it successfully.
 - `C:\vd-vms\D-CLEANUP.ps1` is a dry-run-by-default preview script sourced only
   from the read-only D: scan. It has not been run and never targets `D:\PIT` or
-  the VD Agent source.
+  the PIT Agent source.
 - A manual macOS-only build is available from `.github/workflows/mac-build.yml`.
   It is workflow-dispatch only and deliberately unsigned.
 - Disposable checks and packaging remained above the 20 GB C: safety floor;
@@ -85,7 +85,7 @@ provider was exercised.
 
 ## Packaging truth
 
-The packaged app contains the VD Agent runtime, bridge VSIX, editor assets,
+The packaged app contains the PIT Agent runtime, bridge VSIX, editor assets,
 terminal native dependency, and updater. It does **not** contain VS Code,
 Ollama, downloaded models, provider accounts, or credentials. See
 `docs/PACKAGED_CAPABILITIES.md`.

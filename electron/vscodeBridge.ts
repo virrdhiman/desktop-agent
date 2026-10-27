@@ -3,6 +3,7 @@ import path from 'path'
 import crypto from 'crypto'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
+import { APP_NAME } from '../shared/brand'
 
 export type VsCodeBridgeState = {
   version: 1
@@ -140,7 +141,7 @@ export async function formatVsCodeContext(workspace: string): Promise<string> {
   if (!state) {
     return [
       'No VS Code bridge state found.',
-      'Install the VD Agent Bridge VS Code extension from vscode-extension/ and run "VD Agent: Export Workspace Context".',
+      `Install the ${APP_NAME} Bridge VS Code extension from vscode-extension/ and run "${APP_NAME}: Export Workspace Context".`,
     ].join('\n')
   }
   const ageSeconds = state.updatedAt ? Math.max(0, Math.round((Date.now() - state.updatedAt) / 1000)) : null
@@ -185,8 +186,8 @@ export async function readVsCodeBridgeStatus(workspace: string): Promise<VsCodeB
     message: state
       ? `Connected${ageSeconds == null ? '' : `, exported ${ageSeconds}s ago`}.`
       : setup.vscodeAvailable
-        ? 'Not connected. Install the VD Agent Bridge, open this workspace in VS Code, then run "VD Agent: Export Workspace Context". Restricted Mode supports active-editor export/autocomplete; trust the workspace for indexing and edit/apply commands.'
-        : 'Not connected. Install VS Code first, then install the free local VD Agent Bridge.',
+        ? `Not connected. Install the ${APP_NAME} Bridge, open this workspace in VS Code, then run "${APP_NAME}: Export Workspace Context". Restricted Mode supports active-editor export/autocomplete; trust the workspace for indexing and edit/apply commands.`
+        : `Not connected. Install VS Code first, then install the free local ${APP_NAME} Bridge.`,
   }
 }
 
@@ -201,9 +202,9 @@ export async function installVsCodeBridge(): Promise<string> {
   const output = await runCodeCli(setup.vscodeCommand, ['--install-extension', setup.vsixPath, '--force'], 30_000)
   setupCache = null
   return [
-    'VD Agent Bridge install command finished.',
+    `${APP_NAME} Bridge install command finished.`,
     output || 'VS Code did not print extra output.',
-    'Open this repository in VS Code, then run "VD Agent: Export Workspace Context" from the Command Palette. Restricted Mode supports active-editor export/autocomplete; trust the workspace for indexing and edit/apply commands.',
+    `Open this repository in VS Code, then run "${APP_NAME}: Export Workspace Context" from the Command Palette. Restricted Mode supports active-editor export/autocomplete; trust the workspace for indexing and edit/apply commands.`,
   ].join('\n')
 }
 
@@ -237,8 +238,8 @@ export async function sendVsCodeBridgeCommand(
   if (!result) {
     return [
       `VS Code bridge command queued but no result arrived within ${Math.round(timeoutMs / 1000)}s.`,
-      'Make sure the VD Agent Bridge extension is installed in the matching VS Code workspace.',
-      'You can also run "VD Agent: Process Pending Bridge Commands" from the VS Code Command Palette.',
+      `Make sure the ${APP_NAME} Bridge extension is installed in the matching VS Code workspace.`,
+      `You can also run "${APP_NAME}: Process Pending Bridge Commands" from the VS Code Command Palette.`,
     ].join('\n')
   }
   if (!result.ok) throw new Error(result.message || 'VS Code bridge command failed.')
@@ -274,7 +275,7 @@ async function detectVsCodeBridgeSetup(): Promise<VsCodeBridgeSetup> {
       vsixPath,
       installReady,
       downloadUrl: VSCODE_DOWNLOAD_URL,
-      message: 'VD Agent is installed, but VS Code CLI was not found. The VD installer does not install VS Code automatically; install VS Code for free, then reopen VD Agent or refresh this panel.',
+      message: `${APP_NAME} is installed, but VS Code CLI was not found. The ${APP_NAME} installer does not install VS Code automatically; install VS Code for free, then reopen ${APP_NAME} or refresh this panel.`,
     }
   }
   return {

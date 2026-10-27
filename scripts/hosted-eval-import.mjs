@@ -1,12 +1,12 @@
 /**
  * @author Virender Dhiman
  * @year 2026
- * @project VD Agent
+ * @project PIT Agent
  * @license Proprietary. See LICENSE.
  */
 /**
  * Upload the local golden eval dataset to an explicitly configured hosted
- * dashboard. This command is intentionally manual so VD Agent does not silently
+ * dashboard. This command is intentionally manual so PIT Agent does not silently
  * send prompts, traces, code, or screenshots to a third party.
  */
 import fs from 'node:fs'
@@ -105,7 +105,7 @@ async function importArize() {
   if (!apiKey) fail('ARIZE_API_KEY is missing. Add it to .env.local or your shell environment.')
 
   const baseUrl = (process.env.ARIZE_BASE_URL || 'https://api.arize.com/v2').replace(/\/$/, '')
-  const datasetName = String(args.get('name') || process.env.ARIZE_DATASET_NAME || `VD Agent Golden Evals ${pkg.version}`)
+  const datasetName = String(args.get('name') || process.env.ARIZE_DATASET_NAME || `PIT Agent Golden Evals ${pkg.version}`)
   const datasetId = args.get('dataset-id')
   const spaceId = args.get('space-id') || process.env.ARIZE_SPACE_ID
   const cases = selectedCases()
@@ -174,7 +174,7 @@ async function importLangSmith() {
   if (!apiKey) fail('LANGSMITH_API_KEY is missing. The Desktop Agent workbook did not include a LangSmith key.')
 
   const endpoint = (process.env.LANGSMITH_ENDPOINT || 'https://api.smith.langchain.com').replace(/\/$/, '')
-  const datasetName = String(args.get('name') || process.env.LANGSMITH_DATASET_NAME || `VD Agent Golden Evals ${pkg.version}`)
+  const datasetName = String(args.get('name') || process.env.LANGSMITH_DATASET_NAME || `PIT Agent Golden Evals ${pkg.version}`)
   const datasetIdArg = args.get('dataset-id')
   const cases = selectedCases()
   const headers = { 'x-api-key': apiKey }

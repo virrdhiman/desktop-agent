@@ -1,7 +1,7 @@
 <!--
   @author Virender Dhiman
   @year 2026
-  @project VD Agent
+  @project PIT Agent
   @license Proprietary. See LICENSE.
 -->
 
@@ -11,7 +11,7 @@ Bug reports, fixes, and improvements are welcome.
 
 ## Before you start
 
-- VD Agent is proprietary, source-available software under the [VD Agent License](../LICENSE). Its dependencies keep their own open-source licenses; don't remove their license files or notices. You may fork it on GitHub **only to send contributions back**. By opening a pull request, you agree to section 3 of the license, which grants the author rights to use your contribution.
+- PIT Agent is proprietary, source-available software under the [PIT Agent License](../LICENSE). Its dependencies keep their own open-source licenses; don't remove their license files or notices. You may fork it on GitHub **only to send contributions back**. By opening a pull request, you agree to section 3 of the license, which grants the author rights to use your contribution.
 - For anything bigger than a small fix, open an issue first so we can agree on the approach.
 - Report security problems privately. See [SECURITY.md](./SECURITY.md).
 

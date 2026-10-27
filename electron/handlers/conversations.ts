@@ -1,7 +1,7 @@
 /**
  * @author Virender Dhiman
  * @year 2026
- * @project VD Agent
+ * @project PIT Agent
  * @license Proprietary. See LICENSE.
  */
 /**
@@ -13,6 +13,7 @@ import fs from 'fs'
 import path from 'path'
 import { deleteConversation, isValidSessionId, listConversations, normalizeConversation, readConversation, saveConversation } from '../conversationStore'
 import { loadConfiguredApiKeys } from './settings'
+import { APP_NAME } from '../../shared/brand'
 
 const conversationsDir = () => path.join(app.getPath('userData'), 'conversations')
 
@@ -50,7 +51,7 @@ export function registerConversationHandlers() {
       const existing = await readConversation(conversationsDir(), id)
       if (!existing) throw new Error('Conversation not found')
       const chosen = await dialog.showSaveDialog({
-        title: 'Export VD Agent chat',
+        title: `Export ${APP_NAME} chat`,
         defaultPath: `${existing.title.replace(/[^A-Za-z0-9 _-]/g, '').slice(0, 50) || 'vd-chat'}.json`,
         filters: [{ name: 'JSON', extensions: ['json'] }],
       })
@@ -65,7 +66,7 @@ export function registerConversationHandlers() {
   ipcMain.handle('conversations:import', async () => {
     try {
       const chosen = await dialog.showOpenDialog({
-        title: 'Import VD Agent chats',
+        title: `Import ${APP_NAME} chats`,
         properties: ['openFile', 'multiSelections'],
         filters: [{ name: 'JSON', extensions: ['json'] }],
       })

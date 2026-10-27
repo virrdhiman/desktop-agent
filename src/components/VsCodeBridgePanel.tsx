@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useStore } from '../store'
 import type { VsCodeBridgeStatus } from '../../electron/preload'
+import { APP_NAME } from '../lib/brand'
 
 function fmtTime(value?: number) {
   if (!value) return 'Never'
@@ -221,7 +222,7 @@ export default function VsCodeBridgePanel() {
               {setup?.vscodeAvailable && setup.installReady && (
                 <button
                   className="btn btn-sm btn-primary"
-                  onClick={() => void runSetupAction('Install VD Agent Bridge', () => window.api.vscodeInstallBridge())}
+                  onClick={() => void runSetupAction(`Install ${APP_NAME} Bridge`, () => window.api.vscodeInstallBridge())}
                   disabled={loading}
                 >
                   Load Bridge into VS Code
@@ -234,7 +235,7 @@ export default function VsCodeBridgePanel() {
           <Row label="Bridge package" value={setup?.installReady ? setup.vsixPath : `${setup?.vsixPath || ''} (missing)`} />
           <Row
             label="Installer behavior"
-            value="The VD Agent installer bundles this VSIX, but does not silently install VS Code, Ollama, local models, API keys, or the VS Code extension. Use Load Bridge into VS Code after VS Code is installed."
+            value={`The ${APP_NAME} installer bundles this VSIX, but does not silently install VS Code, Ollama, local models, API keys, or the VS Code extension. Use Load Bridge into VS Code after VS Code is installed.`}
           />
           <Row label="Setup" value={setup?.message || 'Checking VS Code setup...'} />
           <Row
@@ -311,7 +312,7 @@ export default function VsCodeBridgePanel() {
         <section className="card" style={{ display: 'grid', gap: 8 }}>
           <h3 style={{ fontSize: 13 }}>How It Works</h3>
           <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-            Install the local bridge, open this same workspace in VS Code, then run `VD Agent: Export Workspace Context`.
+            Install the local bridge, open this same workspace in VS Code, then run `{APP_NAME}: Export Workspace Context`.
             The agent can then read active editor context and send open/edit/diff commands through the bridge.
           </div>
         </section>

@@ -35,8 +35,8 @@ function fileInfo(target) {
 }
 
 function expectedArtifacts(platform, version) {
-  if (platform === 'windows') return [`VD Agent Setup ${version}.exe`, `VD Agent ${version}.exe`]
-  return [`VD Agent-${version}.AppImage`, `vd-agent_${version}_amd64.deb`]
+  if (platform === 'windows') return [`PIT Agent Setup ${version}.exe`, `PIT Agent ${version}.exe`]
+  return [`PIT Agent-${version}.AppImage`, `vd-agent_${version}_amd64.deb`]
 }
 
 function relativeOrAbsolute(target) {
@@ -75,7 +75,7 @@ function checklist({ evidence, output }) {
   const resourcesHint = evidence.platform === 'windows'
     ? `${evidence.artifacts[0]?.path || '<installer>'} unpacked resources`
     : `${evidence.artifacts[0]?.path || '<AppImage>'} extracted resources`
-  return `# VD Agent ${evidence.platform} clean-machine QA harness
+  return `# PIT Agent ${evidence.platform} clean-machine QA harness
 
 Generated for package version **${evidence.version}**.
 

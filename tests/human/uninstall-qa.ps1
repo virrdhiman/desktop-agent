@@ -59,7 +59,7 @@ try {
 } catch { $errorText = $_.Exception.ToString() } finally {
   if (-not $process.HasExited) { $process.Kill(); $process.WaitForExit() }
 }
-$appRemoved = (-not (Test-Path (Join-Path $InstallRoot 'VD Agent.exe'))) -and (-not (Test-Path (Join-Path $InstallRoot 'VD Agent\VD Agent.exe')))
+$appRemoved = (-not (Test-Path (Join-Path $InstallRoot 'PIT Agent.exe'))) -and (-not (Test-Path (Join-Path $InstallRoot 'PIT Agent\PIT Agent.exe')))
 $dataKept = (Test-Path (Join-Path $UserData 'settings.json')) -and (Test-Path (Join-Path $UserData 'conversations\update-preservation.json'))
 $result = [pscustomobject]@{ ok = [string]::IsNullOrEmpty($errorText) -and $appRemoved -and $dataKept; appRemoved = $appRemoved; userDataKept = $dataKept; error = $errorText }
 $result | ConvertTo-Json | Set-Content (Join-Path $ResultsRoot 'uninstall-evidence.json')

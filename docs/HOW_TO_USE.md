@@ -1,9 +1,9 @@
-# How to use VD Agent
+# How to use PIT Agent
 
 ## First run
 
-The optional setup checklist offers VS Code, the VD Agent Bridge, and Ollama.
-Each item has independent consent and may be skipped. VD Agent opens only the
+The optional setup checklist offers VS Code, the PIT Agent Bridge, and Ollama.
+Each item has independent consent and may be skipped. PIT Agent opens only the
 official HTTPS download page; the operating system or official installer owns
 signature verification and elevation. Nothing is silently downloaded.
 
@@ -47,7 +47,7 @@ falls back to local/editor symbols when the provider is unavailable.
 
 ## Provider fallback
 
-With model selection set to Auto, VD Agent discovers usable models when the
+With model selection set to Auto, PIT Agent discovers usable models when the
 provider exposes a catalog, ranks them for the selected token budget, and cools
 down models that are unavailable, rate-limited, deprecated, or interrupted by a
 transient network failure. A mid-stream failure can continue with the next
@@ -84,7 +84,7 @@ is not a substitute for an OS sandbox.
   200 lines and excludes API keys, cookies, headers, chat content, source code,
   filenames, and workspace paths. **Copy diagnostics** uses the desktop
   clipboard and copies only that bounded report.
-- When **Automatic indexing** is enabled, VD Agent walks the open workspace
+- When **Automatic indexing** is enabled, PIT Agent walks the open workspace
   within fixed file/size limits, respects `.gitignore`, skips binary content,
   and reports status in the sidebar. The index powers `search_code`,
   `go_to_definition`, and `find_usages`; unchanged files are reused on the next
@@ -134,7 +134,7 @@ indexing and edit/apply commands are enabled.
 The trust/depth human runner is:
 
 ```powershell
-PLAYWRIGHT_PACKAGE=playwright-core node tests/human/runner.mjs --exe "release/win-unpacked/VD Agent.exe" --scenario skip,diagnostics,index-tools,safe-change,resume,crash
+PLAYWRIGHT_PACKAGE=playwright-core node tests/human/runner.mjs --exe "release/win-unpacked/PIT Agent.exe" --scenario skip,diagnostics,index-tools,safe-change,resume,crash
 ```
 
 It uses a disposable test profile, real keystrokes with screenshots, and records

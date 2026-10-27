@@ -1,7 +1,7 @@
 /**
  * @author Virender Dhiman
  * @year 2025
- * @project VD Agent
+ * @project PIT Agent
  * @license Proprietary. See LICENSE.
  */
 /**
@@ -42,7 +42,7 @@ export default function Sidebar() {
       {/* Logo */}
       <div
         role="img"
-        aria-label="VD Agent logo"
+        aria-label="PIT Agent logo"
         style={{
           width: 32, height: 32, borderRadius: 8, display: 'flex',
           alignItems: 'center', justifyContent: 'center',

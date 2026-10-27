@@ -1,4 +1,4 @@
-# VD Agent layout feature map
+# PIT Agent layout feature map
 
 The layout shell is additive: existing panels remain mounted through the same `activePanel` routes, while the shell gives them clearer destinations.
 

@@ -1,7 +1,7 @@
 /**
  * @author Virender Dhiman
  * @year 2025
- * @project VD Agent
+ * @project PIT Agent
  * @license Proprietary. See LICENSE.
  */
 /**
@@ -17,6 +17,7 @@
  */
 import { useEffect, useState, useCallback, memo } from 'react'
 import { useStore } from '../store'
+import { APP_NAME } from '../lib/brand'
 
 export default function GitPanel() {
   const {
@@ -156,7 +157,7 @@ export default function GitPanel() {
       const stagedText = typeof staged === 'string' ? staged : staged.error
       setDiffFile('review bundle')
       setGitDiff([
-        'VD Agent Review Bundle',
+        `${APP_NAME} Review Bundle`,
         '',
         '--- git status ---',
         statusText,
@@ -349,7 +350,7 @@ export default function GitPanel() {
                 {diffViewMode === 'unified' ? (
                   <SyntaxHighlightedDiff
                     diff={gitDiff}
-                    canPatch={!!workspacePath && diffFile !== 'review bundle' && !gitDiff.startsWith('VD Agent Review Bundle')}
+                    canPatch={!!workspacePath && diffFile !== 'review bundle' && !gitDiff.startsWith(`${APP_NAME} Review Bundle`)}
                     loading={loading}
                     onApplyHunk={applyHunkPatch}
                   />

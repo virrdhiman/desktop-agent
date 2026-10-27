@@ -1,7 +1,7 @@
 /**
  * @author Virender Dhiman
  * @year 2026
- * @project VD Agent
+ * @project PIT Agent
  * @license Proprietary. See LICENSE.
  */
 /**
@@ -109,10 +109,10 @@ function checkPackageConfig() {
   if (pkg.build?.appId === 'com.vd.agent') pass('Electron appId', pkg.build.appId)
   else fail('Electron appId', 'Expected com.vd.agent')
 
-  if (pkg.productName === 'VD Agent' && pkg.build?.productName === 'VD Agent') {
-    pass('Product name', 'VD Agent')
+  if (pkg.productName === 'PIT Agent' && pkg.build?.productName === 'PIT Agent') {
+    pass('Product name', 'PIT Agent')
   } else {
-    fail('Product name', 'package.json and build.productName should both be VD Agent')
+    fail('Product name', 'package.json and build.productName should both be PIT Agent')
   }
 
   if (pkg.build?.directories?.output === 'release') pass('release output directory', 'release/')

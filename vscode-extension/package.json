@@ -1,7 +1,7 @@
 {
   "name": "vd-agent-vscode-bridge",
-  "displayName": "VD Agent Bridge",
-  "description": "Exports VS Code workspace/editor context, local index data, AI inline suggestions, and VD Agent editor commands.",
+  "displayName": "PIT Agent Bridge",
+  "description": "Exports VS Code workspace/editor context, local index data, AI inline suggestions, and PIT Agent editor commands.",
   "version": "0.4.7",
   "publisher": "virender-dhiman",
   "license": "SEE LICENSE IN ../LICENSE",
@@ -11,7 +11,7 @@
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": "limited",
-      "description": "VD Agent Bridge offers read-only status, active-editor export, and inline autocomplete in Restricted Mode. Trust the workspace to enable indexing, terminals, command execution, and edit/apply workflows."
+      "description": "PIT Agent Bridge offers read-only status, active-editor export, and inline autocomplete in Restricted Mode. Trust the workspace to enable indexing, terminals, command execution, and edit/apply workflows."
     }
   },
   "categories": ["Other"],
@@ -44,94 +44,94 @@
     "commands": [
       {
         "command": "vdAgent.exportContext",
-        "title": "VD Agent: Export Workspace Context"
+        "title": "PIT Agent: Export Workspace Context"
       },
       {
         "command": "vdAgent.openBridgeFile",
-        "title": "VD Agent: Open Bridge Context File"
+        "title": "PIT Agent: Open Bridge Context File"
       },
       {
         "command": "vdAgent.processCommands",
-        "title": "VD Agent: Process Pending Bridge Commands"
+        "title": "PIT Agent: Process Pending Bridge Commands"
       },
       {
         "command": "vdAgent.rebuildIndex",
-        "title": "VD Agent: Rebuild Local Workspace Index"
+        "title": "PIT Agent: Rebuild Local Workspace Index"
       },
       {
         "command": "vdAgent.openIndexFile",
-        "title": "VD Agent: Open Local Workspace Index"
+        "title": "PIT Agent: Open Local Workspace Index"
       },
       {
         "command": "vdAgent.acceptLastPreview",
-        "title": "VD Agent: Accept Last Previewed Edit"
+        "title": "PIT Agent: Accept Last Previewed Edit"
       },
       {
         "command": "vdAgent.rejectLastPreview",
-        "title": "VD Agent: Reject Last Previewed Edit"
+        "title": "PIT Agent: Reject Last Previewed Edit"
       },
       {
         "command": "vdAgent.reviewLastPreview",
-        "title": "VD Agent: Review Last Previewed Edit"
+        "title": "PIT Agent: Review Last Previewed Edit"
       },
       {
         "command": "vdAgent.checkAiStatus",
-        "title": "VD Agent: Check AI Status"
+        "title": "PIT Agent: Check AI Status"
       },
       {
         "command": "vdAgent.selectAiModel",
-        "title": "VD Agent: Select AI Model"
+        "title": "PIT Agent: Select AI Model"
       },
       {
         "command": "vdAgent.runAutocompleteSmoke",
-        "title": "VD Agent: Run Inline Autocomplete Smoke Test"
+        "title": "PIT Agent: Run Inline Autocomplete Smoke Test"
       },
       {
         "command": "vdAgent.showStatus",
-        "title": "VD Agent: Show Bridge Status"
+        "title": "PIT Agent: Show Bridge Status"
       },
       {
         "command": "vdAgent.openDashboard",
-        "title": "VD Agent: Open Bridge Dashboard"
+        "title": "PIT Agent: Open Bridge Dashboard"
       },
       {
         "command": "vdAgent.fixWithVD",
-        "title": "VD Agent: Fix with VD"
+        "title": "PIT Agent: Fix with VD"
       },
       {
         "command": "vdAgent.explainWithVD",
-        "title": "VD Agent: Explain Selection"
+        "title": "PIT Agent: Explain Selection"
       },
       {
         "command": "vdAgent.refactorWithVD",
-        "title": "VD Agent: Refactor Selection"
+        "title": "PIT Agent: Refactor Selection"
       },
       {
         "command": "vdAgent.generateTestsWithVD",
-        "title": "VD Agent: Generate Tests"
+        "title": "PIT Agent: Generate Tests"
       },
       {
         "command": "vdAgent.openWorkspaceTerminal",
-        "title": "VD Agent: Open Workspace Terminal"
+        "title": "PIT Agent: Open Workspace Terminal"
       },
       {
         "command": "vdAgent.goToDefinition",
-        "title": "VD Agent: Go to Definition"
+        "title": "PIT Agent: Go to Definition"
       },
       {
         "command": "vdAgent.findReferences",
-        "title": "VD Agent: Find References"
+        "title": "PIT Agent: Find References"
       },
       {
         "command": "vdAgent.renameSymbol",
-        "title": "VD Agent: Rename Symbol"
+        "title": "PIT Agent: Rename Symbol"
       }
     ],
     "viewsContainers": {
       "activitybar": [
         {
           "id": "vdAgent",
-          "title": "VD Agent",
+          "title": "PIT Agent",
           "icon": "resources/vd-agent.svg"
         }
       ]
@@ -208,12 +208,12 @@
       "editor.suggest.preview": true
     },
     "configuration": {
-      "title": "VD Agent Bridge",
+      "title": "PIT Agent Bridge",
       "properties": {
         "vdAgentBridge.autoExport": {
           "type": "boolean",
           "default": true,
-          "description": "Automatically export active editor context for VD Agent."
+          "description": "Automatically export active editor context for PIT Agent."
         },
         "vdAgentBridge.maxSelectionChars": {
           "type": "number",
@@ -275,14 +275,14 @@
         "vdAgentBridge.autoIndex": {
           "type": "boolean",
           "default": true,
-          "description": "Automatically maintain a local workspace index under .vd-agent for VD Agent context."
+          "description": "Automatically maintain a local workspace index under .vd-agent for PIT Agent context."
         },
         "vdAgentBridge.maxIndexedFiles": {
           "type": "number",
           "default": 2000,
           "minimum": 100,
           "maximum": 10000,
-          "description": "Maximum workspace files indexed by the local VD Agent Bridge."
+          "description": "Maximum workspace files indexed by the local PIT Agent Bridge."
         },
         "vdAgentBridge.maxSemanticSymbolFiles": {
           "type": "number",

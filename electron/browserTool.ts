@@ -16,6 +16,7 @@ import {
   validateBrowserUrl,
   type BrowserToolInput,
 } from './browserToolValidation'
+import { APP_NAME } from '../shared/brand'
 
 type BrowserSessionState = {
   window: BrowserWindow
@@ -46,7 +47,7 @@ function createBrowserSession(sessionId: string): BrowserSessionState {
     useContentSize: true,
     focusable: false,
     autoHideMenuBar: true,
-    title: 'VD Agent Browser Tool',
+    title: `${APP_NAME} Browser Tool`,
     webPreferences: {
       // No persist: prefix: pages do not share app/browser cookies or saved storage.
       partition: `vd-agent-browser-${crypto.randomUUID()}`,

@@ -1,10 +1,10 @@
 #!/bin/bash
 # ============================================================
-# VD Agent - Linux Build Script
+# PIT Agent - Linux Build Script
 # Builds an AppImage and a .deb package into release/
 # ============================================================
 # @author Virender Dhiman
-# @project VD Agent
+# @project PIT Agent
 # @license Proprietary. See LICENSE.
 
 set -euo pipefail
@@ -14,7 +14,7 @@ VERSION=$(node -p "require('./package.json').version")
 
 echo ""
 echo "  ========================================"
-echo "   VD Agent ${VERSION} - Linux Build"
+echo "   PIT Agent ${VERSION} - Linux Build"
 echo "  ========================================"
 echo ""
 
@@ -46,7 +46,7 @@ echo "   BUILD COMPLETE"
 echo "  ========================================"
 echo ""
 echo "  Output (release/):"
-echo "    - VD Agent-${VERSION}.AppImage"
+echo "    - PIT Agent-${VERSION}.AppImage"
 echo "    - vd-agent_${VERSION}_amd64.deb"
 echo "    - SHA256SUMS.txt   (checksums to publish with the release)"
 echo ""

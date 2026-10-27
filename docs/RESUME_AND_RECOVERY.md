@@ -1,6 +1,6 @@
 # Resume and Recovery
 
-VD Agent stores working state locally so a conversation can continue after an app restart.
+PIT Agent stores working state locally so a conversation can continue after an app restart.
 
 ## What is restored
 
@@ -26,7 +26,7 @@ Use **Sessions → Restore** to return those files to their pre-edit state. The 
 
 Deleting a saved chat also removes its recovery checkpoints.
 
-Shell commands can modify files VD Agent cannot predict. They require approval by default, but their side effects are not automatically reversible. Keep important work in Git and review commands before allowing them.
+Shell commands can modify files PIT Agent cannot predict. They require approval by default, but their side effects are not automatically reversible. Keep important work in Git and review commands before allowing them.
 
 ## Project memory
 

@@ -1,7 +1,7 @@
 <!--
   @author Virender Dhiman
   @year 2026
-  @project VD Agent
+  @project PIT Agent
   @license Proprietary. See LICENSE.
 -->
 
@@ -21,4 +21,4 @@ For conduct problems, email [virrdhiman@gmail.com](mailto:virrdhiman@gmail.com) 
 
 ## Scope
 
-This applies to the VD Agent repository and the spaces used to discuss it. The project author decides how to respond, including closing threads or blocking further participation.
+This applies to the PIT Agent repository and the spaces used to discuss it. The project author decides how to respond, including closing threads or blocking further participation.

@@ -56,9 +56,9 @@ actual chain.
 
 Before the fix, `prepareWorkspace` created a task workspace but passed only an
 optional external `VD_BENCH_SELFTEST_CLONE` path. `validateTask11` then returned
-`VD Agent clone path missing` even when a model could have created a nested clone.
+`PIT Agent clone path missing` even when a model could have created a nested clone.
 The failing regression test reproduced that contract. `4b60299` now searches
-the task workspace for a nested VD Agent `package.json`/`src` clone and returns
+the task workspace for a nested PIT Agent `package.json`/`src` clone and returns
 the discovered path in evidence. The rerun must therefore distinguish “model
 never cloned” from “clone existed but tests/no-push evidence failed.”
 
@@ -71,7 +71,7 @@ outage after `444f2ae` tightened the classifier.
 
 | Provider | Rerun cells and outcome | Evidence |
 |---|---|---|
-| Gemini | `2=fail`, `7=timeout`, `11=fail` | `Seeded JavaScript regression test is still failing`; `README, script, tests, or ZIP missing`; `VD Agent clone path missing`. |
+| Gemini | `2=fail`, `7=timeout`, `11=fail` | `Seeded JavaScript regression test is still failing`; `README, script, tests, or ZIP missing`; `PIT Agent clone path missing`. |
 | Mistral | `1=fail`, `2=pass`, `7=timeout`, `10=timeout`, `11=fail` | Python CLI, seeded JS, artifact, clone/venv validator reasons; task 2 is the one passing cell. |
 | LLM7 DeepSeek | `7=fail`, `11=fail` | Artifact and clone validator reasons; no provider outage evidence. |
 | NVIDIA | `7=timeout`, `11=timeout` | Artifact and clone validator reasons reached the 10-minute cap. |

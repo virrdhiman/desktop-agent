@@ -443,7 +443,7 @@ async function main() {
 
     const settingsText = await mainPage.evaluate(`(() => { document.dispatchEvent(new KeyboardEvent('keydown', { key: ',', ctrlKey: true, bubbles: true })); return document.body.innerText })()`)
     await sleep(400)
-    check('Settings exposes version and build commit', /About VD Agent v[0-9]/.test(await mainPage.evaluate('document.body.innerText')) && /Build commit:/.test(await mainPage.evaluate('document.body.innerText')), settingsText.slice(0, 80))
+    check('Settings exposes version and build commit', /About PIT Agent v[0-9]/.test(await mainPage.evaluate('document.body.innerText')) && /Build commit:/.test(await mainPage.evaluate('document.body.innerText')), settingsText.slice(0, 80))
     await mainPage.screenshot('settings.png')
     if (screenshotDir) {
       await mainPage.send('Emulation.setDeviceMetricsOverride', { width: 720, height: 700, deviceScaleFactor: 1, mobile: false })

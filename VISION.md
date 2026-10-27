@@ -1,6 +1,6 @@
-# VD Agent vision
+# PIT Agent vision
 
-VD Agent is a local-first desktop engineering workspace for people who want an
+PIT Agent is a local-first desktop engineering workspace for people who want an
 AI coding partner without giving up control of their files, credentials, or
 review process.
 

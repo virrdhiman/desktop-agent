@@ -297,7 +297,7 @@ kbd {
 .surface-switch button { border: 0; border-radius: 5px; padding: 5px 9px; background: transparent; color: var(--text-secondary); cursor: pointer; font-size: 12px; }
 .surface-switch button.active { background: var(--accent); color: white; }
 
-/* VD Agent workspace shell */
+/* PIT Agent workspace shell */
 .vd-app-shell { min-width: 960px; }
 .vd-left-rail {
   width: 58px; flex: 0 0 58px; display: flex; flex-direction: column; align-items: center;

@@ -1,13 +1,13 @@
 <!--
   @author Virender Dhiman
   @year 2026
-  @project VD Agent
+  @project PIT Agent
   @license Proprietary. See LICENSE.
 -->
 
 # Privacy and Local Data
 
-VD Agent has no VD-hosted server or account, and it does not send telemetry, analytics, crash reports, chats, or tool traces to the maintainer. Installed builds can check the configured release host for updates when automatic updates are enabled; this is off by default while the release repository is private.
+PIT Agent has no VD-hosted server or account, and it does not send telemetry, analytics, crash reports, chats, or tool traces to the maintainer. Installed builds can check the configured release host for updates when automatic updates are enabled; this is off by default while the release repository is private.
 
 ## What is stored, and where
 
@@ -32,7 +32,7 @@ Settings exports never include API keys. Imports keep the keys already stored on
 
 ### Private diagnostics export
 
-Settings includes an optional **Export diagnostics** action for troubleshooting. The report is generated locally and is saved only to the path you choose. It contains app, OS, runtime, provider health/model counts, and aggregate conversation/checkpoint/project-memory file statistics. It explicitly excludes API keys, chat content, filenames, workspace paths, and source code. VD Agent does not upload the report; inspect it before choosing to share it with anyone.
+Settings includes an optional **Export diagnostics** action for troubleshooting. The report is generated locally and is saved only to the path you choose. It contains app, OS, runtime, provider health/model counts, and aggregate conversation/checkpoint/project-memory file statistics. It explicitly excludes API keys, chat content, filenames, workspace paths, and source code. PIT Agent does not upload the report; inspect it before choosing to share it with anyone.
 
 ### Hosted eval exports
 
@@ -40,7 +40,7 @@ Settings includes an optional **Export diagnostics** action for troubleshooting.
 
 ### Private env files
 
-VD Agent fills blank provider keys from `.env.local` in the app user-data folder.
+PIT Agent fills blank provider keys from `.env.local` in the app user-data folder.
 A development run also reads `.env.local` in the app directory. A packaged app
 does not read a file next to the executable or inside `resources`. Set
 `VD_AGENT_ENV_FILE` to an explicit path when you want another file, and set
@@ -50,7 +50,7 @@ public release, support bundle, or synced folder.
 
 ## What leaves your machine
 
-VD Agent only sends data when you use a feature that needs a network service:
+PIT Agent only sends data when you use a feature that needs a network service:
 
 | When | Where | What is sent |
 |------|-------|--------------|
@@ -63,7 +63,7 @@ VD Agent only sends data when you use a feature that needs a network service:
 | `generate_image`, `text_to_speech`, `generate_video` tools | Pollinations | The prompt or text, as part of a URL |
 | `web3_balance` and `web3_explorer` | Public blockchain RPC endpoints and block explorers | The address, transaction, or block you ask about |
 | Update check | The configured GitHub release host or public update feed | App version, platform, and the ordinary network metadata involved in an HTTPS request. Update checks can be disabled in Settings. |
-| You click a link | Your default browser | Nothing from VD Agent; the page opens outside the app |
+| You click a link | Your default browser | Nothing from PIT Agent; the page opens outside the app |
 
 Tools only run when the agent calls them. Tool calls appear in the agent's reply, and each call and its result is recorded in the **Tasks** panel. With a local provider such as Ollama and no web tools, nothing leaves your machine.
 
@@ -79,4 +79,4 @@ To do its job, the agent reads files in your workspace and sends relevant parts 
 
 - **One chat**: delete it from the **Sessions** panel or the **History** popover. Its conversation, backup, and session checkpoints are removed from disk.
 - **One key**: clear it in Settings and click **Save**.
-- **Everything**: quit VD Agent and delete the user data folder, including conversations, backups, checkpoints, project memory, settings, and keys.
+- **Everything**: quit PIT Agent and delete the user data folder, including conversations, backups, checkpoints, project memory, settings, and keys.

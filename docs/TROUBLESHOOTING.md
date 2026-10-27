@@ -1,7 +1,7 @@
 <!--
   @author Virender Dhiman
   @year 2026
-  @project VD Agent
+  @project PIT Agent
   @license Proprietary. See LICENSE.
 -->
 
@@ -24,7 +24,7 @@
 | `npm install` fails on `node-pty` or the terminal will not open | Install native build tools: Visual Studio Build Tools with "Desktop development with C++" and Python 3 on Windows, Xcode Command Line Tools on macOS, or `build-essential` and `python3` on Linux. Linux has no `node-pty` prebuild, so its install script compiles with `node-gyp`. If npm skipped install scripts, run `npm rebuild node-pty`. |
 | `npm install` reports `EBADENGINE` for `undici` | Use Node.js 22.19 or newer. Node.js 20 cannot install the pinned `undici` 8 release. |
 | `npm test` fails to start | Use Node.js 22.19 or newer. |
-| Port 5173 is in use | Stop the other dev server, or close the other VD Agent dev instance. |
+| Port 5173 is in use | Stop the other dev server, or close the other PIT Agent dev instance. |
 
 ## The agent
 
@@ -34,7 +34,7 @@
 | "… failed, so this answer came from …" | Informational. The active provider failed (the reason is in brackets) and another free provider answered. Fix or wait out the first provider, or make the other one active. |
 | "… returned an unusable reply" | The model's reply was empty, only pleasantries, or looping, even after one automatic retry. Send the request again, rephrase it, or pin a stronger model. |
 | "Check this reply: it says the agent …" | The reply claims edits, commands, or passing tests that no tool call in that request performed. Ask the agent to make the change and run the check, or verify it yourself. |
-| "… rejected the API key" | The key is wrong, expired, or revoked. Copy it again from the provider. VD Agent intentionally doesn't fall back to other providers on auth errors. |
+| "… rejected the API key" | The key is wrong, expired, or revoked. Copy it again from the provider. PIT Agent intentionally doesn't fall back to other providers on auth errors. |
 | Rate limited, or all providers failed | Wait a minute, add keys for more free providers so fallback has somewhere to go, or use a local model. |
 | It picked a weak or wrong model | Pin a model from the menu in the Agent header. Choose **Auto** to return to automatic selection. |
 | "Stopped after 10 tool rounds" | Reply "continue" to let it keep going. |
@@ -72,4 +72,4 @@ For a reproducible problem, use **Settings > Export diagnostics**. The JSON repo
 | The app uses the default Electron icon | Add `build/icon.ico`, `build/icon.icns`, and `build/icon.png` (512×512). See [RELEASE_CHECKLIST.md](./RELEASE_CHECKLIST.md). |
 | `npm run smoke` fails to open a window on Linux CI | It needs a display. Run it under `xvfb-run`. |
 
-Still stuck? [Open an issue](https://github.com/virrdhiman/desktop-agent/issues) with your OS, VD Agent version, the exact error, and the optional private diagnostics report. Leave API keys out of screenshots and logs.
+Still stuck? [Open an issue](https://github.com/virrdhiman/desktop-agent/issues) with your OS, PIT Agent version, the exact error, and the optional private diagnostics report. Leave API keys out of screenshots and logs.

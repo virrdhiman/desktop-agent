@@ -1,10 +1,13 @@
+import fs from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parseArguments, relativeOutput } from './package-release.mjs'
 
 describe('safe package command', () => {
   it('defaults to an ignored unique work output and rejects release reuse', () => {
     const options = parseArguments(['--platform', 'linux'])
-    expect(options.output.output.replaceAll('\\', '/')).toContain('.work/package-1.1.0-')
+    const version = JSON.parse(fs.readFileSync(path.resolve('package.json'), 'utf8')).version
+    expect(options.output.output.replaceAll('\\', '/')).toContain(`.work/package-${version}-`)
     expect(() => relativeOutput('release')).toThrow('.work')
   })
 

@@ -1,7 +1,7 @@
 /**
  * @author Virender Dhiman
  * @year 2026
- * @project VD Agent
+ * @project PIT Agent
  * @license Proprietary. See LICENSE.
  */
 /**
@@ -109,7 +109,7 @@ export function signingPreflight({ platform, env = {}, requireSigning = false, r
 }
 
 function printReport(result) {
-  console.log(`VD Agent signing preflight (${result.platform})`)
+  console.log(`PIT Agent signing preflight (${result.platform})`)
   console.log('================================')
   const width = Math.max(...result.checks.map((item) => item.level.length))
   for (const item of result.checks) {

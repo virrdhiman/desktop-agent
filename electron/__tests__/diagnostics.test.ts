@@ -83,7 +83,7 @@ describe('diagnostics', () => {
     })
     const serialized = JSON.stringify(report)
 
-    expect(report.application).toMatchObject({ name: 'VD Agent', version: '1.2.3', packaged: true })
+    expect(report.application).toMatchObject({ name: 'PIT Agent', version: '1.2.3', packaged: true })
     expect(report.settings.providers[0]).toMatchObject({
       position: 1, active: true, configured: true, selectedModelConfigured: true, discoveredModels: 2, successes: 4, failures: 1,
     })

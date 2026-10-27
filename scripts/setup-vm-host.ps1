@@ -74,7 +74,7 @@ function Explain-HyperV {
   Write-Step "Checking Hyper-V path"
   Write-Host "Windows edition: $edition"
   if ($edition -match 'Home') {
-    Write-Host "Full Hyper-V Manager is not supported on Windows Home. Use VirtualBox for VD Agent clean-machine QA on this device." -ForegroundColor Yellow
+    Write-Host "Full Hyper-V Manager is not supported on Windows Home. Use VirtualBox for PIT Agent clean-machine QA on this device." -ForegroundColor Yellow
     return
   }
 
@@ -82,7 +82,7 @@ function Explain-HyperV {
   Write-Host "Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-All -All"
 }
 
-Write-Step "VD Agent VM host setup"
+Write-Step "PIT Agent VM host setup"
 Write-Host "Preferred VM host: $Prefer"
 Write-Host "Admin: $(Test-Admin)"
 Write-Host "Windows edition: $(Get-WindowsEdition)"
@@ -95,7 +95,7 @@ if ($Prefer -eq 'HyperV') {
 
 Write-Step "Next clean-machine QA step"
 Write-Host "1. Provide an existing Windows ISO at an explicit path; this script does not download one."
-Write-Host "2. Create a clean VM named VD-Agent-QA in VirtualBox."
+Write-Host "2. Create a clean VM named PIT-Agent-QA in VirtualBox."
 Write-Host "3. Install VS Code in the VM."
 Write-Host "4. Copy the versioned installer and source VSIX from the explicit release path into the VM."
 Write-Host "5. Run npm run release:vm-qa on the host for artifact preflight, then run the manual VM QA checklist in the VM."

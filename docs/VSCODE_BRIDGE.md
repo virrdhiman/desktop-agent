@@ -1,16 +1,16 @@
 <!--
   @author Virender Dhiman
   @year 2026
-  @project VD Agent
+  @project PIT Agent
   @license Proprietary. See LICENSE.
 -->
 
 # VS Code Bridge
 
-VD Agent can read VS Code's current workspace/editor context and send local
-editor commands through the VD Agent Bridge extension in `vscode-extension/`.
+PIT Agent can read VS Code's current workspace/editor context and send local
+editor commands through the PIT Agent Bridge extension in `vscode-extension/`.
 
-The packaged VD Agent build bundles the bridge VSIX and desktop integration, but
+The packaged PIT Agent build bundles the bridge VSIX and desktop integration, but
 VS Code itself is a separate application. Install VS Code for your platform,
 then install/load the bridge into that VS Code installation and open the same
 workspace. A bundled VSIX is not proof that VS Code is installed or that the
@@ -30,7 +30,7 @@ The bridge writes a local file at:
 
 The context file includes the active file, active language, selected text,
 visible editors, open text documents, and a summary of the VS Code-side local
-index. Command files let VD Agent ask VS Code to open files, apply exact edits,
+index. Command files let PIT Agent ask VS Code to open files, apply exact edits,
 reveal diff previews, or run a specific VS Code command. Source code,
 selections, commands, previews, index data, and results stay local.
 
@@ -39,11 +39,11 @@ selections, commands, previews, index data, and results stay local.
 1. Open `vscode-extension/` in VS Code.
 2. Press `F5` to start an Extension Development Host.
 3. Open your project folder in that host window.
-4. Run `VD Agent: Export Workspace Context` from the Command Palette.
+4. Run `PIT Agent: Export Workspace Context` from the Command Palette.
 
 ## Install From VSIX
 
-VD Agent can install the bridge from its `VS Code Bridge` panel when VS Code is
+PIT Agent can install the bridge from its `VS Code Bridge` panel when VS Code is
 installed and the `code` command is available. This path is free and does not
 require marketplace publishing, certificates, or hosted accounts.
 
@@ -60,7 +60,7 @@ release/vd-agent-vscode-bridge-0.4.7.vsix
 vscode-extension/vd-agent-vscode-bridge-0.4.7.vsix
 ```
 
-Install from VD Agent: open the `VS Code Bridge` panel, click `Install Bridge`,
+Install from PIT Agent: open the `VS Code Bridge` panel, click `Install Bridge`,
 then click `Open Workspace`. If VS Code is missing, click `Install VS Code` and
 install the free VS Code app first.
 
@@ -73,8 +73,8 @@ code --install-extension "release/vd-agent-vscode-bridge-0.4.7.vsix"
 Or install from VS Code: Extensions panel -> `...` -> Install from VSIX -> pick
 the generated file under `release/`.
 
-After install, open the same repository in VS Code and VD Agent, then run
-`VD Agent: Export Workspace Context`. The VD Agent `VS Code` panel shows
+After install, open the same repository in VS Code and PIT Agent, then run
+`PIT Agent: Export Workspace Context`. The PIT Agent `VS Code` panel shows
 connected/not connected, active file, pending commands, and the last command
 result.
 
@@ -87,7 +87,7 @@ workflows.
 
 The extension also adds no-cost VS Code-side polish:
 
-- `VD Agent: Rebuild Local Workspace Index` writes a local symbol/token index
+- `PIT Agent: Rebuild Local Workspace Index` writes a local symbol/token index
   with symbols, imports, dependency links, and small context snippets for faster
   ranking and status reporting.
 - Lightweight inline completions suggest VS Code language-server candidates,
@@ -95,31 +95,31 @@ The extension also adds no-cost VS Code-side polish:
   autocomplete service.
 - Optional AI inline completions use local Ollama by default, with debounce,
   cancellation, small fill-in-middle context, cache, and local-symbol fallback.
-- `VD Agent: Check AI Status` and `VD Agent: Select AI Model` expose local
+- `PIT Agent: Check AI Status` and `PIT Agent: Select AI Model` expose local
   provider health and model switching from inside VS Code.
-- `VD Agent: Run Inline Autocomplete Smoke Test` verifies that the active
+- `PIT Agent: Run Inline Autocomplete Smoke Test` verifies that the active
   cursor can produce a local inline completion candidate, which is useful when
   checking Restricted Mode behavior without applying edits.
-- The VD Agent activity-bar sidebar provides ask, task status, index, dashboard,
+- The PIT Agent activity-bar sidebar provides ask, task status, index, dashboard,
   and terminal controls inside VS Code.
 - Editor context actions add `Fix with VD`, `Explain Selection`,
   `Refactor Selection`, and `Generate Tests`.
 - Native VS Code commands for `Go to Definition`, `Find References`, and
   `Rename Symbol` are available from the Command Palette, editor context menu,
-  and VD Agent sidebar.
-- `VD Agent: Review Last Previewed Edit`, `Accept Last Previewed Edit`, and
+  and PIT Agent sidebar.
+- `PIT Agent: Review Last Previewed Edit`, `Accept Last Previewed Edit`, and
   `Reject Last Previewed Edit` let users inspect preview hunks in VS Code
   before applying the remaining edit.
 - Preview files show CodeLens actions for accepting or rejecting the latest VD
   Agent preview directly above the diff content.
-- `VD Agent: Open Bridge Dashboard` opens a local dashboard with context,
+- `PIT Agent: Open Bridge Dashboard` opens a local dashboard with context,
   pending commands, index, and preview controls.
 - The VS Code status bar item opens a bridge status dialog with pending command,
   index, and preview state.
 
-## Use From VD Agent
+## Use From PIT Agent
 
-Open the same repository in VD Agent. In a chat, ask for VS Code context or let
+Open the same repository in PIT Agent. In a chat, ask for VS Code context or let
 the agent call:
 
 ```json
@@ -127,7 +127,7 @@ the agent call:
 ```
 
 The bridge is optional. If it is not installed or has not exported context yet,
-VD Agent falls back to its own workspace files, repo map, search, git diff, and
+PIT Agent falls back to its own workspace files, repo map, search, git diff, and
 editor state.
 
 Two-way tools:
@@ -139,5 +139,5 @@ Two-way tools:
 {"name":"vscode_command","args":{"command":"workbench.action.files.save"}}
 ```
 
-`vscode_apply_edit` is treated as a write action by VD Agent. `vscode_command`
+`vscode_apply_edit` is treated as a write action by PIT Agent. `vscode_command`
 is treated as risky because VS Code commands can have side effects.

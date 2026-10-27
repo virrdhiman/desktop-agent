@@ -1,6 +1,6 @@
 param(
   [string]$OutDir = 'local-certs',
-  [string]$Name = 'VD Agent Local Test Code Signing',
+  [string]$Name = 'PIT Agent Local Test Code Signing',
   [string]$Password = ''
 )
 

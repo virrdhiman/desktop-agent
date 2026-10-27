@@ -1,20 +1,20 @@
 <!--
   @author Virender Dhiman
   @year 2026
-  @project VD Agent
+  @project PIT Agent
   @license Proprietary. See LICENSE.
 -->
 
 # Architecture
 
-A technical overview of VD Agent for contributors and maintainers.
+A technical overview of PIT Agent for contributors and maintainers.
 
 **Author:** [Virender Dhiman](https://virender.in)
-**License:** [VD Agent License](./LICENSE) (proprietary, free to use with credit)
+**License:** [PIT Agent License](./LICENSE) (proprietary, free to use with credit)
 
 ## Overview
 
-VD Agent is an **Electron + React + TypeScript + Vite** desktop app built on Electron's usual three layers:
+PIT Agent is an **Electron + React + TypeScript + Vite** desktop app built on Electron's usual three layers:
 
 ```
 ┌──────────────────────────────────────────────────────────┐

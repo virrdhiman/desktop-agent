@@ -1,13 +1,13 @@
 <!--
   @author Virender Dhiman
   @year 2026
-  @project VD Agent
+  @project PIT Agent
   @license Proprietary. See LICENSE.
 -->
 
 # Release Checklist
 
-How to build, sign, verify, and publish a VD Agent release on GitHub. Only the maintainer publishes official releases; the [license](../LICENSE) does not allow others to redistribute builds.
+How to build, sign, verify, and publish a PIT Agent release on GitHub. Only the maintainer publishes official releases; the [license](../LICENSE) does not allow others to redistribute builds.
 
 ## Build commands
 
@@ -44,9 +44,9 @@ not copy a hardcoded version into a checklist or QA command.
 
 | Platform | Command | Output in `release/` |
 |----------|---------|----------------------|
-| Windows | `Win\build.bat` | `VD Agent Setup <version>.exe` (NSIS installer) and `VD Agent <version>.exe` (portable) |
-| macOS | `bash Mac/build.sh` | `VD Agent-<version>.dmg` and `VD Agent-<version>-mac.zip` (`-arm64` in the name on Apple Silicon) |
-| Linux | `bash Linux/build.sh` | `VD Agent-<version>.AppImage` and `vd-agent_<version>_amd64.deb` |
+| Windows | `Win\build.bat` | `PIT Agent Setup <version>.exe` (NSIS installer) and `PIT Agent <version>.exe` (portable) |
+| macOS | `bash Mac/build.sh` | `PIT Agent-<version>.dmg` and `PIT Agent-<version>-mac.zip` (`-arm64` in the name on Apple Silicon) |
+| Linux | `bash Linux/build.sh` | `PIT Agent-<version>.AppImage` and `vd-agent_<version>_amd64.deb` |
 
 **Only upload files built by these scripts.** `release/` can also contain test builds made with manual `electron-builder` commands. Those are not release builds; leave them in place for evidence or rebuild into a fresh unique `.work/` output. `npmRebuild` is intentionally disabled because `node-pty` supplies Windows/macOS prebuilds and its install step builds the Linux Node-API binary; CI and packaged smoke tests verify that the terminal starts on each release platform.
 
@@ -85,8 +85,8 @@ Run `npm run release:signing` before packaging to see exactly which signing or n
 - [ ] Stage installer/VSIX artifacts for VM testing with `.\Win\prepare-clean-vm-qa.bat "C:\path\to\windows.iso"`.
 - [ ] Create a clean VirtualBox VM with `.\Win\create-clean-vm.bat "C:\path\to\windows.iso"`, then finish the Windows install in the VM before running installer QA.
 - [ ] Smoke-test the packaged app:
-  - Windows: `npm run smoke -- --exe "release/win-unpacked/VD Agent.exe"`
-  - macOS: `npm run smoke -- --exe "release/mac/VD Agent.app/Contents/MacOS/VD Agent"` (`mac-arm64` on Apple Silicon)
+  - Windows: `npm run smoke -- --exe "release/win-unpacked/PIT Agent.exe"`
+  - macOS: `npm run smoke -- --exe "release/mac/PIT Agent.app/Contents/MacOS/PIT Agent"` (`mac-arm64` on Apple Silicon)
   - Linux: `npm run smoke -- --exe release/linux-unpacked/vd-agent`
 - [ ] Install from the installer on a clean machine or VM. Check that the license page appears, the app launches, a chat works with a real key, the app restarts with history intact, and it uninstalls cleanly.
 - [ ] Portable QA on Windows: run the portable `.exe`, confirm it does not require installation, open a workspace, send one normal query, send one agentic query, restart the app, and confirm the saved chat resumes with Tasks and Agent trace intact.
@@ -122,10 +122,10 @@ When you build on several machines, combine the per-platform files into one `SHA
    ```
 2. Create a **draft** release with only the installers and the checksum file:
    ```bash
-   gh release create v<x.y.z> --draft --title "VD Agent <x.y.z>" --notes-file notes.md \
-     "release/VD Agent Setup <x.y.z>.exe" "release/VD Agent <x.y.z>.exe" \
-     "release/VD Agent-<x.y.z>.dmg" "release/VD Agent-<x.y.z>-mac.zip" \
-     "release/VD Agent-<x.y.z>.AppImage" "release/vd-agent_<x.y.z>_amd64.deb" \
+   gh release create v<x.y.z> --draft --title "PIT Agent <x.y.z>" --notes-file notes.md \
+     "release/PIT Agent Setup <x.y.z>.exe" "release/PIT Agent <x.y.z>.exe" \
+     "release/PIT Agent-<x.y.z>.dmg" "release/PIT Agent-<x.y.z>-mac.zip" \
+     "release/PIT Agent-<x.y.z>.AppImage" "release/vd-agent_<x.y.z>_amd64.deb" \
      SHA256SUMS.txt
    ```
    Generate `notes.md` with `npm run release:notes -- --version <x.y.z> --out notes.md`, review it, and say whether each build is signed.

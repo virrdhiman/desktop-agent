@@ -9,7 +9,7 @@ describe('HelpPanel diagnostics', () => {
     const lines = Array.from({ length: 201 }, (_, index) => `line-${index}`)
     vi.mocked(window.api.readDiagnostics).mockResolvedValue({
       report: {
-        application: { name: 'VD Agent', version: '1.2.3', platform: 'win32', osRelease: 'test', architecture: 'x64' },
+        application: { name: 'PIT Agent', version: '1.2.3', platform: 'win32', osRelease: 'test', architecture: 'x64' },
         settings: { activeProviderConfigured: false },
       },
       lines,

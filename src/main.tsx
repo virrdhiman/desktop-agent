@@ -1,11 +1,11 @@
 /**
  * @author Virender Dhiman
  * @year 2025
- * @project VD Agent
+ * @project PIT Agent
  * @license Proprietary. See LICENSE.
  */
 /**
- * VD Agent — React Entry Point
+ * PIT Agent — React Entry Point
  *
  * Mounts the React app into the DOM with:
  * - StrictMode for development warnings

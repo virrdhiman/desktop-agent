@@ -1,13 +1,13 @@
 <!--
   @author Virender Dhiman
   @year 2026
-  @project VD Agent
+  @project PIT Agent
   @license Proprietary. See LICENSE.
 -->
 
 # Code Signing and Notarization
 
-VD Agent can build unsigned private installers, but public Windows and macOS users may see SmartScreen or Gatekeeper warnings until releases are signed. Do not commit certificates, passwords, exported keychains, `.env` files, or GitHub secret values.
+PIT Agent can build unsigned private installers, but public Windows and macOS users may see SmartScreen or Gatekeeper warnings until releases are signed. Do not commit certificates, passwords, exported keychains, `.env` files, or GitHub secret values.
 
 ## Quick Preflight
 
@@ -120,4 +120,4 @@ Signing only proves publisher identity. It does not replace installer QA. After 
 .\Win\create-clean-vm.bat "C:\path\to\windows.iso"
 ```
 
-Then install the generated `VD Agent Setup <version>.exe` inside the VM, launch it from Start Menu and desktop shortcut, verify chat/history/VS Code bridge setup, and uninstall it cleanly.
+Then install the generated `PIT Agent Setup <version>.exe` inside the VM, launch it from Start Menu and desktop shortcut, verify chat/history/VS Code bridge setup, and uninstall it cleanly.

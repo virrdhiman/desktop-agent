@@ -185,7 +185,7 @@ async function main() {
   }
   if (options.json) console.log(JSON.stringify(report, null, 2))
   else {
-    console.log('VD Agent local update-feed QA (read-only)')
+    console.log('PIT Agent local update-feed QA (read-only)')
     console.log('=========================================')
     for (const item of report.checks) console.log(`${item.level.padEnd(4)} ${item.label}${item.detail ? ` - ${item.detail}` : ''}`)
     console.log(`\nUpdate feed QA: ${report.ok ? 'PASS' : 'FAIL'} (${report.failures.length} fail)`)

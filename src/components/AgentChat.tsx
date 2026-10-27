@@ -1,7 +1,7 @@
 /**
  * @author Virender Dhiman
  * @year 2026
- * @project VD Agent
+ * @project PIT Agent
  * @license Proprietary. See LICENSE.
  */
 /**
@@ -34,6 +34,7 @@ import {
   applyDiscoveredModel, buildProviderChain, classifyAgentTask, providerIsConfigured, providerPrefersFreeModels, recordProviderOutcome, refreshProviderModelCatalog,
 } from '../lib/providers'
 import { highlightSyntax } from '../lib/highlight'
+import { APP_NAME } from '../lib/brand'
 import { imageAttachmentError, withImageContent } from '../lib/vision'
 import { toolActivityArgs, toolActivityResult } from '../lib/toolActivity'
 import { AUTHOR_NAME, AUTHOR_URL, REPO_URL } from '../lib/brand'
@@ -1514,7 +1515,7 @@ export default function AgentChat() {
           <div className="empty-state">
             <BrandLogo className="vd-chat-empty-logo" />
             <div className="empty-state-text" style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-primary)' }}>
-              VD Agent
+              {APP_NAME}
             </div>
             <div style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', maxWidth: 480, lineHeight: 1.6 }}>
               Autonomous coding agent. Reads and edits your repo, runs commands, manages git,

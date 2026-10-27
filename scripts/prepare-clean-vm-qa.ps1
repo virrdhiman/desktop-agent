@@ -1,7 +1,7 @@
 param(
   [Parameter(Mandatory = $true)]
   [string]$IsoPath,
-  [string]$Name = 'VD-Agent-QA',
+  [string]$Name = 'PIT-Agent-QA',
   [string]$StageDir = 'release\vm-qa-staging'
 )
 
@@ -33,8 +33,8 @@ $package = Get-Content -LiteralPath (Join-Path (Get-Location) 'package.json') -R
 $version = $package.version
 $bridge = @($package.build.extraResources | Where-Object { $_.to -match '\.vsix$' })[0]
 $vsixName = $bridge.to
-$installer = Join-Path (Get-Location) "release\VD Agent Setup $version.exe"
-$portable = Join-Path (Get-Location) "release\VD Agent $version.exe"
+$installer = Join-Path (Get-Location) "release\PIT Agent Setup $version.exe"
+$portable = Join-Path (Get-Location) "release\PIT Agent $version.exe"
 $vsix = Join-Path (Get-Location) $bridge.from
 
 Write-Step "Checking release artifacts"
@@ -51,7 +51,7 @@ Copy-Item -LiteralPath $vsix -Destination $stage -Force
 
 $checklist = Join-Path $stage 'VM-QA-CHECKLIST.txt'
 @"
-VD Agent clean VM QA checklist
+PIT Agent clean VM QA checklist
 ==============================
 
 VM name: $Name
@@ -62,15 +62,15 @@ Inside the clean Windows VM:
 2. Install VS Code.
 3. Copy this staging folder into the VM:
    $stage
-4. Install VD Agent Setup $version.exe.
-5. Launch VD Agent from Start Menu and desktop shortcut.
+4. Install PIT Agent Setup $version.exe.
+5. Launch PIT Agent from Start Menu and desktop shortcut.
 6. Confirm chat opens, local history persists after restart, terminal starts, and provider settings are saved locally.
 7. In VS Code, run:
    code --install-extension $vsixName
 8. Open a repo in VS Code, choose Trust Workspace, then run:
-   VD Agent: Export Workspace Context
-9. In VD Agent, verify VS Code bridge status, active file, open file, diff preview, and one small edit/apply flow.
-10. Uninstall VD Agent and confirm app uninstall works. User data should remain unless manually deleted.
+   PIT Agent: Export Workspace Context
+9. In PIT Agent, verify VS Code bridge status, active file, open file, diff preview, and one small edit/apply flow.
+10. Uninstall PIT Agent and confirm app uninstall works. User data should remain unless manually deleted.
 
 Host commands:
   .\Win\create-clean-vm.bat "$iso"

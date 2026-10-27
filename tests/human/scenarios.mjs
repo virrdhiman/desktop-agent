@@ -6,7 +6,7 @@ export async function runScenario(name, page, q) {
     await button.waitFor({ state: 'visible', timeout: 15_000 })
     await q.shot(page, `${name}-first-run-before`)
     await q.click(page, button, `${name}-first-run`)
-    await page.getByRole('dialog', { name: 'Customize VD Agent' }).waitFor({ state: 'hidden' })
+    await page.getByRole('dialog', { name: 'Customize PIT Agent' }).waitFor({ state: 'hidden' })
     if (name === 'customize') {
       await page.getByRole('heading', { name: 'Advanced' }).waitFor({ state: 'visible' })
       const toggle = page.getByRole('checkbox', { name: 'Autocomplete' })

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "name": "VD Agent local golden evals",
+  "name": "PIT Agent local golden evals",
   "inspiration": "Golden tasks, trace checks, and release smoke gates.",
   "minimums": {
     "vitestPassed": 320,

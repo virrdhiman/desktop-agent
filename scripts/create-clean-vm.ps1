@@ -1,7 +1,7 @@
 param(
   [Parameter(Mandatory = $true)]
   [string]$IsoPath,
-  [string]$Name = 'VD-Agent-QA',
+  [string]$Name = 'PIT-Agent-QA',
   [string]$OsType = 'Windows10_64',
   [int]$MemoryMB = 4096,
   [int]$Cpus = 2,
@@ -61,4 +61,4 @@ Write-Step "Starting VM"
 & $vbox startvm $Name --type gui
 
 Write-Host ''
-Write-Host "VM '$Name' is ready. Install Windows inside the VM, then install VS Code and run VD Agent installer QA."
+Write-Host "VM '$Name' is ready. Install Windows inside the VM, then install VS Code and run PIT Agent installer QA."

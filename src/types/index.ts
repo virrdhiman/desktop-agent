@@ -1,11 +1,11 @@
 /**
  * @author Virender Dhiman
  * @year 2025
- * @project VD Agent
+ * @project PIT Agent
  * @license Proprietary. See LICENSE.
  */
 /**
- * VD Agent — Type Definitions
+ * PIT Agent — Type Definitions
  *
  * All TypeScript interfaces, types, and constants used throughout the app.
  * Includes:
@@ -18,6 +18,7 @@
  */
 import type { DataToolSettings } from '../lib/dataToolSettings'
 import type { LayoutPreferences } from '../lib/layoutPersistence'
+import { APP_NAME } from '../lib/brand'
 
 export interface FileEntry {
   name: string
@@ -350,12 +351,12 @@ export const AGENT_TOOLS = [
   },
   {
     name: 'vscode_context',
-    description: 'Read the latest VS Code active editor, selection, visible files, and open files exported by the VD Agent Bridge extension.',
+    description: `Read the latest VS Code active editor, selection, visible files, and open files exported by the ${APP_NAME} Bridge extension.`,
     parameters: { path: 'string (optional) — workspace path, defaults to current workspace' },
   },
   {
     name: 'vscode_open',
-    description: 'Ask the VD Agent Bridge VS Code extension to open a workspace file at an optional line/column.',
+    description: `Ask the ${APP_NAME} Bridge VS Code extension to open a workspace file at an optional line/column.`,
     parameters: { path: 'string — file to open', line: 'number (optional)', column: 'number (optional)' },
   },
   {

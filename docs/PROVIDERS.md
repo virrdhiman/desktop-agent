@@ -1,13 +1,13 @@
 <!--
   @author Virender Dhiman
   @year 2026
-  @project VD Agent
+  @project PIT Agent
   @license Proprietary. See LICENSE.
 -->
 
 # AI Providers
 
-VD Agent talks to AI providers with API keys that you create on the provider's website. The full catalog, with counts per category, is in **Settings**. It is defined in `electron/handlers/settings.ts`, and new entries are added to existing installs automatically.
+PIT Agent talks to AI providers with API keys that you create on the provider's website. The full catalog, with counts per category, is in **Settings**. It is defined in `electron/handlers/settings.ts`, and new entries are added to existing installs automatically.
 
 See [Packaged capabilities and prerequisites](PACKAGED_CAPABILITIES.md) for the
 boundary between bundled provider support and software, models, keys, and
@@ -30,7 +30,7 @@ Free tiers, credits, and rate limits are set by each provider and change often. 
 |----------|-----------|-------|
 | Groq | [console.groq.com/keys](https://console.groq.com/keys) | Fast. Keys start with `gsk_`. |
 | Google Gemini | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) | Keys start with `AIza`. Also used by the `image_analysis` tool. |
-| OpenRouter | [openrouter.ai/keys](https://openrouter.ai/keys) | With a free key, VD Agent only picks models whose ID ends in `:free`. |
+| OpenRouter | [openrouter.ai/keys](https://openrouter.ai/keys) | With a free key, PIT Agent only picks models whose ID ends in `:free`. |
 | Mistral AI | [console.mistral.ai/api-keys](https://console.mistral.ai/api-keys/) | OpenAI-compatible chat endpoint. `mistral-large-latest` is the default fallback model, and live model refresh can replace it with the strongest model your key can call. |
 | NVIDIA NIM | [build.nvidia.com](https://build.nvidia.com/) | OpenAI-compatible endpoint at `https://integrate.api.nvidia.com/v1`. |
 | Cerebras | [cloud.cerebras.ai](https://cloud.cerebras.ai/) | Fast inference with rate limits. |
@@ -38,7 +38,7 @@ Free tiers, credits, and rate limits are set by each provider and change often. 
 | Hugging Face | [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) | Router with monthly free credits. Tokens start with `hf_`. |
 
 LLM7 can also be configured from Settings with `https://api.llm7.io/v1`, but
-VD Agent treats it as a paid/credit provider and does not use it in automatic
+PIT Agent treats it as a paid/credit provider and does not use it in automatic
 free fallback.
 
 For providers that are not in the catalog yet, use **Add compatible provider** in Settings.
@@ -70,7 +70,7 @@ previous request, not a continuous health check.
 
 For OpenAI-compatible providers, on each request:
 
-1. VD Agent lists the models your key can call (`/models`, 8-second timeout, cached for 10 minutes).
+1. PIT Agent lists the models your key can call (`/models`, 8-second timeout, cached for 10 minutes).
 2. It drops non-chat models: embeddings, rerank, moderation, audio, speech, transcription, image, and video.
 3. It ranks the rest by coding quality, budget, then efficiency. On free-tier aggregators with explicit `:free` model IDs, Auto stays on those models in every budget. To let Auto use other model IDs on such providers, enable **Allow paid model IDs** in Settings. Selecting a paid provider explicitly also allows its models. Providers without explicit free model IDs may still charge for usage; check their terms.
 4. It tries the best model first, then the next few. If `/models` returns a usable list, stale saved model IDs are dropped instead of retried.
@@ -78,11 +78,11 @@ For OpenAI-compatible providers, on each request:
 6. On an invalid key (401 or an auth error) it **stops** and tells you, without trying other models or providers.
 7. The refreshed live model list and the model that worked are saved, unless you pinned one.
 
-When **Auto** is selected, VD Agent does not cling to an expired or deprecated saved model. If live discovery returns a usable list, that list becomes the source of truth. If discovery is temporarily unavailable but a previous live list is saved, Auto still tries the saved live models in ranked order before failing over to another provider.
+When **Auto** is selected, PIT Agent does not cling to an expired or deprecated saved model. If live discovery returns a usable list, that list becomes the source of truth. If discovery is temporarily unavailable but a previous live list is saved, Auto still tries the saved live models in ranked order before failing over to another provider.
 
 **Pin a model**: pick it from the model menu in the Agent header, which lists the models discovered for the active provider. Choose **Auto** to go back to automatic selection.
 
-**Anthropic** uses its own Messages API and has no model discovery, so VD Agent uses the model set in Settings.
+**Anthropic** uses its own Messages API and has no model discovery, so PIT Agent uses the model set in Settings.
 
 Screenshots pasted or dropped into the current chat request are sent as image content
 to compatible chat models. VD converts the same request for Anthropic's Messages API.
@@ -92,9 +92,9 @@ request and are not stored in the text history.
 
 ## Provider fallback
 
-If the active provider fails for a reason other than an invalid key, VD Agent tries compatible fallbacks with keys. Free providers fall back only to other **Free Official** providers so Auto does not spend money unexpectedly. Paid providers are used only when you intentionally select one; then VD can fall back across your configured paid and free providers. The active provider remains first and fallbacks are ordered by locally observed reliability and latency; repeated failures create a short cooldown. When another provider answers, the chat says which one, and the rest of that request stays on it. If every provider fails, the chat lists each provider's error with next steps. Local servers and image/video services are only used when you make them the active provider.
+If the active provider fails for a reason other than an invalid key, PIT Agent tries compatible fallbacks with keys. Free providers fall back only to other **Free Official** providers so Auto does not spend money unexpectedly. Paid providers are used only when you intentionally select one; then VD can fall back across your configured paid and free providers. The active provider remains first and fallbacks are ordered by locally observed reliability and latency; repeated failures create a short cooldown. When another provider answers, the chat says which one, and the rest of that request stays on it. If every provider fails, the chat lists each provider's error with next steps. Local servers and image/video services are only used when you make them the active provider.
 
-The catalog does not include unofficial or reverse-engineered proxies. Older settings files drop those entries on the next load. If one of them was the active provider, VD Agent switches back to Groq.
+The catalog does not include unofficial or reverse-engineered proxies. Older settings files drop those entries on the next load. If one of them was the active provider, PIT Agent switches back to Groq.
 
 ## Adding a provider (developers)
 

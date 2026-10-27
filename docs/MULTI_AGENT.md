@@ -1,6 +1,6 @@
 # Agentic Environments
 
-VD Agent can process a normal chat message through a bounded team instead of relying on one model pass.
+PIT Agent can process a normal chat message through a bounded team instead of relying on one model pass.
 
 ## Modes
 

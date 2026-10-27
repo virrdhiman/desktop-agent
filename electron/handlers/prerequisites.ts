@@ -9,6 +9,7 @@ import {
   type SetupItemId,
 } from '../../src/lib/prerequisiteSetup'
 import { downloadAndVerify, PrerequisiteDownloadError, type DownloadProgress } from '../prerequisiteDownload'
+import { APP_NAME } from '../../shared/brand'
 
 export type PrerequisiteProgress = Omit<DownloadProgress, 'state'> & {
   id: SetupItemId
@@ -87,7 +88,7 @@ export function registerPrerequisiteHandlers(getMainWindow: () => BrowserWindow 
     const progress = (state: PrerequisiteProgress['state'], extra: Partial<PrerequisiteProgress> = {}) =>
       sendProgress(event, getMainWindow, { id: request.id, state, bytesReceived: 0, ...extra })
 
-    progress('queued', { message: 'Preparing a download in VD Agent user data.' })
+    progress('queued', { message: `Preparing a download in ${APP_NAME} user data.` })
     try {
       await fs.mkdir(workDirectory(), { recursive: true })
       const filename = `${request.id}-${Date.now()}-${randomUUID()}-${path.basename(item.artifactFileName)}`

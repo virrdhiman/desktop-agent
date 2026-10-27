@@ -1,13 +1,15 @@
 <!--
   @author Virender Dhiman
   @year 2026
-  @project VD Agent
+  @project PIT Agent
   @license Proprietary. See LICENSE.
 -->
 
 # Changelog
 
-All notable changes to VD Agent are documented here.
+- PIT Agent is the current product name; formerly VD Agent.
+
+All notable changes to PIT Agent are documented here.
 
 ## [Unreleased]
 
@@ -68,7 +70,7 @@ All notable changes to VD Agent are documented here.
 ## [1.0.1] - 2026-09-30
 
 ### Branding
-- Consistent **VD Agent** / **VD** branding across the app title, package metadata (`vd-agent`, `com.vd.agent`, product name `VD Agent`), build scripts, and docs.
+- Consistent **PIT Agent** / **VD** branding across the app title, package metadata (`vd-agent`, `com.vd.agent`, product name `PIT Agent`), build scripts, and docs.
 
 ### Agent behaviour
 - Rewrote the system prompt as a senior engineering assistant. It inspects before claiming, challenges weak or risky requests, verifies with commands before reporting success, states risks and tradeoffs, and asks before destructive actions.
@@ -129,7 +131,7 @@ All notable changes to VD Agent are documented here.
 - Fixed the code editor never loading. Monaco was fetched from a CDN that the Content-Security-Policy blocks. It is now bundled with the app (lazy-loaded), so the editor also works offline.
 
 ### License and credit
-- VD Agent is now proprietary, source-available software owned by Virender Dhiman, under the new VD Agent License. It is free to download and use, including for commercial work, but credit is required and it may not be resold, redistributed, rebranded, or hosted as a service.
+- PIT Agent is now proprietary, source-available software owned by Virender Dhiman, under the new PIT Agent License. It is free to download and use, including for commercial work, but credit is required and it may not be resold, redistributed, rebranded, or hosted as a service.
 - Source headers, docs, and package metadata reflect the new license. `package.json` is marked `private` and points to the correct repository.
 - Third-party dependencies keep their own open-source licenses and notices. Those licenses cover the dependencies only.
 - The Windows installer shows the license, and packaged builds include `LICENSE.txt`.

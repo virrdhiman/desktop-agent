@@ -2,6 +2,7 @@ import { app, clipboard, dialog, ipcMain } from 'electron'
 import fs from 'fs'
 import { appendDiagnosticsLog, buildDiagnosticsReport, formatDiagnosticsReport, readDiagnosticsLines, type DiagnosticsLogEvent, type DiagnosticsViewerPayload } from '../diagnostics'
 import { settingsPath } from './settings'
+import { APP_NAME } from '../../shared/brand'
 
 async function loadDiagnosticsSettings(): Promise<any> {
   try { return JSON.parse(await fs.promises.readFile(settingsPath(), 'utf8')) } catch { return {} }
@@ -57,7 +58,7 @@ export function registerDiagnosticsHandlers() {
         packaged: app.isPackaged,
       })
       const chosen = await dialog.showSaveDialog({
-        title: 'Export private VD Agent diagnostics',
+        title: `Export private ${APP_NAME} diagnostics`,
         defaultPath: `vd-agent-diagnostics-${new Date().toISOString().slice(0, 10)}.json`,
         filters: [{ name: 'JSON', extensions: ['json'] }],
       })

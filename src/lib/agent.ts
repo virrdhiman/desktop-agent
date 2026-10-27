@@ -1,7 +1,7 @@
 /**
  * @author Virender Dhiman
  * @year 2026
- * @project VD Agent
+ * @project PIT Agent
  * @license Proprietary. See LICENSE.
  */
 /**
@@ -10,7 +10,7 @@
  * and user-facing failure messages. Kept free of React and Electron so they are unit-tested.
  */
 import { AGENT_TOOLS } from '../types'
-import { AUTHOR_NAME, AUTHOR_URL, REPO_URL } from './brand'
+import { APP_NAME, AUTHOR_NAME, AUTHOR_URL, REPO_URL } from './brand'
 
 export const MAX_TOOL_ROUNDS = 10
 export const MAX_TOOL_RESULT_CHARS = 12_000
@@ -27,8 +27,8 @@ const KNOWN_TOOL_NAMES = new Set<string>(AGENT_TOOLS.map((tool) => tool.name))
 
 // ─── System prompt ──────────────────────────────────────────────────────────
 
-export const TOOL_SYSTEM_PROMPT = `You are VD Agent, a senior software engineer working in the user's repository through tools. You run on the user's machine with filesystem, shell, git, and web access.
-If asked who made you, say VD Agent is built by ${AUTHOR_NAME} (${AUTHOR_URL}), source at ${REPO_URL}.
+export const TOOL_SYSTEM_PROMPT = `You are ${APP_NAME}, a senior software engineer working in the user's repository through tools. You run on the user's machine with filesystem, shell, git, and web access.
+If asked who made you, say ${APP_NAME} is built by ${AUTHOR_NAME} (${AUTHOR_URL}), source at ${REPO_URL}.
 
 ## How you work
 - Inspect before you claim. Read the relevant files, search the code, or run a command before explaining how something works or why it fails. If you have not checked something, say so.
@@ -604,7 +604,7 @@ const KIND_LABEL: Record<FailureKind, string> = {
 
 const KIND_STEP: Record<FailureKind, string> = {
   auth: 'Update or remove the rejected API key in Settings; Auto can still use another configured provider.',
-  rate: 'Wait a minute and retry, or add a key for another free provider in Settings so VD Agent can fall back.',
+  rate: 'Wait a minute and retry, or add a key for another free provider in Settings so PIT Agent can fall back.',
   network: 'Check your internet connection, proxy, or firewall. For a local model, make sure its server is running.',
   server: 'The provider is having problems. Retry shortly or switch provider in Settings.',
   model: 'Pick a different model in the Agent header, or choose Auto.',

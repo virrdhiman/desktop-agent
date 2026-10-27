@@ -33,8 +33,8 @@ export function parseArguments(argv, now = new Date()) {
   if (argv.includes('--help') || argv.includes('-h')) return { help: true }
   const outputArg = valueAfter(argv, '--output') || `.work/mac-test/macos-${pkg.version}-${fileStamp(now)}-${process.pid}.md`
   const artifactRoot = valueAfter(argv, '--artifact-root') || 'release'
-  const appPath = valueAfter(argv, '--app-path') || `${artifactRoot}/mac/VD Agent.app/Contents/MacOS/VD Agent`
-  const resourcesPath = valueAfter(argv, '--resources') || `${artifactRoot}/mac/VD Agent.app/Contents/Resources`
+  const appPath = valueAfter(argv, '--app-path') || `${artifactRoot}/mac/PIT Agent.app/Contents/MacOS/PIT Agent`
+  const resourcesPath = valueAfter(argv, '--resources') || `${artifactRoot}/mac/PIT Agent.app/Contents/Resources`
   const output = repoRelative(outputArg, '--output')
   if (!insideRoot(output)) throw new Error('--output must remain inside the repository')
   if (!outputArg.replaceAll('\\', '/').startsWith('.work/')) throw new Error('--output must be under .work/')

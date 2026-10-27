@@ -6,7 +6,7 @@ explicit packaged executable:
 
 ```powershell
 $env:PLAYWRIGHT_PACKAGE = 'C:\path\to\node_modules\playwright'
-node tests/human/runner.mjs --exe 'release/win-unpacked/VD Agent.exe' --scenario smoke,terminal,persistence,search,checklist,diagnostics,index-tools,safe-change,resume,crash
+node tests/human/runner.mjs --exe 'release/win-unpacked/PIT Agent.exe' --scenario smoke,terminal,persistence,search,checklist,diagnostics,index-tools,safe-change,resume,crash
 ```
 
 `--exe` may point to a Linux AppImage under WSLg. Each run uses `.work/human-qa/<timestamp>` as

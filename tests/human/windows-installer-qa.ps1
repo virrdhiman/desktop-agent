@@ -187,7 +187,7 @@ function Get-InstallerWindow([Diagnostics.Process]$Process) {
       $handle = [IntPtr]$window.Current.NativeWindowHandle
       if ($handle -eq [IntPtr]::Zero) { continue }
       $owner = Get-Process -Id ([uint32]$window.Current.ProcessId) -ErrorAction SilentlyContinue
-      if ($owner -and ($owner.Id -eq $Process.Id -or $owner.ProcessName -match '(?i)VD-Agent|VD Agent|nsis|setup')) { return $window }
+      if ($owner -and ($owner.Id -eq $Process.Id -or $owner.ProcessName -match '(?i)PIT-Agent|PIT Agent|nsis|setup')) { return $window }
     } catch { }
   }
   return $null
@@ -228,18 +228,18 @@ function Run-NsisInstall {
         $nextScreenshot += [Math]::Max(1, $InstallScreenshotIntervalSec)
       }
       $candidates = @(
-        (Join-Path $rootPath 'VD Agent.exe'),
-        (Join-Path $rootPath 'VD Agent\VD Agent.exe')
+        (Join-Path $rootPath 'PIT Agent.exe'),
+        (Join-Path $rootPath 'PIT Agent\PIT Agent.exe')
       )
       $installedExe = $candidates | Where-Object {
         $appAsar = Join-Path (Split-Path $_) 'resources\app.asar'
-        $uninstaller = Join-Path (Split-Path $_) 'Uninstall VD Agent.exe'
+        $uninstaller = Join-Path (Split-Path $_) 'Uninstall PIT Agent.exe'
         (Test-Path $_) -and (Test-Path $uninstaller) -and (Test-Path $appAsar) -and ((Get-Item $appAsar).Length -gt 100MB)
       } | Select-Object -First 1
       $installed = [bool]$installedExe
       Write-Event 'install-poll' @{ seconds = [int]$started.Elapsed.TotalSeconds; processId = $process.Id; installed = $installed; path = $installedExe }
     }
-    if (-not $installed) { throw "Installer did not complete within $InstallTimeoutSec seconds; expected $rootPath\VD Agent.exe." }
+    if (-not $installed) { throw "Installer did not complete within $InstallTimeoutSec seconds; expected $rootPath\PIT Agent.exe." }
     Save-Screenshot 'install-finish-visible'
     Write-Event 'install-finish-visible' @{ path = $installedExe; seconds = [int]$started.Elapsed.TotalSeconds }
     # NSIS may move the completion page into an elevated helper process, which

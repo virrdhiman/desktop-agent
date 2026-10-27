@@ -52,7 +52,7 @@ describe('release signing plan', () => {
     expect(signedOnly.signed).toBe(true)
     expect(signedOnly.notarize).toBe(false)
     expect(signedOnly.env.APPLE_ID).toBe('')
-    expect(releaseSigningPlan({ os: 'macOS', env: { CSC_NAME: 'Developer ID Application: VD Agent' } })).toMatchObject({
+    expect(releaseSigningPlan({ os: 'macOS', env: { CSC_NAME: 'Developer ID Application: PIT Agent' } })).toMatchObject({
       signed: true,
       builderArgs: '--mac',
     })

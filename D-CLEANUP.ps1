@@ -5,7 +5,7 @@
 .DESCRIPTION
   Dry-run is the default. Deletion requires -Apply and is still restricted to
   paths explicitly marked "safe to delete (rebuildable)" in the scan report.
-  D:\PIT and the VD Agent source are always excluded.
+  D:\PIT and the PIT Agent source are always excluded.
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(

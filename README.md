@@ -1,28 +1,28 @@
 <!--
   @author Virender Dhiman
   @year 2026
-  @project VD Agent
+  @project PIT Agent
   @license Proprietary. See LICENSE.
 -->
 
-# VD Agent
+# PIT Agent
 
 **A desktop AI coding agent that works with free API keys.**
 
-VD Agent by [Virender Dhiman](https://virender.in) · [VD Agent License](./LICENSE): free to use, credit required
+PIT Agent by [Virender Dhiman](https://virender.in) · [PIT Agent License](./LICENSE): free to use, credit required
 
 [![GitHub stars](https://img.shields.io/github/stars/virrdhiman/desktop-agent?style=social)](https://github.com/virrdhiman/desktop-agent/stargazers)
 [![Latest release](https://img.shields.io/github/v/release/virrdhiman/desktop-agent?include_prereleases&label=release)](https://github.com/virrdhiman/desktop-agent/releases)
 ![License](https://img.shields.io/badge/license-VD%20Agent%20License-blueviolet)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 
-![VD Agent welcome screen](./docs/images/welcome.png)
+![PIT Agent welcome screen](./docs/images/welcome.png)
 
 ---
 
-## What is VD Agent?
+## What is PIT Agent?
 
-VD Agent is a desktop app that pairs an AI coding assistant with a code editor, terminal, and git client for the projects on your computer. You describe a task, and the agent reads your code, edits files, runs commands, and checks its own work with your project's tests and build.
+PIT Agent is a desktop app that pairs an AI coding assistant with a code editor, terminal, and git client for the projects on your computer. You describe a task, and the agent reads your code, edits files, runs commands, and checks its own work with your project's tests and build.
 
 It is built to work well on **free API keys**. It asks your key which models it can use, picks the strongest chat model, and moves on to the next one when a model is rate-limited or unavailable. It can also run fully offline with a local model such as Ollama.
 
@@ -52,9 +52,11 @@ Your chats, settings, and keys stay on your machine. There is no account and no 
 
    | System | File |
    |--------|------|
-   | Windows 10/11 (64-bit) | `VD Agent Setup <version>.exe` (installer) or `VD Agent <version>.exe` (portable) |
-   | macOS | `VD Agent-<version>.dmg` (Apple Silicon builds end in `-arm64`) |
-   | Linux (64-bit) | `VD Agent-<version>.AppImage` or `vd-agent_<version>_amd64.deb` |
+   | Windows 10/11 (64-bit) | `PIT Agent Setup <version>.exe` (installer) or `PIT Agent <version>.exe` (portable) |
+   | macOS | `PIT Agent-<version>.dmg` (Apple Silicon builds end in `-arm64`) |
+   | Linux (64-bit) | `PIT Agent-<version>.AppImage` or `vd-agent_<version>_amd64.deb` |
+
+The product is branded PIT Agent, while the existing `VD Agent` user-data folder remains the stable upgrade location so existing chats, settings, and keys are preserved.
 
 2. Optional but recommended: check the file against `SHA256SUMS.txt` from the same release. See [verify your download](./docs/INSTALL.md#verify-your-download).
 3. Install and launch it. If Windows SmartScreen or macOS Gatekeeper warns about an unsigned build, see [first launch](./docs/INSTALL.md#first-launch-warnings).
@@ -82,16 +84,16 @@ You need one key to start. Groq and Google Gemini have free tiers and are good f
 
 1. Open **Settings** (⚙️ in the sidebar) and select **Groq** or **Google Gemini**.
 2. Click **Get API Key**. The provider's site opens in your browser. Create a key there and copy it.
-3. Paste the key into VD Agent and click **Save**. Selecting a provider in the list also makes it the active one.
+3. Paste the key into PIT Agent and click **Save**. Selecting a provider in the list also makes it the active one.
 4. Open a project folder (📁 **Files → Open**), go to 🤖 **Agent**, and send a message.
 
 No key? Install [Ollama](https://ollama.com/download), run `ollama pull qwen2.5-coder:7b`, and pick **Ollama (Local)** in Settings. Prompts never leave your machine.
 
-Adding keys for more than one free provider makes rate limits less of a problem, because VD Agent can fall back between them. Free-tier limits are set by each provider and change often. See [docs/PROVIDERS.md](./docs/PROVIDERS.md) for other providers and their trade-offs.
+Adding keys for more than one free provider makes rate limits less of a problem, because PIT Agent can fall back between them. Free-tier limits are set by each provider and change often. See [docs/PROVIDERS.md](./docs/PROVIDERS.md) for other providers and their trade-offs.
 
 ### How model selection works
 
-For OpenAI-compatible providers, VD Agent:
+For OpenAI-compatible providers, PIT Agent:
 
 1. Lists the models your key can call and drops non-chat models such as embeddings, speech, image, and moderation models.
 2. Ranks the rest by coding quality and efficiency, then learns from local success, failure, and latency history. If a live list is available, stale saved model IDs are dropped automatically.
@@ -99,13 +101,13 @@ For OpenAI-compatible providers, VD Agent:
 4. **Stops immediately on an invalid key**, so you can fix it instead of having the problem hidden.
 5. Saves the refreshed live model list and the model that worked, unless you pinned a model in the Agent header.
 
-If the active provider fails for any reason other than an invalid key, VD Agent tries other official free providers that have keys. Local servers are never used automatically. The catalog is official APIs and local OpenAI-compatible servers only.
+If the active provider fails for any reason other than an invalid key, PIT Agent tries other official free providers that have keys. Local servers are never used automatically. The catalog is official APIs and local OpenAI-compatible servers only.
 
 ---
 
 ## Privacy and local data
 
-VD Agent has no server, account, telemetry, or analytics. Everything it stores stays in your user data folder:
+PIT Agent has no server, account, telemetry, or analytics. Everything it stores stays in your user data folder:
 
 | OS | Folder |
 |----|--------|
@@ -148,12 +150,12 @@ Your prompts and code go **only** to the AI provider you choose, plus any servic
 
 ## Support the project
 
-If VD Agent saves you time, starring the [GitHub repository](https://github.com/virrdhiman/desktop-agent) helps other people find it. Starring is a request, not a condition of the license.
+If PIT Agent saves you time, starring the [GitHub repository](https://github.com/virrdhiman/desktop-agent) helps other people find it. Starring is a request, not a condition of the license.
 
-If you share, review, demo, or write about VD Agent, the license asks you to credit it:
+If you share, review, demo, or write about PIT Agent, the license asks you to credit it:
 
 ```
-VD Agent by Virender Dhiman - https://virender.in
+PIT Agent by Virender Dhiman - https://virender.in
 ```
 
 Please link to https://github.com/virrdhiman/desktop-agent as well. Bug reports and pull requests are welcome; see [docs/CONTRIBUTING.md](./docs/CONTRIBUTING.md).
@@ -162,7 +164,7 @@ Please link to https://github.com/virrdhiman/desktop-agent as well. Bug reports 
 
 Copyright (c) 2025-2026 [Virender Dhiman](https://virender.in). All rights reserved.
 
-VD Agent is proprietary, source-available software and the exclusive property of Virender Dhiman. From version 1.0.1 it is licensed under the [VD Agent License](./LICENSE):
+PIT Agent is proprietary, source-available software and the exclusive property of Virender Dhiman. From version 1.0.1 it is licensed under the [PIT Agent License](./LICENSE):
 
 | You may | You may not |
 |---------|-------------|
@@ -170,4 +172,4 @@ VD Agent is proprietary, source-available software and the exclusive property of
 | Use it free of charge for personal and commercial work | Remove or change the name, logo, or author credits |
 | Modify your own copy for your own use | Offer it, or a service based on it, as a hosted service |
 
-Credit is required when you share or showcase it. VD Agent is built on open-source dependencies such as Electron, React, and Monaco Editor, which keep their own licenses (many are MIT-licensed); those licenses cover the dependencies, not VD Agent itself. This summary is for convenience and is not legal advice; the [LICENSE](./LICENSE) file is the binding text. For permissions the license does not cover, contact the author through [virender.in](https://virender.in).
+Credit is required when you share or showcase it. PIT Agent is built on open-source dependencies such as Electron, React, and Monaco Editor, which keep their own licenses (many are MIT-licensed); those licenses cover the dependencies, not PIT Agent itself. This summary is for convenience and is not legal advice; the [LICENSE](./LICENSE) file is the binding text. For permissions the license does not cover, contact the author through [virender.in](https://virender.in).

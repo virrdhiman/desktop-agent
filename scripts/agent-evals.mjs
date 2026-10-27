@@ -1,7 +1,7 @@
 /**
  * @author Virender Dhiman
  * @year 2026
- * @project VD Agent
+ * @project PIT Agent
  * @license Proprietary. See LICENSE.
  */
 /**
@@ -155,7 +155,7 @@ function parseSmoke(output, minimum) {
 
 const golden = loadGolden()
 
-console.log(`VD Agent AI evaluation gate (${pkg.name}@${pkg.version})`)
+console.log(`PIT Agent AI evaluation gate (${pkg.name}@${pkg.version})`)
 console.log(`Golden cases: ${golden.cases.length}`)
 console.log(`Golden sources: ${golden.cases.filter((item) => item.source === 'real-user').length} real-user, ${golden.cases.filter((item) => item.source !== 'real-user').length} maintained regression cases`)
 console.log('Borrowed idea, not code: golden tasks + trajectory checks + release smoke gates from public agent-eval practice.')

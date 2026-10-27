@@ -1,13 +1,13 @@
-# VD Agent 1.1.0 tester sheet
+# PIT Agent 1.2.0 tester sheet
 
-Packaged application commit: `883c37c88c30808a4c3b8d0e338496ba9ad05ea0`
+Packaged application commit: check Settings → About for the exact build commit.
 
 This is an unsigned Windows test build for a local, fixture-only evaluation. It is not a public release.
 
 ## Install and first run
 
 1. Run the installer. Windows SmartScreen may warn because this build is unsigned: choose **More info** → **Run anyway**.
-2. Start VD Agent from the desktop or Start menu shortcut.
+2. Start PIT Agent from the desktop or Start menu shortcut.
 3. On first run, open **Settings** and add an API key only if you want cloud models. Never paste a key into a bug report, screenshot, chat export, or log. Ollama can be used locally without a cloud key.
 4. In Settings, note the displayed app version and build commit before reporting a problem.
 
