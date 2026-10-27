@@ -237,7 +237,7 @@ function startLocalServer() {
 }
 
 async function runSecurityInspection(packageRoot) {
-  const resources = path.join(packageRoot, 'win-unpacked', 'resources')
+  const resources = findPackagedResources(packageRoot)
   const asarPath = path.join(resources, 'app.asar')
   const asar = require('@electron/asar')
   const entries = new Set(asar.listPackage(asarPath))
@@ -249,6 +249,14 @@ async function runSecurityInspection(packageRoot) {
   check('packaged CSP and external-link policy are present', /Content-Security-Policy/.test(main) && /setWindowOpenHandler/.test(main) && /openExternal/.test(main), 'CSP, denied window opens, system browser')
   check('packaged preload exposes a bounded bridge', /contextBridge\.exposeInMainWorld/.test(preload) && /ipcRenderer\.invoke/.test(preload) && !/exposeInMainWorld\(\s*["']api["']\s*,\s*ipcRenderer/.test(preload), 'contextBridge preload')
   return entries
+}
+
+function findPackagedResources(packageRoot) {
+  const candidates = [
+    path.join(packageRoot, 'win-unpacked', 'resources'),
+    path.join(packageRoot, 'resources'),
+  ]
+  return candidates.find((candidate) => fs.existsSync(path.join(candidate, 'app.asar'))) || candidates[0]
 }
 
 async function main() {
@@ -465,8 +473,8 @@ async function main() {
   }
 
   const packageRoot = path.resolve(value('--package-root') || path.dirname(path.dirname(exe)))
-  if (fs.existsSync(path.join(packageRoot, 'win-unpacked', 'resources', 'app.asar'))) await runSecurityInspection(packageRoot)
-  else check('packaged security inspection', false, 'win-unpacked/resources/app.asar not found')
+  if (fs.existsSync(path.join(findPackagedResources(packageRoot), 'app.asar'))) await runSecurityInspection(packageRoot)
+  else check('packaged security inspection', false, 'packaged resources/app.asar not found')
 
   const output = { generatedAt: new Date().toISOString(), fixture, executable: exe, results }
   const outputPath = path.join(fixture, 'logs', 'automated-qa.json')
