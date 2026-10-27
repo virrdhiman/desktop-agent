@@ -17,6 +17,7 @@ All notable changes to PIT Agent are documented here.
 - Rebranded user-facing product surfaces, installer names, shortcuts, settings and documentation as PIT Agent by Productive IT.
 - Preserved the `com.vd.agent` app ID and `%APPDATA%\VD Agent` data folder so existing installations upgrade in place without moving user data.
 - Added the Productive IT logo/icon pipeline and hardened packaged smoke, security and dirty-close checks.
+- Added System, Light, Dark, Pink Light and Pink Dark appearances with live switching and saved preferences.
 
 ## [Unreleased]
 
