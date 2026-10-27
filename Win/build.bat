@@ -1,10 +1,10 @@
 @echo off
 :: ============================================================
-:: VD Agent - Windows Build Script
+:: PIT Agent - Windows Build Script
 :: Builds an NSIS installer and a portable .exe into release\
 :: ============================================================
 :: @author Virender Dhiman
-:: @project VD Agent
+:: @project PIT Agent
 :: @license Proprietary. See LICENSE.
 
 setlocal
@@ -14,7 +14,7 @@ for /f "delims=" %%v in ('node -p "require('./package.json').version"') do set V
 
 echo.
 echo  ========================================
-echo   VD Agent %VERSION% - Windows Build
+echo   PIT Agent %VERSION% - Windows Build
 echo  ========================================
 echo.
 
@@ -88,8 +88,8 @@ echo   BUILD COMPLETE
 echo  ========================================
 echo.
 echo  Output (release\):
-echo    - VD Agent Setup %VERSION%.exe   (NSIS installer)
-echo    - VD Agent %VERSION%.exe         (portable)
+echo    - PIT Agent Setup %VERSION%.exe   (NSIS installer)
+echo    - PIT Agent %VERSION%.exe         (portable)
 echo    - SHA256SUMS.txt                 (checksums to publish with the release)
 echo.
 echo  Before publishing, follow docs\RELEASE_CHECKLIST.md

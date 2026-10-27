@@ -15,7 +15,7 @@ if not "%ERRORLEVEL%"=="0" (
 pushd "%ROOT%" >nul
 
 if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
-echo VD Agent VM host setup started at %DATE% %TIME% > "%LOG%"
+echo PIT Agent VM host setup started at %DATE% %TIME% > "%LOG%"
 echo Root: %ROOT% >> "%LOG%"
 
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\scripts\setup-vm-host.ps1" -Prefer VirtualBox >> "%LOG%" 2>&1

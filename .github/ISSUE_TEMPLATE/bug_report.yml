@@ -1,5 +1,5 @@
 name: Bug report
-description: Something in VD Agent is broken or behaves unexpectedly
+description: Something in PIT Agent is broken or behaves unexpectedly
 title: "bug: "
 body:
   - type: textarea
@@ -12,7 +12,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: VD Agent version
+      label: PIT Agent version
       placeholder: "1.1.0"
     validations:
       required: true

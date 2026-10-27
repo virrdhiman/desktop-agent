@@ -9,6 +9,6 @@ repository, pinned to commit
 - Size: `4,113,088` bytes
 - Upstream license: Apache-2.0; packaged in `LICENSE.apache-2.0.txt`
 
-VD Agent uses this local asset with Tesseract downloads and cache writes
+PIT Agent uses this local asset with Tesseract downloads and cache writes
 disabled. Additional languages must be supplied explicitly from inside the
 open workspace.

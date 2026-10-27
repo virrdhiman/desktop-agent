@@ -81,7 +81,7 @@ jobs:
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          resources=$(find release -type d -path '*/VD Agent.app/Contents/Resources' -print -quit)
+          resources=$(find release -type d -path '*/PIT Agent.app/Contents/Resources' -print -quit)
           test -n "$resources"
           node scripts/validate-packaged-capabilities.mjs --platform darwin --arch "$(node -p 'process.arch')" --resources "$resources"
       - name: Validate packaged capabilities (Linux)
@@ -89,12 +89,12 @@ jobs:
         run: node scripts/validate-packaged-capabilities.mjs --platform linux --arch x64 --resources release/linux-unpacked/resources
       - name: Smoke packaged Windows app
         if: runner.os == 'Windows'
-        run: node scripts/smoke.mjs --exe "release/win-unpacked/VD Agent.exe"
+        run: node scripts/smoke.mjs --exe "release/win-unpacked/PIT Agent.exe"
       - name: Smoke packaged macOS app
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          exe=$(find release -path '*/VD Agent.app/Contents/MacOS/VD Agent' -type f -print -quit)
+          exe=$(find release -path '*/PIT Agent.app/Contents/MacOS/PIT Agent' -type f -print -quit)
           test -n "$exe"
           node scripts/smoke.mjs --exe "$exe"
       - name: Smoke packaged Linux app
@@ -130,5 +130,5 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --draft --title "VD Agent ${GITHUB_REF_NAME#v}" --generate-notes
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --draft --title "PIT Agent ${GITHUB_REF_NAME#v}" --generate-notes
           gh release upload "$GITHUB_REF_NAME" release/* --clobber

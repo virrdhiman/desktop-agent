@@ -11,6 +11,13 @@
 
 All notable changes to PIT Agent are documented here.
 
+## [1.2.0] - 2026-10-27
+
+### Product identity and release quality
+- Rebranded user-facing product surfaces, installer names, shortcuts, settings and documentation as PIT Agent by Productive IT.
+- Preserved the `com.vd.agent` app ID and `%APPDATA%\VD Agent` data folder so existing installations upgrade in place without moving user data.
+- Added the Productive IT logo/icon pipeline and hardened packaged smoke, security and dirty-close checks.
+
 ## [Unreleased]
 
 ### VS Code bridge

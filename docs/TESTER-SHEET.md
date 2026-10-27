@@ -1,6 +1,6 @@
 # PIT Agent 1.2.0 tester sheet
 
-Packaged application commit: check Settings → About for the exact build commit.
+Packaged application source commit: `0c1ef47` (the app also shows its exact build commit in Settings → About).
 
 This is an unsigned Windows test build for a local, fixture-only evaluation. It is not a public release.
 
