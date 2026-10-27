@@ -24,7 +24,7 @@ import { useStore } from '../store'
 import type { ProviderConfig, TeamPreset, TeamRoleProfile, TeamTokenBudget } from '../types'
 import { getProviderCategory, mergeImportedSettings, providerIsConfigured, providerPrefersFreeModels, refreshProviderModelCatalog, withoutApiKeys } from '../lib/providers'
 import { maskProviderForRenderer } from '../lib/providerKeys'
-import { APP_NAME, APP_VERSION, AUTHOR_NAME, AUTHOR_URL, COPYRIGHT, LICENSE_URL, REPO_URL } from '../lib/brand'
+import { APP_COMMIT, APP_NAME, APP_VERSION, AUTHOR_NAME, AUTHOR_URL, COPYRIGHT, LICENSE_URL, REPO_URL } from '../lib/brand'
 import { TEAM_PRESET_LABELS } from '../lib/multiAgent'
 import { DATA_TOOL_SETTINGS } from '../lib/dataToolSettings'
 import { SMALL_OLLAMA_MODEL, SMALL_OLLAMA_SIZE } from '../../electron/ollamaModels'
@@ -884,6 +884,18 @@ export default function SettingsPanel() {
               <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 14, fontSize: 12 }}>
                 <input
                   type="checkbox"
+                  checked={settings.strictGrounding === true}
+                  onChange={(event) => {
+                    const next = { ...settings, strictGrounding: event.target.checked }
+                    setSettings(next)
+                    void window.api.saveSettings(next)
+                  }}
+                />
+                <span><strong>Strict grounding</strong><br /><span style={{ color: 'var(--text-muted)' }}>Opt in to evidence-only claims. The agent cites files and reports commands or tests as not checked unless this chat has a tool result.</span></span>
+              </label>
+              <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 14, fontSize: 12 }}>
+                <input
+                  type="checkbox"
                   checked={settings.browserToolEnabled === true}
                   onChange={(event) => {
                     const next = { ...settings, browserToolEnabled: event.target.checked }
@@ -1020,6 +1032,7 @@ export default function SettingsPanel() {
             {/* About */}
             <div className="card" style={{ marginTop: 20, padding: 16 }} aria-label="About VD Agent">
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>ℹ️ About {APP_NAME} v{APP_VERSION}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>Build commit: {APP_COMMIT}</div>
               <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: 10 }}>
                 Built by <strong style={{ color: 'var(--text-primary)' }}>{AUTHOR_NAME}</strong>. {COPYRIGHT}
                 <br />

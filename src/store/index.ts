@@ -29,6 +29,7 @@ import type {
   FileEntry, GitStatus, GitLogEntry, GitBranchInfo, ChatMessage, ChatSession, TerminalEntry, TerminalTab,
   Settings, ProviderConfig, Panel, AgentTask, CheckpointSummary, ToolExecutionSummary, VerificationSummary, RepoIndexStatus,
 } from '../types'
+import { compactConversation, summarizeMessages } from '../lib/chatControl'
 
 export const AUTOSAVE_DELAY_MS = 800
 export const MAX_SESSIONS_IN_MEMORY = 100
@@ -62,6 +63,10 @@ function isPersistable(messages: ChatMessage[]) {
 
 function toStoredMessages(messages: ChatMessage[]) {
   return messages.map(({ id, role, content, timestamp }) => ({ id, role, content, timestamp }))
+}
+
+function summaryMessage(summary: string): ChatMessage {
+  return { id: `summary-${Date.now()}`, role: 'system', content: summary, timestamp: Date.now() }
 }
 
 export function buildConversationSummary(messages: ChatMessage[], keepRecent = 20): string {
@@ -158,6 +163,15 @@ interface AppState {
   setLastVerification: (verification: VerificationSummary | undefined) => void
   projectMemory: string
   setProjectMemory: (memory: string) => void
+  projectNotes: string
+  setProjectNotes: (notes: string) => void
+  earlierMessages: ChatMessage[]
+  pinnedSummary: string
+  parentSessionId?: string
+  forkedFromMessageId?: string
+  summarizeAndContinue: () => Promise<void>
+  forkChat: () => Promise<void>
+  forkFromMessage: (messageId: string) => Promise<void>
 
   // Tasks
   tasks: AgentTask[]
@@ -218,7 +232,7 @@ interface AppState {
 export const useStore = create<AppState>((set, get) => ({
   // Workspace
   workspacePath: '',
-  setWorkspacePath: (path) => set({ workspacePath: path, currentDirectory: path, projectMemory: '' }),
+  setWorkspacePath: (path) => set({ workspacePath: path, currentDirectory: path, projectMemory: '', projectNotes: '' }),
 
   // Navigation
   activePanel: 'chat',
@@ -332,6 +346,42 @@ export const useStore = create<AppState>((set, get) => ({
   setLastVerification: (verification) => { set({ lastVerification: verification }); get().scheduleSessionSave() },
   projectMemory: '',
   setProjectMemory: (memory) => { set({ projectMemory: memory }); get().scheduleSessionSave() },
+  projectNotes: '',
+  setProjectNotes: (notes) => set({ projectNotes: notes.slice(0, 12_000) }),
+  earlierMessages: [],
+  pinnedSummary: '',
+  parentSessionId: undefined,
+  forkedFromMessageId: undefined,
+  summarizeAndContinue: async () => {
+    const state = get()
+    if (state.messages.length <= 6) return
+    const compacted = compactConversation(state.messages, state.settings.goal, state.projectNotes, 6)
+    set({ messages: [summaryMessage(compacted.summary), ...compacted.recent], earlierMessages: compacted.earlier, pinnedSummary: compacted.summary })
+    await get().saveSession()
+  },
+  forkChat: async () => {
+    const state = get()
+    await state.flushSessionSave()
+    const source = get()
+    const summary = source.pinnedSummary || summarizeMessages(source.messages, source.settings.goal, source.projectNotes)
+    const recent = source.messages.slice(-6)
+    const parent = source.currentSessionId || undefined
+    const id = newSessionId()
+    set({ currentSessionId: id, messages: [summaryMessage(summary), ...recent], earlierMessages: source.messages.slice(0, -6), pinnedSummary: summary, parentSessionId: parent, forkedFromMessageId: undefined, tasks: [], toolExecutions: [], latestCheckpoint: undefined, lastVerification: undefined })
+    await get().saveSession()
+  },
+  forkFromMessage: async (messageId) => {
+    const state = get()
+    const index = state.messages.findIndex((message) => message.id === messageId)
+    if (index < 0) return
+    await state.flushSessionSave()
+    const source = get()
+    const selected = source.messages.slice(0, index + 1)
+    const summary = summarizeMessages(selected, source.settings.goal, source.projectNotes)
+    const recent = selected.slice(-6)
+    set({ currentSessionId: newSessionId(), messages: [summaryMessage(summary), ...recent], earlierMessages: selected.slice(0, -6), pinnedSummary: summary, parentSessionId: source.currentSessionId || undefined, forkedFromMessageId: messageId, tasks: [], toolExecutions: [], latestCheckpoint: undefined, lastVerification: undefined })
+    await get().saveSession()
+  },
 
   // Tasks
   tasks: [],
@@ -410,6 +460,10 @@ export const useStore = create<AppState>((set, get) => ({
       createdAt: existing?.createdAt ?? messages[0]?.timestamp ?? now,
       updatedAt: now,
       messages,
+      earlierMessages: state.earlierMessages,
+      pinnedSummary: state.pinnedSummary || undefined,
+      parentSessionId: state.parentSessionId,
+      forkedFromMessageId: state.forkedFromMessageId,
       pinned: existing?.pinned,
       summary,
       resume: {
@@ -425,6 +479,9 @@ export const useStore = create<AppState>((set, get) => ({
         checklistState: { setupChecklistDismissed: state.settings.setupChecklistDismissed },
         projectMemory: state.projectMemory.slice(0, 12_000),
         conversationSummary: summary,
+        pinnedSummary: state.pinnedSummary || undefined,
+        parentSessionId: state.parentSessionId,
+        forkedFromMessageId: state.forkedFromMessageId,
         checkpoint: state.latestCheckpoint,
         lastVerification: state.lastVerification,
         git: state.gitStatus ? {
@@ -445,6 +502,10 @@ export const useStore = create<AppState>((set, get) => ({
         title: session.title,
         createdAt: session.createdAt,
         messages: toStoredMessages(messages),
+        earlierMessages: toStoredMessages(state.earlierMessages),
+        pinnedSummary: session.pinnedSummary,
+        parentSessionId: session.parentSessionId,
+        forkedFromMessageId: session.forkedFromMessageId,
         pinned: session.pinned,
         summary: session.summary,
         resume: session.resume as unknown as Record<string, unknown>,
@@ -477,6 +538,10 @@ export const useStore = create<AppState>((set, get) => ({
       const resume = session.resume
       set({
         messages: session.messages,
+        earlierMessages: session.earlierMessages || [],
+        pinnedSummary: session.pinnedSummary || resume?.pinnedSummary || '',
+        parentSessionId: session.parentSessionId || resume?.parentSessionId,
+        forkedFromMessageId: session.forkedFromMessageId || resume?.forkedFromMessageId,
         currentSessionId: id,
         streamingContent: '',
         ...(resume?.workspacePath ? { workspacePath: resume.workspacePath, currentDirectory: resume.workspacePath } : {}),
@@ -538,6 +603,7 @@ export const useStore = create<AppState>((set, get) => ({
     set({
       messages: [], currentSessionId: null, streamingContent: '', tasks: [], toolExecutions: [],
       latestCheckpoint: undefined, lastVerification: undefined,
+      earlierMessages: [], pinnedSummary: '', parentSessionId: undefined, forkedFromMessageId: undefined,
     })
   },
   hydrateSessions: (records, options) => {
@@ -552,6 +618,10 @@ export const useStore = create<AppState>((set, get) => ({
         createdAt: typeof rec.createdAt === 'number' ? rec.createdAt : updatedAt,
         updatedAt,
         messages: rec.messages,
+        earlierMessages: Array.isArray(rec.earlierMessages) ? rec.earlierMessages : [],
+        pinnedSummary: typeof rec.pinnedSummary === 'string' ? rec.pinnedSummary : '',
+        parentSessionId: typeof rec.parentSessionId === 'string' ? rec.parentSessionId : undefined,
+        forkedFromMessageId: typeof rec.forkedFromMessageId === 'string' ? rec.forkedFromMessageId : undefined,
         pinned: rec.pinned === true,
         recovered: false,
         summary: typeof rec.summary === 'string' ? rec.summary : undefined,
@@ -588,6 +658,10 @@ export const useStore = create<AppState>((set, get) => ({
         selectedFile: resume?.selectedFile ?? null,
         openFiles: resume?.openFiles || [],
         projectMemory: resume?.projectMemory || '',
+        earlierMessages: restore.earlierMessages || [],
+        pinnedSummary: restore.pinnedSummary || resume?.pinnedSummary || '',
+        parentSessionId: restore.parentSessionId || resume?.parentSessionId,
+        forkedFromMessageId: restore.forkedFromMessageId || resume?.forkedFromMessageId,
         latestCheckpoint: resume?.checkpoint,
         lastVerification: resume?.lastVerification,
        settings: restoredSettings,
@@ -639,6 +713,8 @@ export const useStore = create<AppState>((set, get) => ({
     setupChecklistDismissed: false,
     autocompleteEnabled: false,
     indexingEnabled: false,
+    responseEffort: 'medium',
+    strictGrounding: false,
     telemetryEnabled: false,
     updateChannel: 'stable',
   },

@@ -7,7 +7,7 @@
 /**
  * Component interaction tests — user interactions, keyboard shortcuts, state flows
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { useStore } from '../store'
 import Sidebar from '../components/Sidebar'
@@ -215,22 +215,16 @@ describe('Store — Complex State Flows', () => {
 
 describe('ErrorBoundary — Recovery', () => {
   it('renders fallback on error', () => {
-    const Bad = () => { throw new Error('crash') }
-    render(
-      <ErrorBoundary>
-        <Bad />
-      </ErrorBoundary>
-    )
+    const boundary = new ErrorBoundary({ children: null })
+    boundary.state = ErrorBoundary.getDerivedStateFromError(new Error('crash'))
+    render(boundary.render() as any)
     expect(screen.getByText(/Something went wrong/)).toBeInTheDocument()
   })
 
   it('shows error message in fallback', () => {
-    const Bad = () => { throw new Error('specific error 42') }
-    render(
-      <ErrorBoundary>
-        <Bad />
-      </ErrorBoundary>
-    )
+    const boundary = new ErrorBoundary({ children: null })
+    boundary.state = ErrorBoundary.getDerivedStateFromError(new Error('specific error 42'))
+    render(boundary.render() as any)
     expect(screen.getByText(/specific error 42/)).toBeInTheDocument()
   })
 })

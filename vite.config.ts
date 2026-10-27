@@ -9,8 +9,20 @@ import react from '@vitejs/plugin-react'
 import electron from 'vite-plugin-electron'
 import renderer from 'vite-plugin-electron-renderer'
 import path from 'path'
+import { execFileSync } from 'node:child_process'
+
+function buildCommitHash(): string {
+  try {
+    return execFileSync('git', ['rev-parse', '--short', 'HEAD'], { encoding: 'utf8' }).trim() || 'local'
+  } catch {
+    return 'local'
+  }
+}
 
 export default defineConfig({
+  define: {
+    __VD_COMMIT_HASH__: JSON.stringify(buildCommitHash()),
+  },
   build: {
     // Monaco is lazy-loaded behind CodeEditor. Keep warning if any lazy chunk grows
     // materially beyond the current editor budget, but do not fail every build on

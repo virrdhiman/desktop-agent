@@ -27,14 +27,10 @@ import {
   type WorkspaceReference,
 } from '../lib/editorIntelligence'
 import { buildInlineEditHunks, rejectInlineEditHunk, summarizeInlineEdit, type InlineEditHunk } from '../lib/inlineEdits'
+import { completionWords, filterCompletionWords } from '../lib/editorCompletions'
 
 const loadMonacoEditor = () => import('../lib/monacoEditor')
 const Editor = lazy(loadMonacoEditor)
-
-const COMMON_SYMBOLS = [
-  'async', 'await', 'const', 'let', 'function', 'return', 'import', 'export', 'type', 'interface',
-  'class', 'extends', 'implements', 'try', 'catch', 'finally', 'Promise', 'Array', 'Record',
-]
 
 function getLanguage(filePath: string): string {
   const ext = filePath.split('.').pop()?.toLowerCase() || ''
@@ -63,20 +59,6 @@ function getIcon(filePath: string): string {
     go: '🔵', yaml: '⚙️', yml: '⚙️', sh: '⬛',
   }
   return map[ext] || '📄'
-}
-
-function completionWords(text: string, filePaths: string[], openFiles: string[]): string[] {
-  const words = new Set<string>(COMMON_SYMBOLS)
-  const wordMatches = text.match(/\b[A-Za-z_$][\w$]{2,}\b/g) || []
-  for (const word of wordMatches) words.add(word)
-  for (const file of [...filePaths, ...openFiles]) {
-    const normalized = file.replace(/\\/g, '/')
-    const base = normalized.split('/').pop() || ''
-    const stem = base.replace(/\.[^.]+$/, '')
-    for (const part of normalized.split(/[/.\\_-]+/)) if (/^[A-Za-z_$][\w$]{2,}$/.test(part)) words.add(part)
-    if (/^[A-Za-z_$][\w$]{2,}$/.test(stem)) words.add(stem)
-  }
-  return [...words].slice(0, 500)
 }
 
 export default function CodeEditor() {
@@ -321,6 +303,20 @@ export default function CodeEditor() {
     })
   }, [addTerminalEntry, allFiles, collectReferences, currentIdentifier, currentPosition, hasLanguageService, selectedFile, setFileContent, workspacePath])
 
+  useEffect(() => {
+    const onCommand = (event: Event) => {
+      const command = event.type
+      if (command === 'vd:code-save') void handleSave()
+      if (command === 'vd:code-find') void editorRef.current?.getAction('actions.find')?.run()
+      if (command === 'vd:code-replace') void editorRef.current?.getAction('editor.action.startFindReplaceAction')?.run()
+      if (command === 'vd:code-select-all') void editorRef.current?.getAction('editor.action.selectAll')?.run()
+      if (command === 'vd:code-definition') void handleGoToDefinition()
+    }
+    const commands = ['vd:code-save', 'vd:code-find', 'vd:code-replace', 'vd:code-select-all', 'vd:code-definition']
+    commands.forEach((command) => window.addEventListener(command, onCommand))
+    return () => commands.forEach((command) => window.removeEventListener(command, onCommand))
+  }, [handleGoToDefinition, handleSave])
+
   const acceptInlineEdit = useCallback(async () => {
     if (!latestInlineEdit || !selectedFile) return
     setFileContent(latestInlineEdit.after)
@@ -395,6 +391,11 @@ export default function CodeEditor() {
 
   const handleEditorMount = useCallback((editor: Monaco.editor.IStandaloneCodeEditor, monaco: typeof Monaco) => {
     editorRef.current = editor
+    editor.onDidChangeCursorPosition((event) => {
+      window.dispatchEvent(new CustomEvent('vd:cursor-position', {
+        detail: { line: event.position.lineNumber, column: event.position.column },
+      }))
+    })
     completionProviderRef.current?.dispose()
     completionProviderRef.current = monaco.languages.registerCompletionItemProvider(language, {
       triggerCharacters: ['.', '/', '-', '_'],
@@ -408,9 +409,7 @@ export default function CodeEditor() {
           endColumn: word.endColumn,
         }
         const prefix = word.word.toLowerCase()
-        const suggestions = completionWordsRef.current
-          .filter((item) => !prefix || item.toLowerCase().includes(prefix))
-          .slice(0, 80)
+        const suggestions = filterCompletionWords(completionWordsRef.current, prefix)
           .map((item) => ({
             label: item,
             kind: monaco.languages.CompletionItemKind.Text,

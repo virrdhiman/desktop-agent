@@ -24,6 +24,7 @@ interface TermInstance {
   terminal: Terminal
   fitAddon: FitAddon
   termId: string
+  disposed: boolean
   cleanup: () => void
 }
 
@@ -39,7 +40,16 @@ export default function MultiTerminal() {
 
   const fitTerminal = useCallback((instance: TermInstance, container?: HTMLElement | null) => {
     const target = container || instance.terminal.element?.parentElement
-    if (!target || target.clientWidth <= 0 || target.clientHeight <= 0) return false
+    const element = instance.terminal.element
+    if (instance.disposed || !element || !element.isConnected || !target || !target.isConnected || target.clientWidth <= 0 || target.clientHeight <= 0) return false
+    const style = window.getComputedStyle(target)
+    if (style.display === 'none' || style.visibility === 'hidden') return false
+    if (instance.terminal.cols <= 0 || instance.terminal.rows <= 0) return false
+    const core = (instance.terminal as Terminal & {
+      _core?: { _renderService?: { dimensions?: { css?: { cell?: { width?: number; height?: number } } } } }
+    })._core
+    const cell = core?._renderService?.dimensions?.css?.cell
+    if (!cell?.width || !cell.height) return false
     try {
       instance.fitAddon.fit()
       return true
@@ -79,7 +89,9 @@ export default function MultiTerminal() {
     term.open(container)
 
     const termId = `term-${tabId}`
-    const cwd = workspacePath || process.env.HOME || '.'
+    // Renderer code cannot rely on Node globals. The main process resolves the
+    // relative fallback using its own platform-specific working directory.
+    const cwd = workspacePath || '.'
 
     window.api.terminalCreate(termId, cwd)
 
@@ -98,23 +110,54 @@ export default function MultiTerminal() {
     window.api.onTerminalExit(exitHandler)
     term.onData((data) => window.api.terminalWrite(termId, data))
 
-    term.writeln('\x1b[36m╔═══════════════════════════════════════╗\x1b[0m')
-    term.writeln('\x1b[36m║         VD Terminal                   ║\x1b[0m')
-    term.writeln('\x1b[36m╚═══════════════════════════════════════╝\x1b[0m')
-    term.writeln('')
-
+    const instance: TermInstance = { terminal: term, fitAddon, termId, disposed: false, cleanup: () => {} }
+    let bannerFrame = 0
     const cleanup = () => {
+      instance.disposed = true
       disposed = true
+      if (bannerFrame) cancelAnimationFrame(bannerFrame)
       window.api.terminalKill(termId)
-      term.dispose()
+      // xterm can have a viewport refresh queued when a right-panel tab is
+      // switched. Let that frame drain before disposing its render service;
+      // disposing synchronously can make Viewport._innerRefresh read missing
+      // render dimensions in the renderer.
+      let frames = 0
+      const disposeAfterRefresh = () => {
+        if (++frames < 2) requestAnimationFrame(disposeAfterRefresh)
+        else term.dispose()
+      }
+      requestAnimationFrame(disposeAfterRefresh)
     }
 
-    const instance: TermInstance = { terminal: term, fitAddon, termId, cleanup }
+    instance.cleanup = cleanup
     instancesRef.current.set(tabId, instance)
-    requestAnimationFrame(() => {
-      fitTerminal(instance, container)
+    const writeBanner = () => {
+      bannerFrame = 0
+      if (instance.disposed || !term.element?.isConnected) return
+      if (!fitTerminal(instance, container)) {
+        bannerFrame = requestAnimationFrame(writeBanner)
+        return
+      }
+      term.writeln('\x1b[36m╔═══════════════════════════════════════╗\x1b[0m')
+      term.writeln('\x1b[36m║         VD Terminal                   ║\x1b[0m')
+      term.writeln('\x1b[36m╚═══════════════════════════════════════╝\x1b[0m')
+      term.writeln('')
       window.api.terminalResize(instance.termId, instance.terminal.cols, instance.terminal.rows)
-    })
+    }
+    const fitWhenVisible = () => {
+      let attempts = 0
+      const attempt = () => {
+        attempts += 1
+        if (fitTerminal(instance, container)) {
+          window.api.terminalResize(instance.termId, instance.terminal.cols, instance.terminal.rows)
+        } else if (attempts < 12 && instance.terminal.element?.isConnected) {
+          requestAnimationFrame(attempt)
+        }
+      }
+      requestAnimationFrame(attempt)
+    }
+    fitWhenVisible()
+    bannerFrame = requestAnimationFrame(writeBanner)
     return instance
   }, [workspacePath, fitTerminal])
 
@@ -123,35 +166,46 @@ export default function MultiTerminal() {
     if (!activeTerminalTab || !containerRef.current) return
     const container = containerRef.current
 
-    // Clear container
-    container.innerHTML = ''
-
-    // Check if instance already exists
+    const visible = () => {
+      if (!container.isConnected || container.clientWidth <= 0 || container.clientHeight <= 0) return false
+      const style = window.getComputedStyle(container)
+      return style.display !== 'none' && style.visibility !== 'hidden'
+    }
     let instance = instancesRef.current.get(activeTerminalTab)
-    if (instance) {
-      container.appendChild(instance.terminal.element!)
-      requestAnimationFrame(() => {
-        if (instance) {
-          fitTerminal(instance, container)
-          window.api.terminalResize(instance.termId, instance.terminal.cols, instance.terminal.rows)
-        }
+    const mount = () => {
+      if (!visible()) return
+      if (!instance) instance = createTerm(activeTerminalTab, container)
+      instancesRef.current.forEach((candidate) => {
+        const element = candidate.terminal.element
+        if (!element) return
+        if (element.parentElement !== container) container.appendChild(element)
+        element.style.display = candidate === instance ? 'block' : 'none'
       })
-      return
+      scheduleFit()
     }
 
-    // Create new
-    instance = createTerm(activeTerminalTab, container)
+    const scheduleFit = () => {
+      requestAnimationFrame(() => {
+        if (instance && fitTerminal(instance, container)) window.api.terminalResize(instance.termId, instance.terminal.cols, instance.terminal.rows)
+      })
+    }
+    mount()
 
     // Resize observer
     const ro = new ResizeObserver(() => {
-      if (instance && fitTerminal(instance, container)) {
-        window.api.terminalResize(instance.termId, instance.terminal.cols, instance.terminal.rows)
-      }
+      mount()
     })
     ro.observe(container)
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== 'hidden' && instance) {
+        scheduleFit()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
 
     return () => {
       ro.disconnect()
+      document.removeEventListener('visibilitychange', onVisibilityChange)
     }
   }, [activeTerminalTab, createTerm, fitTerminal])
 

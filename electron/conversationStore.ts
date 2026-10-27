@@ -34,6 +34,10 @@ export interface StoredConversation {
   createdAt: number
   updatedAt: number
   messages: StoredMessage[]
+  earlierMessages?: StoredMessage[]
+  pinnedSummary?: string
+  parentSessionId?: string
+  forkedFromMessageId?: string
   pinned?: boolean
   summary?: string
   resume?: Record<string, unknown>
@@ -88,6 +92,14 @@ function deriveTitle(messages: StoredMessage[]): string {
   return line ? line.slice(0, 80) : 'Untitled chat'
 }
 
+function normalizeMessages(value: unknown, id: string, fallbackTime: number): StoredMessage[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((m: any, i) => {
+    if (!m || typeof m !== 'object' || typeof m.content !== 'string' || !ROLES.has(m.role)) return []
+    return [{ id: typeof m.id === 'string' && m.id ? m.id : `${id}-${i}`, role: m.role, content: m.content.slice(0, MAX_STORED_MESSAGE_CHARS), timestamp: toTimestamp(m.timestamp, fallbackTime) }]
+  }).slice(-MAX_STORED_MESSAGES)
+}
+
 /**
  * Accepts the current format and the legacy `{ messages, taskId }` files.
  * Returns null when there is nothing usable to show.
@@ -97,16 +109,7 @@ export function normalizeConversation(raw: unknown, id: string, fallbackTime: nu
   const data = raw as Record<string, unknown>
   if (!Array.isArray(data.messages)) return null
 
-  const messages: StoredMessage[] = []
-  data.messages.forEach((m: any, i: number) => {
-    if (!m || typeof m !== 'object' || typeof m.content !== 'string' || !ROLES.has(m.role)) return
-    messages.push({
-      id: typeof m.id === 'string' && m.id ? m.id : `${id}-${i}`,
-      role: m.role,
-      content: m.content.slice(0, MAX_STORED_MESSAGE_CHARS),
-      timestamp: toTimestamp(m.timestamp, fallbackTime),
-    })
-  })
+  const messages = normalizeMessages(data.messages, id, fallbackTime)
   if (messages.length === 0) return null
 
   const firstTs = messages[0].timestamp
@@ -122,6 +125,10 @@ export function normalizeConversation(raw: unknown, id: string, fallbackTime: nu
     createdAt,
     updatedAt,
     messages: messages.slice(-MAX_STORED_MESSAGES),
+    earlierMessages: normalizeMessages(data.earlierMessages, `${id}-earlier`, fallbackTime),
+    pinnedSummary: typeof data.pinnedSummary === 'string' ? data.pinnedSummary.slice(0, 12_000) : undefined,
+    parentSessionId: isValidSessionId(data.parentSessionId) ? data.parentSessionId : undefined,
+    forkedFromMessageId: typeof data.forkedFromMessageId === 'string' ? data.forkedFromMessageId.slice(0, 120) : undefined,
     pinned: data.pinned === true,
     summary: typeof data.summary === 'string' ? data.summary.slice(0, 12_000) : undefined,
     resume: data.resume && typeof data.resume === 'object' && !Array.isArray(data.resume)
@@ -141,6 +148,10 @@ export async function saveConversation(
     title?: string
     createdAt?: number
     messages: unknown[]
+    earlierMessages?: unknown[]
+    pinnedSummary?: string
+    parentSessionId?: string
+    forkedFromMessageId?: string
     pinned?: boolean
     summary?: string
     resume?: Record<string, unknown>
@@ -160,6 +171,10 @@ export async function saveConversation(
     ...normalized,
     title: redactSecrets(normalized.title, secrets),
     messages: normalized.messages.map((m) => ({ ...m, content: redactSecrets(m.content, secrets) })),
+    earlierMessages: normalized.earlierMessages?.map((m) => ({ ...m, content: redactSecrets(m.content, secrets) })),
+    pinnedSummary: input.pinnedSummary ? redactSecrets(input.pinnedSummary.slice(0, 12_000), secrets) : undefined,
+    parentSessionId: input.parentSessionId,
+    forkedFromMessageId: input.forkedFromMessageId,
     pinned: input.pinned === true,
     summary: input.summary ? redactSecrets(input.summary.slice(0, 12_000), secrets) : undefined,
     resume: sanitizeResume(input.resume, secrets),
@@ -201,6 +216,7 @@ function sanitizeResume(value: unknown, secrets: string[]): Record<string, unkno
       'workspacePath', 'selectedFile', 'openFiles', 'tasks', 'terminalTabs', 'terminalEntries',
       'toolExecutions', 'providerId', 'model', 'projectMemory', 'conversationSummary',
       'checkpoint', 'lastVerification', 'git', 'checklistState',
+      'pinnedSummary', 'parentSessionId', 'forkedFromMessageId',
     ]
     const safe = Object.fromEntries(allowed.filter((key) => key in input).map((key) => [key, stripSensitiveResumeFields(input[key])]))
     const json = JSON.stringify(safe)

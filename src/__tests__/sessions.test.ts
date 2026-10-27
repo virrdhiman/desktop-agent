@@ -22,6 +22,7 @@ beforeEach(() => {
     messages: [], sessions: [], currentSessionId: null, chatLoading: false,
     workspacePath: '', selectedFile: null, openFiles: [], tasks: [], toolExecutions: [],
     projectMemory: '', latestCheckpoint: undefined, lastVerification: undefined,
+    projectNotes: '', earlierMessages: [], pinnedSummary: '', parentSessionId: undefined, forkedFromMessageId: undefined,
   })
   api.saveConversation.mockClear()
   api.deleteConversation.mockClear()
@@ -246,5 +247,39 @@ describe('hydrateSessions (startup)', () => {
     expect(state.settings.activeProvider).toBe('groq')
     expect(api.aiChat).not.toHaveBeenCalled()
     expect(api.terminalCreate).not.toHaveBeenCalled()
+  })
+
+  it('loads legacy chats without long-chat fields unchanged', () => {
+    const legacy = user('legacy-1', 'continue the old task')
+    useStore.getState().hydrateSessions([{ id: 'legacy', title: 'Legacy', createdAt: 1, updatedAt: 2, messages: [legacy] }], { restoreLatest: true })
+    const state = useStore.getState()
+    expect(state.messages).toEqual([legacy])
+    expect(state.earlierMessages).toEqual([])
+    expect(state.pinnedSummary).toBe('')
+    expect(state.parentSessionId).toBeUndefined()
+  })
+
+  it('summarizes while keeping six recent messages and a recoverable transcript', async () => {
+    const history = [user('u-0', 'start'), ...Array.from({ length: 9 }, (_, index) => assistant(`a-${index}`, `answer ${index}`))]
+    useStore.setState({ messages: history, currentSessionId: 'long', projectNotes: 'Keep the API stable' })
+    await useStore.getState().summarizeAndContinue()
+    const state = useStore.getState()
+    expect(state.messages).toHaveLength(7)
+    expect(state.messages[0].role).toBe('system')
+    expect(state.messages.slice(1).map((message) => message.id)).toEqual(['a-3', 'a-4', 'a-5', 'a-6', 'a-7', 'a-8'])
+    expect(state.earlierMessages).toHaveLength(4)
+    expect(state.pinnedSummary).toContain('Keep the API stable')
+    expect(state.earlierMessages.concat(state.messages.slice(1)).map((message) => message.id)).toEqual(['u-0', 'a-0', 'a-1', 'a-2', 'a-3', 'a-4', 'a-5', 'a-6', 'a-7', 'a-8'])
+  })
+
+  it('forks from the current chat without changing the parent record', async () => {
+    const history = [user('u-0', 'parent request'), ...Array.from({ length: 7 }, (_, index) => assistant(`a-${index}`, `answer ${index}`))]
+    useStore.setState({ messages: history, currentSessionId: 'parent', sessions: [{ id: 'parent', title: 'Parent', createdAt: 1, updatedAt: 1, messages: history }] })
+    await useStore.getState().forkChat()
+    const state = useStore.getState()
+    expect(state.currentSessionId).not.toBe('parent')
+    expect(state.parentSessionId).toBe('parent')
+    expect(state.sessions.find((session) => session.id === 'parent')?.messages).toEqual(history)
+    expect(state.messages.slice(1)).toEqual(history.slice(-6))
   })
 })

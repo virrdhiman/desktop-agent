@@ -16,7 +16,10 @@ interface IPtyInstance {
   buffer: string
 }
 
-export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | null) {
+export function registerTerminalHandlers(getWindows: () => BrowserWindow[]) {
+  const send = (channel: string, ...args: unknown[]) => {
+    for (const window of getWindows()) if (!window.isDestroyed()) window.webContents.send(channel, ...args)
+  }
   const terminals: Map<string, IPtyInstance> = new Map()
 
   ipcMain.handle('terminal:create', async (_event, termId: string, cwd: string) => {
@@ -35,11 +38,11 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
 
       pty.onData((data: string) => {
         termInstance.buffer += data
-        getMainWindow()?.webContents.send('terminal:data', termId, data)
+        send('terminal:data', termId, data)
       })
 
       pty.onExit(({ exitCode }: { exitCode: number }) => {
-        getMainWindow()?.webContents.send('terminal:exit', termId, exitCode)
+        send('terminal:exit', termId, exitCode)
         terminals.delete(termId)
       })
 

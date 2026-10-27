@@ -143,12 +143,12 @@ export function registerToolHandlers() {
 
   ipcMain.handle(
     'tool:execute',
-    async (event, tool: { name: string; args: Record<string, any>; workspace?: string; sessionId?: string; taskId?: string }) => {
+    async (event, tool: { name: string; args: Record<string, any>; workspace?: string; sessionId?: string; taskId?: string; workingMode?: 'plan' | 'build' | 'multitask' | 'ask' | 'review' | 'debug' }) => {
       try {
         tool.args = resolveToolArgs(tool.name, tool.args, tool.workspace)
         const policySettings = await loadToolSettings()
         const permissionMode = (policySettings.permissionMode || 'ask-risky') as PermissionMode
-        const decision = assessToolPolicy(tool.name, tool.args, tool.workspace, permissionMode, policySettings.restrictedCommandMode === true, policySettings.browserToolEnabled)
+        const decision = assessToolPolicy(tool.name, tool.args, tool.workspace, permissionMode, policySettings.restrictedCommandMode === true, policySettings.browserToolEnabled, tool.workingMode)
 
         // Capability flags are checked before an approval prompt so an opt-out
         // cannot accidentally turn into a confusing approval request.
@@ -168,6 +168,8 @@ export function registerToolHandlers() {
         if (decision.restrictedCommandBlocked) {
           return { error: `Restricted command mode blocked this command: ${decision.restrictedCommandReason}. This is a command policy, not an OS sandbox.` }
         }
+
+        if (decision.workingModeBlocked) return { error: decision.reason }
 
         if (decision.risk !== 'read' && tool.name !== 'run_command' && !tool.workspace) {
           return { error: `Blocked ${tool.name}: open a workspace before allowing agent mutations.` }

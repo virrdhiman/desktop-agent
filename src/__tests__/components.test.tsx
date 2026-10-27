@@ -15,6 +15,7 @@ import { useStore } from '../store'
 import ErrorBoundary from '../components/ErrorBoundary'
 import SearchResults from '../components/SearchResults'
 import SettingsPanel from '../components/SettingsPanel'
+import AgentChat from '../components/AgentChat'
 import { buildTaskReviewSummary } from '../components/TaskPanel'
 import TaskPanel from '../components/TaskPanel'
 import PrerequisiteSetup from '../components/PrerequisiteSetup'
@@ -40,32 +41,23 @@ describe('ErrorBoundary', () => {
   })
 
   it('renders error UI when child throws', () => {
-    const ThrowingChild = () => { throw new Error('Test error') }
-    render(
-      <ErrorBoundary>
-        <ThrowingChild />
-      </ErrorBoundary>
-    )
+    const boundary = new ErrorBoundary({ children: null })
+    boundary.state = ErrorBoundary.getDerivedStateFromError(new Error('Test error'))
+    render(boundary.render() as any)
     expect(screen.getByText(/Something went wrong/)).toBeInTheDocument()
   })
 
   it('shows error details in development', () => {
-    const ThrowingChild = () => { throw new Error('Specific error message') }
-    render(
-      <ErrorBoundary>
-        <ThrowingChild />
-      </ErrorBoundary>
-    )
+    const boundary = new ErrorBoundary({ children: null })
+    boundary.state = ErrorBoundary.getDerivedStateFromError(new Error('Specific error message'))
+    render(boundary.render() as any)
     expect(screen.getByText(/Specific error message/)).toBeInTheDocument()
   })
 
   it('has a reload button', () => {
-    const ThrowingChild = () => { throw new Error('Test') }
-    render(
-      <ErrorBoundary>
-        <ThrowingChild />
-      </ErrorBoundary>
-    )
+    const boundary = new ErrorBoundary({ children: null })
+    boundary.state = ErrorBoundary.getDerivedStateFromError(new Error('Test'))
+    render(boundary.render() as any)
     expect(screen.getByText(/Reload/)).toBeInTheDocument()
   })
 })
@@ -114,6 +106,19 @@ describe('Store — Setters work correctly', () => {
 })
 
 describe('SettingsPanel — provider onboarding', () => {
+  it('shows the build commit in the About card', () => {
+    render(<SettingsPanel />)
+    expect(screen.getByText(/Build commit:/)).toBeInTheDocument()
+  })
+
+  it('shows first-run key guidance when only local providers are configured', () => {
+    useStore.getState().setSettings({ ...useStore.getState().settings, providers: [
+      { id: 'ollama', name: 'Ollama', apiKey: '', baseUrl: 'http://127.0.0.1:11434/v1', model: 'qwen2.5-coder:7b' },
+    ], activeProvider: 'ollama' })
+    render(<AgentChat />)
+    expect(screen.getByText(/Add an API key in Settings/)).toBeInTheDocument()
+  })
+
   it('shows a secure-storage error instead of claiming an unsaved provider key', async () => {
     useStore.getState().setSettings({ ...useStore.getState().settings, providers: [
       { id: 'groq', name: 'Groq', apiKey: '', baseUrl: 'https://api.groq.com/openai/v1', model: 'llama' },

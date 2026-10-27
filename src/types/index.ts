@@ -17,6 +17,7 @@
  * - AGENT_TOOLS constant — the tool definitions sent to the AI model
  */
 import type { DataToolSettings } from '../lib/dataToolSettings'
+import type { LayoutPreferences } from '../lib/layoutPersistence'
 
 export interface FileEntry {
   name: string
@@ -121,8 +122,15 @@ export interface Settings extends DataToolSettings {
   autoUpdate?: boolean
   autocompleteEnabled?: boolean
   indexingEnabled?: boolean
+  responseEffort?: 'low' | 'medium' | 'high'
+  goal?: string
+  layout?: LayoutPreferences
   telemetryEnabled?: boolean
   updateChannel?: 'stable' | 'beta'
+  /** Opt-in evidence-only response rules. */
+  strictGrounding?: boolean
+  /** Versioned, per-workspace user-maintained notes. */
+  pinnedNotes?: { version: 1; projects: Record<string, string> }
 }
 
 export interface ChatMessage {
@@ -144,7 +152,32 @@ export interface ChatSession {
   pinned?: boolean
   recovered?: boolean
   summary?: string
+  earlierMessages?: ChatMessage[]
+  pinnedSummary?: string
+  parentSessionId?: string
+  forkedFromMessageId?: string
   resume?: SessionResumeState
+}
+
+/** State shared between the primary Agent window and the optional IDE window. */
+export interface SharedAppState {
+  version: 1
+  workspacePath: string
+  files: FileEntry[]
+  selectedFile: string | null
+  openFiles: string[]
+  fileContent: string
+  fileDirty: boolean
+  gitStatus: GitStatus | null
+  gitLog: GitLogEntry[]
+  settings: Settings
+  messages: ChatMessage[]
+  projectNotes?: string
+  currentSessionId: string | null
+  planMode: boolean
+  terminalTabs: TerminalTab[]
+  activeTerminalTab: string | null
+  terminalEntries: TerminalEntry[]
 }
 
 export interface CheckpointSummary {
@@ -185,6 +218,9 @@ export interface SessionResumeState {
   conversationSummary?: string
   checkpoint?: CheckpointSummary
   lastVerification?: VerificationSummary
+  pinnedSummary?: string
+  parentSessionId?: string
+  forkedFromMessageId?: string
   git?: { branch?: string; head?: string; dirty?: boolean }
 }
 

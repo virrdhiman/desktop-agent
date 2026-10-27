@@ -27,6 +27,17 @@ describe('tool policy', () => {
     expect(assessToolPolicy('run_command', { command: 'npm test', cwd: workspace }, workspace, 'auto').needsApproval).toBe(true)
   })
 
+  it.each(['plan', 'ask', 'review'] as const)('marks %s mode as write-blocked', (workingMode) => {
+    expect(assessToolPolicy('write_file', { path: path.join(workspace, 'a.ts') }, workspace, 'auto', false, false, workingMode))
+      .toMatchObject({ workingModeBlocked: true, needsApproval: false, risk: 'write' })
+  })
+
+  it.each(['build', 'debug', 'multitask'] as const)('allows %s mode to reach write execution', (workingMode) => {
+    const decision = assessToolPolicy('write_file', { path: path.join(workspace, 'a.ts') }, workspace, 'auto', false, false, workingMode)
+    expect(decision).toMatchObject({ needsApproval: false, risk: 'write' })
+    expect(decision.workingModeBlocked).not.toBe(true)
+  })
+
   it('keeps browser classified as dangerous while trusted mode only affects approval', () => {
     const trusted = assessToolPolicy('browser', { operation: 'read_page_text' }, workspace, 'trusted', false, true)
     expect(trusted.risk).toBe('dangerous')
@@ -64,6 +75,19 @@ describe('tool policy', () => {
     expect(isPathInsideWorkspace(workspace, outside)).toBe(false)
     expect(assessToolPolicy('write_file', { path: outside }, workspace).outsideWorkspace).toEqual([outside])
     expect(checkpointTargets('multi_file_edit', { edits: [{ path: 'a' }, { path: 'b' }] })).toEqual(['a', 'b'])
+  })
+
+  it('blocks traversal for every file-facing tool family', () => {
+    const outside = path.resolve(workspace, '..', 'outside.txt')
+    const fileTools = ['read_file', 'write_file', 'edit_file', 'create_file', 'delete_file', 'multi_file_edit', 'archive_extract', 'vscode_apply_edit', 'spreadsheet_write', 'pdf_extract_text', 'ocr_image']
+    for (const name of fileTools) {
+      const args = name === 'multi_file_edit'
+        ? { edits: [{ path: outside }] }
+        : name === 'archive_extract'
+          ? { archive_path: outside, output_path: path.join(workspace, 'out') }
+          : { path: outside }
+      expect(assessToolPolicy(name, args, workspace).outsideWorkspace).toContain(outside)
+    }
   })
 
   it('includes the full shell command in the approval text', () => {

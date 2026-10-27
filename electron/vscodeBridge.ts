@@ -210,7 +210,7 @@ export async function installVsCodeBridge(): Promise<string> {
 export async function openWorkspaceInVsCode(workspace: string): Promise<string> {
   const setup = await resolveVsCodeBridgeSetup()
   if (!setup.vscodeCommand) {
-    throw new Error('VS Code CLI was not found. Install VS Code first.')
+    throw new Error('VS Code CLI was not found. Checked PATH for code/code-insiders and the standard Windows, macOS, and Linux install locations. Install VS Code first, then make the code command available.')
   }
   const root = path.resolve(workspace)
   await runCodeCli(setup.vscodeCommand, [root], 15_000)

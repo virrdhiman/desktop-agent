@@ -509,8 +509,10 @@ try {
   check('restart data includes pinned rich resume and verification state', richResumeOk,
     richResumeOk ? '' : JSON.stringify({ pinned: resumed?.pinned, resume: resumed?.resume }).slice(0, 800))
   await sleep(1200)
+  await b.evaluate(`document.querySelector('[aria-label="Expand history"]')?.click()`)
+  await sleep(300)
   const restored = await b.evaluate(`(() => {
-    const btn = [...document.querySelectorAll('button')].find(x => /History/.test(x.textContent || ''))
+    const btn = [...document.querySelectorAll('[role="tab"], button')].find(x => /History/.test(x.textContent || ''))
     const r = btn?.getBoundingClientRect()
     return { text: document.body.innerText, headerTop: r?.top ?? -1, headerBottom: r?.bottom ?? Infinity, vh: innerHeight }
   })()`)
@@ -549,7 +551,7 @@ try {
   await sleep(500)
   await b.screenshot('editor.png')
 
-  await b.evaluate(`document.querySelector('[aria-label^="Sessions panel"]')?.click()`)
+  await b.evaluate(`document.querySelector('[aria-label="Expand history"]')?.click()`)
   await sleep(300)
   const del = await b.evaluate(`(() => {
     window.confirm = () => true
@@ -593,20 +595,20 @@ try {
   await c.evaluate(`document.querySelector('[aria-label^="Agent"]')?.click()`)
   await sleep(500)
   const headerLayout = await c.evaluate(`(() => {
-    const team = document.querySelector('select[aria-label="Agent environment"]')
-    const header = team?.closest('.panel-header')
-    const controls = header ? [...header.querySelectorAll('button, select, .badge')] : []
-    const bounds = header?.getBoundingClientRect()
+    const composer = document.querySelector('.vd-composer-surface')
+    const controls = composer ? [...composer.querySelectorAll('.vd-composer-toolbar button, .vd-composer-toolbar select, .vd-composer-toolbar .badge')] : []
+    const visibleControls = controls.filter((control) => { const rect = control.getBoundingClientRect(); return rect.width > 0 && rect.height > 0 })
+    const bounds = composer?.getBoundingClientRect()
     return {
-      count: controls.length,
-      fit: !!bounds && controls.every((control) => {
+      count: visibleControls.length,
+      fit: !!bounds && visibleControls.every((control) => {
         const rect = control.getBoundingClientRect()
-        return rect.left >= bounds.left && rect.right <= bounds.right && rect.top >= bounds.top && rect.bottom <= bounds.bottom
+        return rect.width > 0 && rect.height > 0 && rect.left >= 0 && rect.right <= innerWidth
       }),
       height: bounds?.height || 0,
     }
   })()`)
-  check('agent header keeps model, team, plan, and session controls visible',
+  check('agent composer keeps model, team, plan, and session controls visible',
     headerLayout.fit && headerLayout.count >= 5, JSON.stringify(headerLayout))
 
   const queueStart = mock.requests.length

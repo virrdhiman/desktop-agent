@@ -23,8 +23,11 @@
  */
 import { useState, useRef, useEffect, useCallback } from 'react'
 import DiffViewer from './DiffViewer'
+import WorkingModeSelector from './WorkingModeSelector'
 import ComposerAddMenu from './ComposerAddMenu'
+import ComposerControls from './ComposerControls'
 import { buildConversationSummary, useStore } from '../store'
+import { contextLevel, contextWindowForModel, estimateTokens } from '../lib/chatControl'
 import { AGENT_TOOLS, type AgentTaskKind, type ChatMessage, type AgentStep, type ProviderConfig } from '../types'
 import {
   applyDiscoveredModel, buildProviderChain, classifyAgentTask, providerIsConfigured, providerPrefersFreeModels, recordProviderOutcome, refreshProviderModelCatalog,
@@ -283,12 +286,32 @@ function MarkdownContent({ content }: { content: string }) {
         if (block.type === 'hr') {
           return <hr key={i} style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '12px 0' }} />
         }
+        if (block.type === 'paragraph' && looksLikeCode(block.content)) {
+          return <CodeBlock key={i} content={block.content} language="code" index={i} />
+        }
         return (
           <p key={i} style={{ margin: '4px 0', fontSize: 13 }}>
             <InlineMarkdown text={block.content} />
           </p>
         )
       })}
+    </div>
+  )
+}
+
+function looksLikeCode(text: string): boolean {
+  const lines = text.split('\n').filter((line) => line.trim())
+  if (lines.length < 2) return false
+  const signals = lines.filter((line) => /^(\s{2,}|import\s|export\s|const\s|let\s|var\s|function\s|class\s|<[/!]?[A-Za-z]|[.#][\w-]+\s*\{|[\w-]+\s*:\s*[^ ]+;)/.test(line) || /[{};]\s*$/.test(line))
+  return signals.length >= Math.max(2, Math.ceil(lines.length * 0.5))
+}
+
+function CodeBlock({ content, language, index }: { content: string; language: string; index: number }) {
+  return (
+    <div className="vd-message-code-block">
+      <div className="vd-message-code-header"><span>{language}</span><button onClick={() => { void navigator.clipboard.writeText(content) }}>📋 Copy</button></div>
+      <pre><code dangerouslySetInnerHTML={{ __html: highlightSyntax(content, language) }} /></pre>
+      <span className="sr-only" id={`code-description-${index}`}>Scrollable code block</span>
     </div>
   )
 }
@@ -430,6 +453,8 @@ export default function AgentChat() {
     projectMemory, latestCheckpoint, lastVerification,
     toolExecutions, tasks,
     openFiles, fileEditHistory,
+    earlierMessages, pinnedSummary, parentSessionId, projectNotes, sessions,
+    summarizeAndContinue, forkChat, forkFromMessage, setProjectNotes, loadSession,
   } = useStore()
 
   const [input, setInput] = useState('')
@@ -438,9 +463,9 @@ export default function AgentChat() {
   const [availableModels, setAvailableModels] = useState<string[]>([])
   const [dragOver, setDragOver] = useState(false)
   const [pendingImages, setPendingImages] = useState<{ data: string; name: string }[]>([])
-  const [showSessions, setShowSessions] = useState(false)
   const [voiceStatus, setVoiceStatus] = useState('')
   const [listening, setListening] = useState(false)
+  const [showComposerMore, setShowComposerMore] = useState(false)
   const [showAddMenu, setShowAddMenu] = useState(false)
   const [addMenuQuery, setAddMenuQuery] = useState('')
   const [addMenuActiveIndex, setAddMenuActiveIndex] = useState(0)
@@ -457,10 +482,24 @@ export default function AgentChat() {
   const pumpingQueueRef = useRef(false)
   const voiceDraftBaseRef = useRef('')
 
-  const { allFiles, sessions, loadSession, deleteSession, newChat, currentSessionId,
-    planMode, setPlanMode, settings: appSettings, setSettings: setAppSettings, setCancelRequested } = useStore()
+  const resizeComposer = useCallback(() => {
+    const element = inputRef.current
+    if (!element) return
+    element.style.height = 'auto'
+    element.style.height = `${Math.min(240, Math.max(72, element.scrollHeight))}px`
+  }, [])
 
+  const { allFiles, newChat, currentSessionId, setActivePanel,
+    planMode, setPlanMode, settings: appSettings, setSettings: setAppSettings, setCancelRequested } = useStore()
   const activeProvider = settings.providers.find((p) => p.id === settings.activeProvider)
+  const selectedModel = modelOverride || activeProvider?.model
+  const contextTokens = estimateTokens([...messages, ...(input ? [{ content: input }] : [])])
+  const contextWindow = contextWindowForModel(selectedModel)
+  const contextState = contextLevel(contextTokens, contextWindow)
+  const [contextDismissed, setContextDismissed] = useState(false)
+  const [showProjectNotes, setShowProjectNotes] = useState(false)
+  const [notesDraft, setNotesDraft] = useState(projectNotes)
+  useEffect(() => setNotesDraft(projectNotes), [projectNotes])
   const composerItems = getComposerMenuItems(AGENT_TOOLS.map((tool) => tool.name))
   const contextMenuItems: ComposerMenuItem[] = allFiles
     .filter((file) => workspacePath && isAllowedContextPath(file.path, workspacePath) && !isProtectedContextPath(file.path))
@@ -654,6 +693,7 @@ export default function AgentChat() {
         args,
         workspace,
         sessionId: useStore.getState().currentSessionId || undefined,
+        workingMode: useStore.getState().settings.layout?.workingMode || (useStore.getState().planMode ? 'plan' : 'build'),
         taskId,
       }).then(async (result) => {
         if (result && !result.error && beforeEdit !== null && typeof args.path === 'string') {
@@ -866,7 +906,8 @@ export default function AgentChat() {
       workspaceFiles: allFiles,
       recentEdits: fileEditHistory,
       projectMemory,
-      conversationSummary: buildConversationSummary(historyMessages),
+      pinnedNotes: projectNotes,
+      conversationSummary: [buildConversationSummary(historyMessages), pinnedSummary].filter(Boolean).join('\n\n'),
       resumeNote: [
         latestCheckpoint ? `Latest recovery checkpoint: ${latestCheckpoint.label} (${latestCheckpoint.files.join(', ')})` : '',
         lastVerification ? `Last verification: ${lastVerification.ok ? 'passed' : 'failed'} ${lastVerification.command}\n${lastVerification.summary}` : '',
@@ -878,6 +919,8 @@ export default function AgentChat() {
       planMode: effectivePlanMode,
       context: workspaceContext,
       customRules: appSettings.customRules,
+      responseEffort: appSettings.responseEffort || 'medium',
+      strictGrounding: appSettings.strictGrounding === true,
     })
     const teamBudget = appSettings.teamTokenBudget || 'balanced'
     const teamProfile = resolveTeamProfile(appSettings.teamPreset, appSettings.teamProfile)
@@ -1154,7 +1197,7 @@ export default function AgentChat() {
       if (!outcome) return
       addTokens(0, Math.ceil(outcome.content.length / 4))
     }
-  }, [workspacePath, selectedFile, fileContent, openFiles, allFiles, fileEditHistory, projectMemory, latestCheckpoint, lastVerification, tasks, toolExecutions, planMode, appSettings.customRules, appSettings.teamTokenBudget, appSettings.teamPreset, appSettings.teamProfile, appSettings.teamMode, appSettings.dynamicTeam, setCancelRequested, setStreamingContent, addTask, updateTask, addStepToTask, callWithFallback, addTokens, addMessage, processToolCalls, updateQueuedQuery])
+  }, [workspacePath, selectedFile, fileContent, openFiles, allFiles, fileEditHistory, projectMemory, projectNotes, pinnedSummary, latestCheckpoint, lastVerification, tasks, toolExecutions, planMode, appSettings.customRules, appSettings.strictGrounding, appSettings.teamTokenBudget, appSettings.teamPreset, appSettings.teamProfile, appSettings.teamMode, appSettings.dynamicTeam, setCancelRequested, setStreamingContent, addTask, updateTask, addStepToTask, callWithFallback, addTokens, addMessage, processToolCalls, updateQueuedQuery])
 
   const pumpQueryQueue = useCallback(() => {
     if (pumpingQueueRef.current) return
@@ -1389,174 +1432,45 @@ export default function AgentChat() {
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <div className="panel-header" style={{ flexWrap: 'wrap', gap: 8, padding: '8px 12px' }}>
-        <h2 style={{ flex: '0 0 auto' }}>🤖 Agent</h2>
-        <div style={{ display: 'flex', flex: '1 1 520px', minWidth: 0, flexWrap: 'wrap', gap: 6, alignItems: 'center', justifyContent: 'flex-end' }}>
-          {/* Model quick-switch */}
-          <select
-            value={modelOverride || ''}
-            onChange={(e) => setModelOverride(e.target.value || null)}
-            style={{
-              padding: '3px 8px', borderRadius: 6, fontSize: 11, maxWidth: 180,
-              background: 'var(--bg-tertiary)', color: 'var(--text-secondary)',
-              border: '1px solid var(--border)', cursor: 'pointer', outline: 'none',
-            }}
-            title="Model for the active provider. Auto refreshes live models, skips expired IDs, and picks by budget. Choosing one pins it for this session."
-            aria-label="Model"
-          >
-            <option value="">Auto: {activeProvider?.model || 'best available'}</option>
-            {[...new Set([...(activeProvider?.model ? [activeProvider.model] : []), ...availableModels])].map((id) => (
-              <option key={id} value={id}>{id}</option>
-            ))}
-          </select>
-
-          {/* Plan mode toggle */}
-          <button
-            className={`btn btn-sm ${planMode ? 'btn-success' : ''}`}
-            onClick={() => togglePlanMode()}
-            title="Plan Mode: agent plans before executing"
-          >
-            📋 {planMode ? 'Plan ON' : 'Plan'}
-          </button>
-
-          <select
-            value={appSettings.teamMode || 'auto'}
-            onChange={(event) => {
-              const teamMode = event.target.value as 'off' | 'auto' | 'always'
-              const next = { ...appSettings, teamMode }
-              setAppSettings(next)
-              void window.api.saveSettings(next)
-            }}
-            style={{
-              padding: '3px 8px', borderRadius: 6, fontSize: 11,
-              background: 'var(--bg-tertiary)', color: 'var(--text-secondary)',
-              border: '1px solid var(--border)', cursor: 'pointer', outline: 'none',
-            }}
-            title="Environment: Normal uses one executor, Smart chooses per request, Agentic forces planner, worker, reviewer, repair, and verifier."
-            aria-label="Agent environment"
-          >
-            <option value="off">Env: Normal</option>
-            <option value="auto">Env: Smart</option>
-            <option value="always">Env: Agentic</option>
-          </select>
-          {hasCustomTeamProfile(appSettings.teamProfile) && (
-            <span className="badge badge-green" title="Custom agent role instructions are active">Custom team</span>
-          )}
-
-          <select
-            value={appSettings.teamTokenBudget || 'balanced'}
-            onChange={(event) => {
-              const teamTokenBudget = event.target.value as 'cheap' | 'balanced' | 'strong'
-              const next = { ...appSettings, teamTokenBudget }
-              setAppSettings(next)
-              void window.api.saveSettings(next)
-            }}
-            style={{
-              padding: '3px 8px', borderRadius: 6, fontSize: 11,
-              background: 'var(--bg-tertiary)', color: 'var(--text-secondary)',
-              border: '1px solid var(--border)', cursor: 'pointer', outline: 'none',
-            }}
-            title="Agentic budget: Cheap saves calls and prefers free models, Balanced is default, Strong allows richer context and best accessible models."
-            aria-label="Agentic token budget"
-          >
-            <option value="cheap">Budget: Cheap</option>
-            <option value="balanced">Budget: Balanced</option>
-            <option value="strong">Budget: Strong</option>
-          </select>
-
-          {/* Stop button */}
-          {chatLoading && (
-            <button
-              className="btn btn-sm btn-error"
-              onClick={() => useStore.getState().stopGeneration()}
-            >
-              ⏹ Stop
-            </button>
-          )}
-
-          {settings.activeProvider && (
-            <span className="badge badge-blue">
-              {settings.providers.find((p) => p.id === settings.activeProvider)?.name || settings.activeProvider}
-            </span>
-          )}
-          <button
-            className="btn btn-sm"
-            onClick={() => setShowSessions(!showSessions)}
-            title="Chat history (saved automatically on this machine)"
-          >
-            🕘 History
-          </button>
-          {messages.length > 0 && (
-            <>
-              <button className="btn btn-sm" onClick={() => {
-                const md = messages.map(m => `**${m.role === 'user' ? 'You' : m.role === 'system' ? 'System' : 'Agent'}** (${new Date(m.timestamp).toLocaleTimeString()})\n\n${m.content}\n`).join('\n---\n\n')
-                const blob = new Blob([md], { type: 'text/markdown' })
-                const url = URL.createObjectURL(blob)
-                const a = document.createElement('a')
-                a.href = url; a.download = `chat-${new Date().toISOString().slice(0,10)}.md`; a.click()
-                URL.revokeObjectURL(url)
-              }}>📤 Export</button>
-              <button className="btn btn-sm" onClick={() => { void newChat() }} title="Start a new chat. The current one stays in history.">
-                ＋ New chat
-              </button>
-            </>
-          )}
+      {appSettings.goal && (
+        <div className="vd-goal-banner" role="status">
+          <span>◎ <strong>Goal</strong> {appSettings.goal}</span>
+          <button aria-label="Clear workspace goal" title="Clear goal" onClick={() => { const next = { ...appSettings, goal: '' }; setAppSettings(next); void window.api.saveSettings(next) }}>×</button>
+        </div>
+      )}
+      {parentSessionId && (
+        <div className="vd-fork-breadcrumb" role="status">
+          Forked from <button onClick={() => void loadSession(parentSessionId)}>{sessions.find((session) => session.id === parentSessionId)?.title || parentSessionId}</button>
+        </div>
+      )}
+      {contextState !== 'normal' && !contextDismissed && (
+        <div className={`vd-context-warning ${contextState}`} role="alert">
+          <span>Context is getting full ({contextWindow ? `${Math.round((contextTokens / contextWindow) * 100)}%` : 'estimate'}).</span>
+          <button onClick={() => void summarizeAndContinue()}>Summarize &amp; continue</button>
+          <button onClick={() => void forkChat()}>Fork chat</button>
+          <button aria-label="Dismiss context warning" onClick={() => setContextDismissed(true)}>Dismiss</button>
+        </div>
+      )}
+      <div className="panel-header vd-chat-header">
+        <h2>🤖 Agent</h2>
+        <div className="vd-chat-header-actions">
+          <button className="vd-icon-button" aria-label="Open chat history" title="Open chat history" onClick={() => setActivePanel('sessions')}>🕘</button>
+          <button className="vd-icon-button" aria-label="Export chat" title="Export chat" disabled={messages.length === 0} onClick={() => {
+            const md = messages.map(m => `**${m.role === 'user' ? 'You' : m.role === 'system' ? 'System' : 'Agent'}** (${new Date(m.timestamp).toLocaleTimeString()})\n\n${m.content}\n`).join('\n---\n\n')
+            const blob = new Blob([md], { type: 'text/markdown' })
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url; a.download = `chat-${new Date().toISOString().slice(0,10)}.md`; a.click(); URL.revokeObjectURL(url)
+          }}>📤</button>
+          <button className="vd-icon-button" aria-label="Start a new chat" title="Start a new chat" onClick={() => { void newChat() }}>＋</button>
+          <button className="vd-icon-button" aria-label="Edit pinned project notes" title="Edit pinned project notes" onClick={() => setShowProjectNotes((open) => !open)}>📌</button>
         </div>
       </div>
-
-      {/* Sessions sidebar */}
-      {showSessions && (
-        <div style={{
-          position: 'absolute', top: 0, right: 0, width: 280, height: '100%',
-          background: 'var(--bg-secondary)', borderLeft: '1px solid var(--border)',
-          zIndex: 50, display: 'flex', flexDirection: 'column', overflow: 'hidden',
-        }}>
-          <div className="panel-header">
-            <h2 style={{ fontSize: 13 }}>🕘 History</h2>
-            <button className="btn btn-sm" onClick={() => setShowSessions(false)} aria-label="Close history">✕</button>
-          </div>
-          <div className="panel-body" style={{ flex: 1, overflowY: 'auto', padding: 4 }}>
-            {sessions.length === 0 ? (
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: 12, textAlign: 'center' }}>
-                No chats yet. Conversations are saved automatically.
-              </div>
-            ) : (
-              sessions.map((s) => (
-                <div
-                  key={s.id}
-                  onClick={() => { void loadSession(s.id); setShowSessions(false) }}
-                  style={{
-                    padding: '8px 10px', borderRadius: 6, cursor: 'pointer', marginBottom: 2,
-                    background: currentSessionId === s.id ? 'rgba(59,130,246,0.1)' : 'transparent',
-                    border: currentSessionId === s.id ? '1px solid var(--accent)' : '1px solid transparent',
-                  }}
-                  onMouseEnter={(e) => { if (currentSessionId !== s.id) e.currentTarget.style.background = 'var(--bg-tertiary)' }}
-                  onMouseLeave={(e) => { if (currentSessionId !== s.id) e.currentTarget.style.background = 'transparent' }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                      {s.title}
-                    </div>
-                    <span
-                      role="button"
-                      aria-label={`Delete chat ${s.title}`}
-                      title="Delete from disk"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        if (window.confirm('Delete this chat from disk? This cannot be undone.')) void deleteSession(s.id)
-                      }}
-                      style={{ fontSize: 11, color: 'var(--text-muted)', padding: '0 4px', cursor: 'pointer' }}
-                    >
-                      ✕
-                    </span>
-                  </div>
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
-                    {new Date(s.updatedAt).toLocaleString()} · {s.messages.length} msgs
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+      {showProjectNotes && (
+        <div className="vd-pinned-notes-editor">
+          <label htmlFor="vd-pinned-notes">Pinned project notes</label>
+          <textarea id="vd-pinned-notes" value={notesDraft} onChange={(event) => setNotesDraft(event.target.value.slice(0, 12_000))} rows={4} placeholder="User-maintained constraints or decisions for this project" />
+          <div><button className="btn btn-sm btn-primary" onClick={async () => { setProjectNotes(notesDraft); if (workspacePath) await window.api.projectNotesSave(workspacePath, notesDraft); setShowProjectNotes(false) }}>Save notes</button></div>
         </div>
       )}
 
@@ -1589,6 +1503,12 @@ export default function AgentChat() {
 
       {/* Messages */}
       <div ref={messagesScrollRef} style={{ flex: 1, overflowY: 'auto', padding: '16px 16px' }}>
+        {earlierMessages.length > 0 && (
+          <details className="vd-earlier-messages">
+            <summary>Earlier messages ({earlierMessages.length})</summary>
+            {earlierMessages.map((message) => <div key={message.id}><strong>{message.role}:</strong> {message.content}</div>)}
+          </details>
+        )}
         {messages.length === 0 ? (
           <div className="empty-state">
             <div style={{
@@ -1606,6 +1526,11 @@ export default function AgentChat() {
               Autonomous coding agent. Reads and edits your repo, runs commands, manages git,
               and picks the strongest free model available on your API key.
             </div>
+            {!appSettings.providers.some((provider) => provider.hasKey) && (
+              <div role="status" style={{ color: 'var(--text-secondary)', fontSize: 12, textAlign: 'center', maxWidth: 480, marginTop: 8 }}>
+                Add an API key in Settings to use cloud models, or choose Ollama for local work without a key.
+              </div>
+            )}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 12, width: '100%', maxWidth: 480 }}>
               {quickActions.map((qa) => (
                 <button
@@ -1636,6 +1561,7 @@ export default function AgentChat() {
                   <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                     {new Date(msg.timestamp).toLocaleTimeString()}
                   </span>
+                  <button className="vd-message-fork" title="Create a new chat from this message" onClick={() => void forkFromMessage(msg.id)}>Fork from here</button>
                 </div>
                 <div style={{
                   padding: '10px 14px',
@@ -1795,7 +1721,7 @@ export default function AgentChat() {
       )}
 
       {/* Input */}
-      <div style={{
+      <div className="vd-composer-surface" style={{
         padding: '10px 14px',
         borderTop: '1px solid var(--border)',
         background: 'var(--bg-secondary)',
@@ -1839,8 +1765,39 @@ export default function AgentChat() {
             <button className="btn btn-sm" onClick={() => setPendingPlan(null)}>Dismiss</button>
           </div>
         )}
+        <div className="vd-composer-toolbar">
+          <ComposerControls
+            settings={appSettings}
+            activeProvider={activeProvider}
+            availableModels={availableModels}
+            modelOverride={modelOverride}
+            onModelOverride={setModelOverride}
+            onSettings={(next) => { setAppSettings(next); void window.api.saveSettings(next) }}
+          />
+          <WorkingModeSelector settings={appSettings} onChange={(next) => { setPlanMode(next.planMode === true); setAppSettings(next); void window.api.saveSettings(next) }} />
+          <div className="vd-composer-optional">
+            <select className="vd-composer-select" value={appSettings.teamMode || 'auto'} onChange={(event) => { const next = { ...appSettings, teamMode: event.target.value as 'off' | 'auto' | 'always' }; setAppSettings(next); void window.api.saveSettings(next) }} aria-label="Agent environment" title="Choose normal, smart, or agentic execution">
+              <option value="off">Normal</option><option value="auto">Smart</option><option value="always">Agentic</option>
+            </select>
+          </div>
+          <div className="vd-composer-optional">{hasCustomTeamProfile(appSettings.teamProfile) && <span className="badge badge-green" title="Custom agent role instructions are active">Custom team</span>}</div>
+          <div className="vd-composer-more">
+            <button aria-haspopup="menu" aria-expanded={showComposerMore} onClick={() => setShowComposerMore((open) => !open)}>More⌄</button>
+            {showComposerMore && <div className="vd-composer-more-popover" role="menu" aria-label="More composer options">
+              <label>Execution environment
+                <select className="vd-composer-select" value={appSettings.teamMode || 'auto'} onChange={(event) => { const next = { ...appSettings, teamMode: event.target.value as 'off' | 'auto' | 'always' }; setAppSettings(next); void window.api.saveSettings(next) }}>
+                  <option value="off">Normal</option><option value="auto">Smart</option><option value="always">Agentic</option>
+                </select>
+              </label>
+              <div>Active provider: {settings.providers.find((provider) => provider.id === settings.activeProvider)?.name || 'Automatic'}</div>
+              {hasCustomTeamProfile(appSettings.teamProfile) && <div>Custom team profile active</div>}
+            </div>}
+          </div>
+          {chatLoading && <button className="btn btn-sm btn-error" onClick={() => useStore.getState().stopGeneration()}>⏹ Stop</button>}
+          {settings.activeProvider && <span className="vd-composer-optional badge badge-blue" title="Active provider">{settings.providers.find((p) => p.id === settings.activeProvider)?.name || settings.activeProvider}</span>}
+        </div>
         {/* Status bar */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+        <div className="vd-composer-status" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             {planMode && (
               <span className="badge badge-green" style={{ fontSize: 10 }}>📋 Plan Mode</span>
@@ -1863,29 +1820,12 @@ export default function AgentChat() {
             )}
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-              ~{Math.ceil(input.length / 4)} tokens · {input.length} chars{' '}
-              {messages.length > 0 && `· ${messages.length} msgs`}
+            <span className={`vd-context-meter ${contextState}`} title="Estimated from message characters; actual provider usage may differ">
+              ~{contextTokens.toLocaleString()}{contextWindow ? ` / ${contextWindow.toLocaleString()}` : ''} tokens (estimate)
             </span>
-            {/* Context window usage bar */}
-            {(() => {
-              const totalChars = messages.reduce((s, m) => s + m.content.length + (m.toolCalls?.reduce((ts, t) => ts + JSON.stringify(t).length, 0) || 0), 0)
-              const estimatedTokens = Math.ceil(totalChars / 4)
-              const maxTokens = 128000
-              const pct = Math.min(100, (estimatedTokens / maxTokens) * 100)
-              const color = pct > 80 ? '#ef4444' : pct > 50 ? '#f59e0b' : '#4ade80'
-              return (
-                <div title={`${estimatedTokens.toLocaleString()} / ${maxTokens.toLocaleString()} tokens used`} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <div style={{ width: 60, height: 4, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
-                    <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 2, transition: 'width 0.3s' }} />
-                  </div>
-                  <span style={{ fontSize: 9, color }}>{pct.toFixed(0)}%</span>
-                </div>
-              )
-            })()}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+        <div className="vd-composer-input-row">
           <button
             className="btn btn-sm"
             onClick={() => openAddMenu('plus')}
@@ -1971,6 +1911,7 @@ export default function AgentChat() {
                 if (showAddMenu && addMenuTrigger !== 'plus') closeAddMenu()
               }
             }}
+            onInput={resizeComposer}
             onKeyDown={(e) => {
               if (showAddMenu && ['ArrowDown', 'ArrowUp', 'Enter', 'Escape', 'Tab'].includes(e.key)) {
                 e.preventDefault()
@@ -1987,8 +1928,8 @@ export default function AgentChat() {
               handleKeyDown(e)
               if (e.key === 'Escape') closeAddMenu()
             }}
-            placeholder="Ask or queue work... + add context, / actions, @ files, Ctrl+V images"
-            rows={2}
+            placeholder="Ask or queue work... Type @ for context, Ctrl+V for images, drag files. (Enter queues immediately)"
+            rows={3}
             style={{ resize: 'none', fontSize: 13, borderRadius: 12 }}
           />
           <button
@@ -2001,7 +1942,7 @@ export default function AgentChat() {
           </button>
         </div>
         {voiceStatus && (
-          <div style={{ marginTop: 4, fontSize: 10, color: 'var(--text-muted)' }}>
+          <div className="vd-composer-voice-status" style={{ marginTop: 4, fontSize: 10, color: 'var(--text-muted)' }}>
             {voiceStatus}
           </div>
         )}

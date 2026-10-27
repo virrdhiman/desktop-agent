@@ -114,7 +114,7 @@ async function listProviderModels(baseUrl: string, apiKey: string): Promise<stri
 
 async function readSse(
   body: ReadableStream<Uint8Array>,
-  getMainWindow: () => BrowserWindow | null,
+  getWindows: () => BrowserWindow[],
   extract: (parsed: any) => string | undefined
 ): Promise<string> {
   const reader = body.getReader()
@@ -135,7 +135,7 @@ async function readSse(
         const token = extract(JSON.parse(data))
         if (token) {
           full += token
-          getMainWindow()?.webContents.send('ai:stream', token)
+          for (const window of getWindows()) if (!window.isDestroyed()) window.webContents.send('ai:stream', token)
         }
       } catch { /* partial SSE chunk */ }
     }
@@ -144,7 +144,7 @@ async function readSse(
 }
 
 async function completeAnthropic(
-  getMainWindow: () => BrowserWindow | null,
+  getWindows: () => BrowserWindow[],
   config: ChatConfig,
   signal: AbortSignal
 ): Promise<ChatSuccess | ChatError> {
@@ -171,7 +171,7 @@ async function completeAnthropic(
   if (!response.ok) return toError(response, config.apiKey)
 
   if (config.stream && response.body) {
-    const content = await readSse(response.body, getMainWindow, (p) =>
+    const content = await readSse(response.body, getWindows, (p) =>
       p.type === 'content_block_delta' ? p.delta?.text : undefined
     )
     return { content }
@@ -186,7 +186,7 @@ async function completeAnthropic(
 }
 
 async function completeOpenAI(
-  getMainWindow: () => BrowserWindow | null,
+  getWindows: () => BrowserWindow[],
   config: ChatConfig,
   model: string,
   signal: AbortSignal
@@ -210,7 +210,7 @@ async function completeOpenAI(
     if (!response.ok) return toError(response, config.apiKey)
 
     if (config.stream && response.body) {
-      const content = await readSse(response.body, getMainWindow, (p) => p.choices?.[0]?.delta?.content)
+      const content = await readSse(response.body, getWindows, (p) => p.choices?.[0]?.delta?.content)
       return { content }
     }
 
@@ -227,7 +227,7 @@ async function completeOpenAI(
   }
 }
 
-export function registerAiHandlers(getMainWindow: () => BrowserWindow | null) {
+export function registerAiHandlers(getWindows: () => BrowserWindow[]) {
   ipcMain.handle('ai:chat', async (_event, config: ChatConfig) => {
     config = { ...config, apiKey: await resolveProviderApiKey(config.provider, config.apiKey) }
     const controller = new AbortController()
@@ -235,7 +235,7 @@ export function registerAiHandlers(getMainWindow: () => BrowserWindow | null) {
 
     try {
       if (config.provider === 'anthropic') {
-        const result = await completeAnthropic(getMainWindow, config, controller.signal)
+        const result = await completeAnthropic(getWindows, config, controller.signal)
         return 'error' in result ? result : { ...result, model: config.model }
       }
 
@@ -266,7 +266,7 @@ export function registerAiHandlers(getMainWindow: () => BrowserWindow | null) {
 
       const result = await tryModels(
         models,
-        (model) => completeOpenAI(getMainWindow, config, model, controller.signal),
+        (model) => completeOpenAI(getWindows, config, model, controller.signal),
         () => controller.signal.aborted,
         (model, failure) => coolDownModel(config.baseUrl, config.apiKey, model, failure.error, failure.status)
       )

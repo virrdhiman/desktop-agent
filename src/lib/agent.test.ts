@@ -63,6 +63,12 @@ describe('system prompt', () => {
     expect(prompt).toContain('## User rules\nUse tabs')
     expect(buildSystemPrompt({ planMode: false, context: '', customRules: '   ' })).not.toContain('## User rules')
   })
+
+  it('keeps strict grounding opt-in and includes pinned project notes in context', () => {
+    expect(buildSystemPrompt({ planMode: false, context: '', strictGrounding: false })).not.toContain('Strict grounding (enabled)')
+    expect(buildSystemPrompt({ planMode: false, context: '', strictGrounding: true })).toContain('Strict grounding (enabled)')
+    expect(buildContext({ workspacePath: '/repo', pinnedNotes: 'Do not change the public API.' })).toContain('Do not change the public API.')
+  })
 })
 
 describe('buildContext', () => {

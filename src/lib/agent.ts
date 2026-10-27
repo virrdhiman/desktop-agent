@@ -124,6 +124,7 @@ export type ContextInput = {
   workspaceFiles?: Array<{ name: string; path: string; isDirectory: boolean }>
   recentEdits?: Array<{ path: string; before: string; after: string; timestamp: number }>
   projectMemory?: string
+  pinnedNotes?: string
   conversationSummary?: string
   resumeNote?: string
 }
@@ -156,7 +157,7 @@ function summarizeEdit(before: string, after: string): string {
 }
 
 export function buildContext({
-  workspacePath, selectedFile, fileContent = '', openFiles = [], workspaceFiles = [], recentEdits = [], projectMemory = '', conversationSummary = '', resumeNote = '',
+  workspacePath, selectedFile, fileContent = '', openFiles = [], workspaceFiles = [], recentEdits = [], projectMemory = '', pinnedNotes = '', conversationSummary = '', resumeNote = '',
 }: ContextInput): string {
   const parts: string[] = []
   if (workspacePath) {
@@ -164,6 +165,7 @@ export function buildContext({
   } else {
     parts.push('No workspace folder is open. Tools need absolute paths. If the task is about a project, ask the user to open its folder (Files → Open).')
   }
+  if (pinnedNotes.trim()) parts.push(`Pinned project notes (user-maintained; verify against files):\n${pinnedNotes.slice(0, 6_000)}`)
   if (selectedFile) {
     const shown = fileContent.slice(0, MAX_CONTEXT_FILE_CHARS)
     const note = fileContent.length > shown.length
@@ -191,13 +193,15 @@ export function buildContext({
   return parts.join('\n\n')
 }
 
-export function buildSystemPrompt(opts: { planMode: boolean; context: string; customRules?: string }): string {
+export function buildSystemPrompt(opts: { planMode: boolean; context: string; customRules?: string; responseEffort?: 'low' | 'medium' | 'high'; strictGrounding?: boolean }): string {
   const modeLine = opts.planMode
     ? 'Plan Mode is ON: propose a plan and wait for approval. Do not modify anything.'
     : 'Plan Mode is OFF: execute the task.'
   return [
     TOOL_SYSTEM_PROMPT,
     `## Session\n${modeLine}`,
+    opts.responseEffort ? `Response effort: ${opts.responseEffort}. Match this depth while remaining concise and evidence-based.` : '',
+    opts.strictGrounding ? '## Strict grounding (enabled)\nClaim files, tests, commands, edits, and outcomes only when a tool result in this chat proves them. Cite exact file paths and say "not checked" when evidence is missing. Never report success without verifying tool output.' : '',
     opts.context ? `## Context\n${opts.context}` : '',
     opts.customRules?.trim() ? `## User rules\n${opts.customRules.trim()}` : '',
   ].filter(Boolean).join('\n\n')
