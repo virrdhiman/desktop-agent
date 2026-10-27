@@ -55,7 +55,11 @@ class CdpPage {
         this.pending.get(message.id)(message)
         this.pending.delete(message.id)
       }
-      if (message.method === 'Runtime.exceptionThrown') this.errors.push(message.params.exceptionDetails?.text || 'renderer exception')
+      if (message.method === 'Runtime.exceptionThrown') {
+        const details = message.params.exceptionDetails || {}
+        const location = details.url ? ` @ ${details.url}:${details.lineNumber ?? 0}:${details.columnNumber ?? 0}` : ''
+        this.errors.push(`${details.description || details.exception?.description || details.text || 'renderer exception'}${location}`)
+      }
       if (message.method === 'Log.entryAdded' && message.params.entry.level === 'error') this.errors.push(message.params.entry.text)
     }
   }
@@ -78,7 +82,12 @@ class CdpPage {
   }
 
   async evaluate(expression) {
-    const response = await this.send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true })
+    let response
+    try {
+      response = await this.send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true })
+    } catch (error) {
+      throw new Error(`${error instanceof Error ? error.message : String(error)} [expression: ${expression.slice(0, 140)}]`)
+    }
     if (response.result?.exceptionDetails) throw new Error(response.result.exceptionDetails.text || 'renderer evaluation failed')
     return response.result?.result?.value
   }
@@ -258,6 +267,12 @@ async function main() {
     const firstRunSettings = await mainPage.evaluate('window.api.loadSettings()')
     check('packaged first run is isolated and key-free', !firstRunText.match(/API key configured|key saved/i), `fresh userData; configured providers=${(firstRunSettings.providers || []).filter((provider) => provider.hasKey).length}`)
     check('first-run key guidance is visible', firstRunText.includes('Add an API key in Settings'), 'welcome screen')
+    await mainPage.evaluate(`(() => {
+      const skip = [...document.querySelectorAll('button')].find((node) => /skip to use defaults/i.test(node.textContent || ''))
+      skip?.click()
+      return Boolean(skip)
+    })()`)
+    await sleep(500)
     await mainPage.screenshot('agent-view.png')
 
     const lockedPath = path.join(workspace, 'locked.txt').replaceAll("'", "''")
@@ -293,8 +308,12 @@ async function main() {
     }
     check('IDE is single-instance and second open focuses it', ideTargets.length === 1, `${ideTargets.length} IDE targets`)
     await publishWorkspace(mainPage, safeSettings)
-    await sleep(2_000)
-    const ideSharedState = await ide.evaluate('window.api.getSharedState()')
+    let ideSharedState
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      ideSharedState = await ide.evaluate('window.api.getSharedState()')
+      if (ideSharedState?.files?.some((file) => file.name === 'qa-editor.ts')) break
+      await sleep(250)
+    }
     check('IDE follows the shared workspace', Boolean(ideSharedState?.files?.some((file) => file.name === 'qa-editor.ts')), `files=${ideSharedState?.files?.map((file) => file.name).join(', ') || 'none'}`)
     await mainPage.evaluate(`(() => { const button = [...document.querySelectorAll('button')].find((node) => node.textContent?.trim() === 'Terminal'); button?.click(); return true })()`)
     await sleep(300)
@@ -326,15 +345,21 @@ async function main() {
     check('QA dialog controls are available only for the fixture harness', qaDialogApi === true, 'bounded QA-only preload methods')
     if (qaDialogApi) {
       const dialogFile = path.join(workspace, 'dialog-file.ts')
+      let dirtyShared
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        dirtyShared = await mainPage.evaluate('window.api.getSharedState()')
+        if (dirtyShared?.workspacePath === workspace) break
+        await sleep(250)
+      }
       const dirtySet = await mainPage.evaluate(`window.api.qaSetDirtyState(${JSON.stringify(dialogFile)}, ${JSON.stringify('export const qaValue = 2\n')})`)
-      check('QA dirty-state fixture is accepted', dirtySet?.success === true, 'main-process shared state marked dirty')
+      check('QA dirty-state fixture is accepted', dirtySet?.success === true, JSON.stringify({ dirtySet, workspace: dirtyShared?.workspacePath, dialogFile }))
       await sleep(250)
-      await ide.evaluate('(async () => { await window.api.qaSetDialogSequence(["cancel"]); await window.api.qaCloseWindow(); return true })()')
+      await ide.evaluate('(async () => { await window.api.qaSetDialogSequence(["cancel"]); void window.api.qaCloseWindow(); return true })()')
       await sleep(500)
       check('IDE dirty close Cancel keeps the window open', await hasRole(port, 'ide'), 'cancelled close')
       await mainPage.evaluate(`window.api.qaSetDirtyState(${JSON.stringify(dialogFile)}, ${JSON.stringify('export const qaValue = 2\n')})`)
       await sleep(100)
-      await ide.evaluate('(async () => { await window.api.qaSetDialogSequence(["save"]); await window.api.qaCloseWindow(); return true })()')
+      await ide.evaluate('(async () => { await window.api.qaSetDialogSequence(["save"]); void window.api.qaCloseWindow(); return true })()')
       await sleep(700)
       check('IDE dirty close Save writes the file and closes', fs.readFileSync(path.join(workspace, 'dialog-file.ts'), 'utf8').includes('qaValue = 2') && !(await hasRole(port, 'ide')), 'saved fixture content')
       const reopened = new Set((await targets(port)).map((target) => target.webSocketDebuggerUrl))
@@ -342,11 +367,11 @@ async function main() {
       ide = await waitForRole(port, 'ide', reopened)
       await mainPage.evaluate(`window.api.qaSetDirtyState(${JSON.stringify(dialogFile)}, ${JSON.stringify('export const qaValue = 3\n')})`)
       await sleep(250)
-      await ide.evaluate('(async () => { await window.api.qaSetDialogSequence(["dont-save"]); await window.api.qaCloseWindow(); return true })()')
+      await ide.evaluate('(async () => { await window.api.qaSetDialogSequence(["dont-save"]); void window.api.qaCloseWindow(); return true })()')
       await sleep(700)
       check('IDE dirty close Don\'t save closes without another write', !(await hasRole(port, 'ide')), 'discarded close')
       await mainPage.evaluate('(async () => { const state = await window.api.getSharedState(); if (state) { state.fileDirty = true; window.api.publishSharedState(state) } return true })()')
-      await mainPage.evaluate('(async () => { await window.api.qaSetDialogSequence(["cancel"]); await window.api.qaCloseWindow(); return true })()')
+      await mainPage.evaluate('(async () => { await window.api.qaSetDialogSequence(["cancel"]); void window.api.qaCloseWindow(); return true })()')
       await sleep(500)
       check('Main dirty close Cancel keeps the Agent window open', await hasRole(port, 'main'), 'cancelled main close')
     }

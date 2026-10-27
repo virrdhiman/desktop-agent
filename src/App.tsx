@@ -29,6 +29,7 @@ import SurfaceSwitch from './components/SurfaceSwitch'
 import AppMenuBar from './components/AppMenuBar'
 import CodeWorkspace from './components/CodeWorkspace'
 import { isTerminalPanelShortcut, mergeLayoutPreferences, normalizeLayoutPreferences, type LayoutPreferences, type RightPanelTab } from './lib/layoutPersistence'
+import { initialSharedStateReady } from './lib/sharedStateSync'
 import type { Panel, SharedAppState } from './types'
 
 type StoreSnapshot = ReturnType<typeof useStore.getState>
@@ -101,6 +102,7 @@ export default function App() {
   const isIdeWindow = window.api.windowRole === 'ide'
   const codeMode = isIdeWindow
   const syncApplying = useRef(false)
+  const sharedHydrated = useRef(false)
   const syncTimer = useRef<number | null>(null)
   const lastPublishedState = useRef('')
 
@@ -144,6 +146,7 @@ export default function App() {
     }
     void initialize()
     const flush = () => {
+      if (isIdeWindow && !sharedHydrated.current) return
       void useStore.getState().flushSessionSave()
       window.api.publishSharedState(buildSharedState(useStore.getState()))
     }
@@ -178,6 +181,7 @@ export default function App() {
     }
     const unsubscribe = useStore.subscribe(schedulePublish)
     const cleanup = window.api.onSharedState((snapshot) => {
+      sharedHydrated.current = true
       syncApplying.current = true
       applySharedState(snapshot)
       lastPublishedState.current = JSON.stringify(buildSharedState(useStore.getState()))
@@ -185,12 +189,21 @@ export default function App() {
     })
     void window.api.getSharedState().then((snapshot) => {
       if (snapshot) {
+        sharedHydrated.current = true
         syncApplying.current = true
         applySharedState(snapshot)
         lastPublishedState.current = JSON.stringify(buildSharedState(useStore.getState()))
         syncApplying.current = false
-      } else {
+      } else if (initialSharedStateReady(isIdeWindow, snapshot)) {
+        sharedHydrated.current = true
         schedulePublish()
+      } else {
+        window.setTimeout(() => {
+          if (!sharedHydrated.current) {
+            sharedHydrated.current = true
+            schedulePublish()
+          }
+        }, 750)
       }
     }).catch(() => schedulePublish())
     return () => {

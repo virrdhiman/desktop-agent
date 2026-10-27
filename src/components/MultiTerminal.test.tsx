@@ -10,6 +10,7 @@ vi.mock('xterm', () => ({
     element = document.createElement('div')
     cols = 80
     rows = 24
+    _core = { _renderService: { dimensions: { css: { cell: { width: 8, height: 16 } } } } }
     loadAddon() {}
     open(container: HTMLElement) { container.appendChild(this.element) }
     onData() { return { dispose() {} } }
@@ -48,12 +49,16 @@ describe('MultiTerminal renderer safety', () => {
     let renderError: unknown
 
     try {
+      Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, value: 400 })
+      Object.defineProperty(HTMLElement.prototype, 'clientHeight', { configurable: true, value: 240 })
       Object.defineProperty(globalThis, 'process', { configurable: true, value: undefined })
       view = render(<MultiTerminal />)
     } catch (error) {
       renderError = error
     } finally {
       Object.defineProperty(globalThis, 'process', { configurable: true, value: originalProcess })
+      delete (HTMLElement.prototype as unknown as { clientWidth?: number }).clientWidth
+      delete (HTMLElement.prototype as unknown as { clientHeight?: number }).clientHeight
     }
 
     expect(renderError).toBeUndefined()
