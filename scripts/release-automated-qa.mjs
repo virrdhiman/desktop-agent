@@ -169,7 +169,7 @@ function tasklistMemory(pid) {
   })
 }
 
-async function publishWorkspace(main, settings) {
+async function publishWorkspace(main, settings, mirror = null) {
   const files = [
     { name: 'qa-editor.ts', path: path.join(workspace, 'qa-editor.ts'), isDirectory: false },
     { name: 'dialog-file.ts', path: path.join(workspace, 'dialog-file.ts'), isDirectory: false },
@@ -193,12 +193,18 @@ async function publishWorkspace(main, settings) {
     activeTerminalTab: 'qa-terminal',
     terminalEntries: [],
   }
-  await main.evaluate(`window.api.publishSharedState(${JSON.stringify(snapshot)}); true`)
+  const serialized = JSON.stringify(snapshot)
+  await main.evaluate(`window.api.publishSharedState(${serialized}); true`)
   for (let attempt = 0; attempt < 20; attempt += 1) {
     const published = await main.evaluate('window.api.getSharedState()')
     if (published?.workspacePath === workspace) return
+    // A renderer can publish its pre-workspace store snapshot immediately after
+    // the harness seed. Mirror the fixture through the IDE window so both
+    // renderers converge before dirty-close assertions begin.
+    if (mirror && attempt === 4) await mirror.evaluate(`window.api.publishSharedState(${serialized}); true`)
     await sleep(250)
   }
+  throw new Error('Fixture workspace was not accepted by the shared-state store')
 }
 
 async function prepareFixture() {
@@ -320,7 +326,7 @@ async function main() {
       try { if (await (await connect(target)).evaluate('window.api?.windowRole') === 'ide') ideTargets.push(target) } catch {}
     }
     check('IDE is single-instance and second open focuses it', ideTargets.length === 1, `${ideTargets.length} IDE targets`)
-    await publishWorkspace(mainPage, safeSettings)
+    await publishWorkspace(mainPage, safeSettings, ide)
     let ideSharedState
     for (let attempt = 0; attempt < 20; attempt += 1) {
       ideSharedState = await ide.evaluate('window.api.getSharedState()')
