@@ -31,5 +31,7 @@ Release verdict: **GO**
 - **PASS** unsigned-package: `C:\vd-vms\qa-fixture-final-release-3\logs\unsigned-package.log`
 - **PASS** packaged-validator: `C:\vd-vms\qa-fixture-final-release-3\logs\packaged-validator.log`
 - **PASS** automated-packaged-qa: `C:\vd-vms\qa-fixture-final-release-3\logs\automated-packaged-qa.log`
+- **PASS** final packaged harness rerun: `C:\vd-vms\qa-fixture-final-packaged-3` (30/30 checks; fresh isolated profile)
+- **PASS** visual screenshot review: `.work/screens/final-visual-final-3` (Agent, Code, right tools, long-chat, Settings and narrow layout; no clipping or overlap found)
 
 Automated checks use only throwaway fixture files, a local 127.0.0.1 server, and an isolated packaged-app userData directory. Visual polish and unsigned-installer SmartScreen interaction remain manual.
