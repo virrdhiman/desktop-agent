@@ -44,6 +44,7 @@ import { SharedStateStore } from './sharedState'
 import { userDataOverride } from './userDataPath'
 import { isSafeWorkspaceFile, nextQaDialogChoice, type UnsavedChoice } from './windowClose'
 import type { SharedAppState } from '../src/types'
+import { shouldAcceptSharedStateUpdate } from '../src/lib/sharedStateSync'
 
 // package.json has "type": "module", so the main bundle is ESM and has no CommonJS __dirname.
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -361,6 +362,10 @@ app.whenReady().then(() => {
   ipcMain.on('shared-state:publish', (event, next: SharedAppState) => {
     if (!next || next.version !== 1 || typeof next.workspacePath !== 'string') return
     if (qaDirtyStateLocked && !next.fileDirty) return
+    const sender = BrowserWindow.fromWebContents(event.sender)
+    const senderRole = sender && sender === getIdeWindow() ? 'ide' : 'main'
+    const current = sharedState.get()
+    if (!shouldAcceptSharedStateUpdate(senderRole, current?.workspacePath || '', next.workspacePath)) return
     const safeState = sanitizeSharedState(next)
     sharedState.set(safeState)
     for (const window of getRendererWindows()) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { initialSharedStateReady } from './sharedStateSync'
+import { initialSharedStateReady, shouldAcceptSharedStateUpdate } from './sharedStateSync'
 
 describe('shared window state hydration', () => {
   it('waits for the main window snapshot before an IDE publishes', () => {
@@ -9,5 +9,11 @@ describe('shared window state hydration', () => {
 
   it('allows the main window to establish the initial shared state', () => {
     expect(initialSharedStateReady(false, null)).toBe(true)
+  })
+
+  it('does not let an IDE startup snapshot erase the active workspace', () => {
+    expect(shouldAcceptSharedStateUpdate('ide', 'C:/workspace', '')).toBe(false)
+    expect(shouldAcceptSharedStateUpdate('ide', 'C:/workspace', 'C:/other')).toBe(true)
+    expect(shouldAcceptSharedStateUpdate('main', 'C:/workspace', '')).toBe(true)
   })
 })
