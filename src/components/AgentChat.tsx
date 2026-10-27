@@ -26,6 +26,7 @@ import DiffViewer from './DiffViewer'
 import WorkingModeSelector from './WorkingModeSelector'
 import ComposerAddMenu from './ComposerAddMenu'
 import ComposerControls from './ComposerControls'
+import BrandLogo from './BrandLogo'
 import { buildConversationSummary, useStore } from '../store'
 import { contextLevel, contextWindowForModel, estimateTokens } from '../lib/chatControl'
 import { AGENT_TOOLS, type AgentTaskKind, type ChatMessage, type AgentStep, type ProviderConfig } from '../types'
@@ -1511,14 +1512,7 @@ export default function AgentChat() {
         )}
         {messages.length === 0 ? (
           <div className="empty-state">
-            <div style={{
-              width: 60, height: 60, borderRadius: 16, display: 'flex',
-              alignItems: 'center', justifyContent: 'center',
-              background: 'linear-gradient(135deg, var(--accent), #a855f7)',
-              fontSize: 28, marginBottom: 8,
-            }}>
-              🤖
-            </div>
+            <BrandLogo className="vd-chat-empty-logo" />
             <div className="empty-state-text" style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-primary)' }}>
               VD Agent
             </div>

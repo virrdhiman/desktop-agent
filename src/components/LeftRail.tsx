@@ -1,4 +1,5 @@
 import type { Panel } from '../types'
+import BrandLogo from './BrandLogo'
 
 type LeftRailProps = {
   activePanel: Panel
@@ -17,7 +18,7 @@ export default function LeftRail({ activePanel, collapsed, onToggle, onHome, onS
 
   return (
     <nav className="vd-left-rail" aria-label="Primary navigation">
-      <div className="vd-rail-brand" role="img" aria-label="VD Agent">VD</div>
+      <div className="vd-rail-brand" role="img" aria-label="Productive IT mark"><BrandLogo variant="mark" alt="Productive IT mark" /></div>
       <div className="vd-rail-items">
         {items.map((item) => (
           <button

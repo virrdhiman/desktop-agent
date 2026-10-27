@@ -3,6 +3,7 @@ import { useStore } from '../store'
 import type { Panel } from '../types'
 import AvatarMenu from './AvatarMenu'
 import { APP_VERSION } from '../lib/brand'
+import BrandLogo from './BrandLogo'
 
 type WorkspaceSidebarProps = {
   collapsed: boolean
@@ -53,9 +54,12 @@ export default function WorkspaceSidebar({ collapsed, onToggle, onSettings, onHe
   return (
     <aside className="vd-workspace-sidebar" aria-label="Workspace navigation">
       <div className="vd-sidebar-header">
-        <div>
+        <div className="vd-sidebar-heading">
+          <BrandLogo className="vd-sidebar-logo" />
+          <div>
           <div className="vd-sidebar-title">Workspace</div>
           <div className="vd-sidebar-subtitle" title={workspacePath || 'No workspace open'}>{workspacePath ? basename(workspacePath) : 'No workspace open'}</div>
+          </div>
         </div>
         <button className="vd-icon-button" aria-label="Collapse workspace sidebar" title="Collapse sidebar" onClick={onToggle}>‹</button>
       </div>

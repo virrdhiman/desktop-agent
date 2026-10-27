@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import BrandLogo from './BrandLogo'
 
 type AvatarMenuProps = { onSettings: () => void; onHelp: () => void; onShortcuts: () => void }
 
@@ -29,7 +30,7 @@ export default function AvatarMenu({ onSettings, onHelp, onShortcuts }: AvatarMe
   }, [open])
   return (
     <div className="vd-avatar-wrap">
-      <button ref={triggerRef} className="vd-avatar" aria-label="Open account menu" aria-expanded={open} onClick={() => setOpen((value) => !value)}>VD</button>
+      <button ref={triggerRef} className="vd-avatar" aria-label="Open account menu" aria-expanded={open} onClick={() => setOpen((value) => !value)}><BrandLogo variant="mark" alt="Productive IT mark" /></button>
       {open && <>
         <button className="vd-menu-backdrop" aria-label="Close account menu" onClick={() => setOpen(false)} />
         <div ref={menuRef} className="vd-avatar-menu" role="menu" aria-label="Account menu">

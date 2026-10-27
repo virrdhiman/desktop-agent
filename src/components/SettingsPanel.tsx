@@ -27,6 +27,7 @@ import { maskProviderForRenderer } from '../lib/providerKeys'
 import { APP_COMMIT, APP_NAME, APP_VERSION, AUTHOR_NAME, AUTHOR_URL, COPYRIGHT, LICENSE_URL, REPO_URL } from '../lib/brand'
 import { TEAM_PRESET_LABELS } from '../lib/multiAgent'
 import { DATA_TOOL_SETTINGS } from '../lib/dataToolSettings'
+import BrandLogo from './BrandLogo'
 import { SMALL_OLLAMA_MODEL, SMALL_OLLAMA_SIZE } from '../../electron/ollamaModels'
 
 type Category = 'all' | 'free' | 'local' | 'community' | 'image_video' | 'paid'
@@ -282,7 +283,7 @@ export default function SettingsPanel() {
       {/* Left: Provider list */}
       <div style={{ width: 400, borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
         <div className="panel-header">
-          <h2>⚙️ Settings</h2>
+          <div className="vd-settings-heading"><BrandLogo className="vd-settings-logo" /><h2>⚙️ Settings</h2></div>
           <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{settings.providers.length} providers</span>
         </div>
           <div className="panel-body">

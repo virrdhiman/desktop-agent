@@ -303,7 +303,17 @@ kbd {
   width: 58px; flex: 0 0 58px; display: flex; flex-direction: column; align-items: center;
   padding: 10px 0; gap: 6px; background: var(--bg-primary); border-right: 1px solid var(--border);
 }
-.vd-rail-brand, .vd-avatar { width: 32px; height: 32px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; color: white; background: linear-gradient(135deg, var(--accent), #a855f7); }
+.vd-rail-brand, .vd-avatar { width: 32px; height: 32px; border-radius: 9px; display: flex; align-items: center; justify-content: center; overflow: hidden; background: rgba(255,255,255,.96); }
+.vd-brand-logo { display: block; object-fit: contain; user-select: none; }
+.vd-brand-logo-full { width: 180px; max-width: 100%; height: auto; padding: 5px 8px; border-radius: 8px; background: rgba(255,255,255,.96); }
+.vd-brand-logo-mark { width: 100%; height: 100%; padding: 3px; border-radius: inherit; background: rgba(255,255,255,.96); }
+.vd-sidebar-heading { display: flex; align-items: center; min-width: 0; gap: 8px; }
+.vd-sidebar-logo { width: 76px; flex: 0 0 76px; padding: 3px 5px; }
+.vd-chat-empty-logo { width: min(260px, 70%); max-height: 120px; margin-bottom: 8px; }
+.vd-setup-logo { width: 190px; margin-bottom: 8px; }
+.vd-settings-heading { display: flex; align-items: center; gap: 10px; }
+.vd-settings-heading h2 { margin: 0; }
+.vd-settings-logo { width: 110px; padding: 3px 6px; }
 .vd-rail-items { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; }
 .vd-rail-button { width: 44px; min-height: 45px; border: 0; border-radius: 9px; background: transparent; color: var(--text-muted); font-size: 16px; cursor: pointer; display: grid; place-items: center; gap: 1px; }
 .vd-rail-label { font-size: 8px; line-height: 1; }
