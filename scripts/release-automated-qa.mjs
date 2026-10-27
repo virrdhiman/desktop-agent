@@ -16,6 +16,7 @@ const require = createRequire(path.join(repo, 'package.json'))
 const fixture = path.resolve(value('--fixture') || 'C:/vd-vms/qa-fixture')
 const exe = path.resolve(value('--exe') || '')
 const stabilityMinutes = Number(value('--stability-minutes') || 30)
+const screenshotDir = value('--screenshots') ? path.resolve(value('--screenshots')) : null
 const userData = path.join(fixture, 'automated-user-data')
 const workspace = path.join(fixture, 'automated-workspace')
 const results = []
@@ -86,6 +87,19 @@ class CdpPage {
     return this.evaluate(`document.querySelector(${JSON.stringify(selector)})?.click(); true`)
   }
 
+  async screenshot(fileName) {
+    if (!screenshotDir) return false
+    await fsp.mkdir(screenshotDir, { recursive: true })
+    await this.send('Page.enable')
+    const result = await this.send('Page.captureScreenshot', { format: 'png', fromSurface: true })
+    await fsp.writeFile(path.join(screenshotDir, fileName), Buffer.from(result.result.data, 'base64'))
+    return true
+  }
+
+  async closeWindow() {
+    await this.send('Page.close')
+  }
+
   close() {
     try { this.socket.close() } catch {}
   }
@@ -125,6 +139,18 @@ async function waitForRole(port, role, known = new Set()) {
   throw new Error(`No ${role} window appeared`)
 }
 
+async function hasRole(port, role) {
+  for (const target of await targets(port)) {
+    try {
+      const page = await connect(target)
+      const matches = await page.evaluate('window.api?.windowRole') === role
+      page.close()
+      if (matches) return true
+    } catch {}
+  }
+  return false
+}
+
 function tasklistMemory(pid) {
   return new Promise((resolve) => {
     execFile('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], { windowsHide: true }, (_error, stdout) => {
@@ -135,7 +161,10 @@ function tasklistMemory(pid) {
 }
 
 async function publishWorkspace(main, settings) {
-  const files = [{ name: 'qa-editor.ts', path: path.join(workspace, 'qa-editor.ts'), isDirectory: false }]
+  const files = [
+    { name: 'qa-editor.ts', path: path.join(workspace, 'qa-editor.ts'), isDirectory: false },
+    { name: 'dialog-file.ts', path: path.join(workspace, 'dialog-file.ts'), isDirectory: false },
+  ]
   const snapshot = {
     version: 1,
     workspacePath: workspace,
@@ -164,6 +193,7 @@ async function prepareFixture() {
   await fsp.mkdir(workspace, { recursive: true })
   await fsp.mkdir(userData, { recursive: true })
   await fsp.writeFile(path.join(workspace, 'qa-editor.ts'), 'export const qaValue = 1\n', 'utf8')
+  await fsp.writeFile(path.join(workspace, 'dialog-file.ts'), 'export const dialogValue = 1\n', 'utf8')
   await fsp.writeFile(path.join(workspace, 'readonly.txt'), 'readonly fixture\n', 'utf8')
   await fsp.writeFile(path.join(workspace, 'locked.txt'), 'locked fixture\n', 'utf8')
   await fsp.writeFile(path.join(workspace, 'delete-me.txt'), 'delete fixture\n', 'utf8')
@@ -213,9 +243,9 @@ async function main() {
   await prepareFixture()
   const portFile = path.join(userData, 'DevToolsActivePort')
   fs.rmSync(portFile, { force: true })
-  const child = spawn(exe, ['--remote-debugging-port=0', `--user-data-dir=${userData}`], {
+  const child = spawn(exe, ['--remote-debugging-port=0', '--vd-qa-dialogs', `--user-data-dir=${userData}`], {
     cwd: path.dirname(exe),
-    env: { ...process.env, VD_AGENT_DISABLE_ENV_IMPORT: '1', VD_AGENT_AUTO_APPROVE_TOOLS: '1' },
+    env: { ...process.env, VD_AGENT_DISABLE_ENV_IMPORT: '1', VD_AGENT_AUTO_APPROVE_TOOLS: '1', VD_AGENT_QA_DIALOGS: '1', VD_AGENT_QA_DIALOG_SEQUENCE: 'cancel,save,dont-save' },
     windowsHide: true,
   })
   const port = await waitForPort(portFile)
@@ -228,6 +258,7 @@ async function main() {
     const firstRunSettings = await mainPage.evaluate('window.api.loadSettings()')
     check('packaged first run is isolated and key-free', !firstRunText.match(/API key configured|key saved/i), `fresh userData; configured providers=${(firstRunSettings.providers || []).filter((provider) => provider.hasKey).length}`)
     check('first-run key guidance is visible', firstRunText.includes('Add an API key in Settings'), 'welcome screen')
+    await mainPage.screenshot('agent-view.png')
 
     const lockedPath = path.join(workspace, 'locked.txt').replaceAll("'", "''")
     const lockProcess = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `$stream = [System.IO.File]::Open('${lockedPath}', [System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None); Start-Sleep -Seconds 30; $stream.Dispose()`], { windowsHide: true })
@@ -249,10 +280,11 @@ async function main() {
     await mainPage.evaluate(`window.api.saveSettings(${JSON.stringify(safeSettings)})`)
     const beforeIde = new Set((await targets(port)).map((target) => target.webSocketDebuggerUrl))
     await mainPage.evaluate('window.api.openIdeWindow()')
-    const ide = await waitForRole(port, 'ide', beforeIde)
+    let ide = await waitForRole(port, 'ide', beforeIde)
     await sleep(1_500)
     const noFolderText = await ide.evaluate('document.body.innerText')
     check('IDE no-folder state offers Open Folder', /open folder/i.test(noFolderText), 'Open Folder control visible')
+    await ide.screenshot('code-window-no-folder.png')
     await mainPage.evaluate('window.api.openIdeWindow()')
     await sleep(500)
     const ideTargets = []
@@ -262,7 +294,20 @@ async function main() {
     check('IDE is single-instance and second open focuses it', ideTargets.length === 1, `${ideTargets.length} IDE targets`)
     await publishWorkspace(mainPage, safeSettings)
     await sleep(2_000)
-    check('IDE follows the shared workspace', (await ide.evaluate('document.body.innerText')).includes('qa-editor.ts'), 'shared fixture workspace')
+    const ideSharedState = await ide.evaluate('window.api.getSharedState()')
+    check('IDE follows the shared workspace', Boolean(ideSharedState?.files?.some((file) => file.name === 'qa-editor.ts')), `files=${ideSharedState?.files?.map((file) => file.name).join(', ') || 'none'}`)
+    await mainPage.evaluate(`(() => { const button = [...document.querySelectorAll('button')].find((node) => node.textContent?.trim() === 'Terminal'); button?.click(); return true })()`)
+    await sleep(300)
+    await mainPage.screenshot('right-panel-terminal.png')
+    await mainPage.evaluate(`(() => { const button = [...document.querySelectorAll('button')].find((node) => node.textContent?.trim() === 'Files'); button?.click(); return true })()`)
+    await sleep(300)
+    await mainPage.screenshot('right-panel-files.png')
+    const monacoLanguages = await ide.evaluate(`(async () => {
+      if (typeof window.__VD_ENSURE_MONACO_LANGUAGE !== 'function') return []
+      await Promise.all(['typescript', 'javascript', 'json'].map((language) => window.__VD_ENSURE_MONACO_LANGUAGE(language)))
+      return window.__VD_MONACO?.languages?.getLanguages?.().map((language) => language.id) || []
+    })()`)
+    check('packaged Monaco contributions load offline for TS, JS and JSON', ['typescript', 'javascript', 'json'].every((language) => monacoLanguages.includes(language)), monacoLanguages.slice(0, 12).join(', '))
     await ide.evaluate(`(() => {
       window.prompt = () => 'qa-renamed.ts'
       const item = [...document.querySelectorAll('[role="treeitem"]')].find((node) => node.textContent.includes('qa-editor.ts'))
@@ -276,6 +321,35 @@ async function main() {
     await ide.evaluate(`(() => { window.confirm = () => true; const button = [...document.querySelectorAll('button')].find((node) => node.textContent?.trim() === 'Delete'); button?.click(); return Boolean(button) })()`)
     await sleep(500)
     check('IDE delete confirmation is wired', !fs.existsSync(path.join(workspace, 'qa-renamed.ts')) || !fs.existsSync(path.join(workspace, 'qa-editor.ts')), 'confirmed fixture delete')
+
+    const qaDialogApi = await mainPage.evaluate('typeof window.api.qaSetDialogSequence === "function" && typeof window.api.qaSetDirtyState === "function" && typeof window.api.qaCloseWindow === "function"')
+    check('QA dialog controls are available only for the fixture harness', qaDialogApi === true, 'bounded QA-only preload methods')
+    if (qaDialogApi) {
+      const dialogFile = path.join(workspace, 'dialog-file.ts')
+      const dirtySet = await mainPage.evaluate(`window.api.qaSetDirtyState(${JSON.stringify(dialogFile)}, ${JSON.stringify('export const qaValue = 2\n')})`)
+      check('QA dirty-state fixture is accepted', dirtySet?.success === true, 'main-process shared state marked dirty')
+      await sleep(250)
+      await ide.evaluate('(async () => { await window.api.qaSetDialogSequence(["cancel"]); await window.api.qaCloseWindow(); return true })()')
+      await sleep(500)
+      check('IDE dirty close Cancel keeps the window open', await hasRole(port, 'ide'), 'cancelled close')
+      await mainPage.evaluate(`window.api.qaSetDirtyState(${JSON.stringify(dialogFile)}, ${JSON.stringify('export const qaValue = 2\n')})`)
+      await sleep(100)
+      await ide.evaluate('(async () => { await window.api.qaSetDialogSequence(["save"]); await window.api.qaCloseWindow(); return true })()')
+      await sleep(700)
+      check('IDE dirty close Save writes the file and closes', fs.readFileSync(path.join(workspace, 'dialog-file.ts'), 'utf8').includes('qaValue = 2') && !(await hasRole(port, 'ide')), 'saved fixture content')
+      const reopened = new Set((await targets(port)).map((target) => target.webSocketDebuggerUrl))
+      await mainPage.evaluate('window.api.openIdeWindow()')
+      ide = await waitForRole(port, 'ide', reopened)
+      await mainPage.evaluate(`window.api.qaSetDirtyState(${JSON.stringify(dialogFile)}, ${JSON.stringify('export const qaValue = 3\n')})`)
+      await sleep(250)
+      await ide.evaluate('(async () => { await window.api.qaSetDialogSequence(["dont-save"]); await window.api.qaCloseWindow(); return true })()')
+      await sleep(700)
+      check('IDE dirty close Don\'t save closes without another write', !(await hasRole(port, 'ide')), 'discarded close')
+      await mainPage.evaluate('(async () => { const state = await window.api.getSharedState(); if (state) { state.fileDirty = true; window.api.publishSharedState(state) } return true })()')
+      await mainPage.evaluate('(async () => { await window.api.qaSetDialogSequence(["cancel"]); await window.api.qaCloseWindow(); return true })()')
+      await sleep(500)
+      check('Main dirty close Cancel keeps the Agent window open', await hasRole(port, 'main'), 'cancelled main close')
+    }
 
     const tool = (name, args, workingMode = 'build') => mainPage.evaluate(`window.api.toolExecute(${JSON.stringify({ name, args, workspace, sessionId: 'qa-session', workingMode })})`)
     const readOnlyWrite = await tool('write_file', { path: path.join(workspace, 'plan-blocked.txt'), content: 'blocked' }, 'plan')
@@ -306,6 +380,7 @@ async function main() {
     await sleep(2_000)
     const longText = await mainPage.evaluate('document.body.innerText')
     check('long chat crosses the context warning threshold', /Context is getting full|tokens \(estimate\)/.test(longText), 'long fixture restored')
+    await mainPage.screenshot('long-chat-banner.png')
     const parentBefore = await mainPage.evaluate(`window.api.listConversations()`)
     await mainPage.evaluate(`[...document.querySelectorAll('button')].find((node) => node.textContent.includes('Summarize'))?.click()`)
     await sleep(800)
@@ -326,6 +401,13 @@ async function main() {
     const settingsText = await mainPage.evaluate(`(() => { document.dispatchEvent(new KeyboardEvent('keydown', { key: ',', ctrlKey: true, bubbles: true })); return document.body.innerText })()`)
     await sleep(400)
     check('Settings exposes version and build commit', /About VD Agent v[0-9]/.test(await mainPage.evaluate('document.body.innerText')) && /Build commit:/.test(await mainPage.evaluate('document.body.innerText')), settingsText.slice(0, 80))
+    await mainPage.screenshot('settings.png')
+    if (screenshotDir) {
+      await mainPage.send('Emulation.setDeviceMetricsOverride', { width: 720, height: 700, deviceScaleFactor: 1, mobile: false })
+      await sleep(300)
+      await mainPage.screenshot('narrow-window.png')
+      await mainPage.send('Emulation.clearDeviceMetricsOverride')
+    }
 
     const baseline = await tasklistMemory(child.pid)
     const samples = []

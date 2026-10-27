@@ -71,7 +71,7 @@ function Qa-Group([string[]]$Names) {
 
 $qaAgent = Qa-Group @('packaged first run is isolated and key-free', 'first-run key guidance is visible')
 $qaModes = Qa-Group @('working mode policy is enforced in the packaged app')
-$qaIde = Qa-Group @('IDE no-folder state offers Open Folder', 'IDE is single-instance and second open focuses it', 'IDE follows the shared workspace', 'IDE rename action is wired', 'IDE delete confirmation is wired')
+$qaIde = Qa-Group @('IDE no-folder state offers Open Folder', 'IDE is single-instance and second open focuses it', 'IDE follows the shared workspace', 'packaged Monaco contributions load offline for TS, JS and JSON', 'IDE rename action is wired', 'IDE delete confirmation is wired', 'QA dialog controls are available only for the fixture harness', 'QA dirty-state fixture is accepted', 'IDE dirty close Cancel keeps the window open', 'IDE dirty close Save writes the file and closes', "IDE dirty close Don't save closes without another write", 'Main dirty close Cancel keeps the Agent window open')
 $qaGit = Qa-Group @('throwaway git fixture supports status, diff, stage and commit')
 $qaBrowser = Qa-Group @('local browser fixture labels source and handles 404')
 $qaFiles = Qa-Group @('permission errors are returned without renderer crashes', 'file tool rejects paths outside the workspace')

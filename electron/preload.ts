@@ -42,6 +42,11 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('shared-state:changed', listener)
     return () => { ipcRenderer.removeListener('shared-state:changed', listener) }
   },
+  ...(process.env.VD_AGENT_QA_DIALOGS === '1' ? {
+    qaSetDialogSequence: (choices: string[]) => invokeWithTimeout('qa:set-dialog-sequence', choices),
+    qaSetDirtyState: (filePath: string, content: string) => invokeWithTimeout('qa:set-dirty-state', filePath, content),
+    qaCloseWindow: () => invokeWithTimeout('qa:close-window'),
+  } : {}),
 
   // ═══ File System ══════════════════════════════════════════════════════════════
   // Browse, read, write, create, delete files and directories
@@ -284,6 +289,9 @@ export type ElectronAPI = {
   getSharedState: () => Promise<SharedAppState | null>
   publishSharedState: (state: SharedAppState) => void
   onSharedState: (cb: (state: SharedAppState) => void) => () => void
+  qaSetDialogSequence?: (choices: string[]) => Promise<{ success: boolean }>
+  qaSetDirtyState?: (filePath: string, content: string) => Promise<{ success: boolean }>
+  qaCloseWindow?: () => Promise<{ success: boolean }>
   openDirectory: () => Promise<string | null>
   pickContext: (workspacePath: string) => Promise<string[] | { error: string }>
   readDirectory: (dirPath: string) => Promise<FileEntry[] | { error: string }>

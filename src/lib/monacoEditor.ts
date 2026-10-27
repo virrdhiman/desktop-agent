@@ -88,6 +88,10 @@ self.MonacoEnvironment = {
 }
 
 loader.config({ monaco })
-;(self as unknown as { __VD_MONACO?: typeof monaco }).__VD_MONACO = monaco
+;(self as unknown as {
+  __VD_MONACO?: typeof monaco
+  __VD_ENSURE_MONACO_LANGUAGE?: (language: string) => Promise<unknown>
+}).__VD_MONACO = monaco
+;(self as unknown as { __VD_ENSURE_MONACO_LANGUAGE?: (language: string) => Promise<unknown> }).__VD_ENSURE_MONACO_LANGUAGE = ensureMonacoLanguage
 
 export { default } from '@monaco-editor/react'

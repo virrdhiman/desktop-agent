@@ -42,6 +42,7 @@ import { appendDiagnosticsLog } from './diagnostics'
 import { SingleIdeWindow } from './ideWindow'
 import { SharedStateStore } from './sharedState'
 import { userDataOverride } from './userDataPath'
+import { isSafeWorkspaceFile, nextQaDialogChoice, type UnsavedChoice } from './windowClose'
 import type { SharedAppState } from '../src/types'
 
 // package.json has "type": "module", so the main bundle is ESM and has no CommonJS __dirname.
@@ -55,6 +56,11 @@ let rendererRecoveryAttempts = 0
 const getMainWindow = () => mainWindow
 const sharedState = new SharedStateStore()
 let ideCloseAllowed = false
+let mainCloseAllowed = false
+let qaDirtyStateLocked = false
+const qaDialogQueue: UnsavedChoice[] = (process.env.VD_AGENT_QA_DIALOG_SEQUENCE || '')
+  .split(',')
+  .filter((choice): choice is UnsavedChoice => choice === 'save' || choice === 'dont-save' || choice === 'cancel')
 const ideWindowManager = new SingleIdeWindow<BrowserWindow>(() => createIdeWindow())
 const getIdeWindow = () => ideWindowManager.get()
 const getRendererWindows = () => [mainWindow, getIdeWindow()].filter((window): window is BrowserWindow => !!window && !window.isDestroyed())
@@ -164,6 +170,44 @@ function saveIdeBounds(window: BrowserWindow): void {
   }
 }
 
+function saveSharedFile(): boolean {
+  const state = sharedState.get()
+  if (!state?.fileDirty || !state.workspacePath || !state.selectedFile || !isSafeWorkspaceFile(state.workspacePath, state.selectedFile)) return false
+  try {
+    fs.writeFileSync(state.selectedFile, state.fileContent, 'utf8')
+    sharedState.set({ ...state, fileDirty: false })
+    return true
+  } catch (error) {
+    console.error('Failed to save unsaved file before window close:', error)
+    return false
+  }
+}
+
+async function unsavedChoice(window: BrowserWindow): Promise<UnsavedChoice> {
+  const qaChoice = nextQaDialogChoice(qaDialogQueue)
+  if (qaChoice) return qaChoice
+  const result = await dialog.showMessageBox(window, {
+    type: 'warning',
+    title: 'Unsaved changes',
+    message: 'This window has unsaved changes.',
+    detail: 'Save before closing, discard the changes, or keep the window open?',
+    buttons: ['Save', "Don't save", 'Cancel'],
+    defaultId: 0,
+    cancelId: 2,
+  })
+  return result.response === 0 ? 'save' : result.response === 1 ? 'dont-save' : 'cancel'
+}
+
+function closeWithUnsavedChoice(window: BrowserWindow, allowClose: () => void): void {
+  void unsavedChoice(window).then((choice) => {
+    if (choice === 'cancel') return
+    if (choice === 'save' && !saveSharedFile()) return
+    qaDirtyStateLocked = false
+    allowClose()
+    if (!window.isDestroyed()) window.close()
+  }).catch(() => {})
+}
+
 function createIdeWindow(): BrowserWindow {
   const icon = resolveWindowIcon()
   const ideWindow = new BrowserWindow({
@@ -190,20 +234,7 @@ function createIdeWindow(): BrowserWindow {
   ideWindow.on('close', (event) => {
     if (ideCloseAllowed || !sharedState.get()?.fileDirty) return
     event.preventDefault()
-    void dialog.showMessageBox(ideWindow, {
-      type: 'warning',
-      title: 'Unsaved changes',
-      message: 'The IDE has unsaved changes.',
-      detail: 'Close the IDE window without saving? The main Agent window will remain open.',
-      buttons: ['Cancel', 'Close without saving'],
-      defaultId: 0,
-      cancelId: 0,
-    }).then(({ response }) => {
-      if (response === 1 && !ideWindow.isDestroyed()) {
-        ideCloseAllowed = true
-        ideWindow.close()
-      }
-    }).catch(() => {})
+    closeWithUnsavedChoice(ideWindow, () => { ideCloseAllowed = true })
   })
   ideWindow.on('closed', () => {
     saveIdeBounds(ideWindow)
@@ -252,7 +283,13 @@ function createWindow() {
 
   mainWindow.on('closed', () => {
     mainWindow = null
+    mainCloseAllowed = false
     closeBrowserSessions()
+  })
+  mainWindow.on('close', (event) => {
+    if (mainCloseAllowed || !sharedState.get()?.fileDirty) return
+    event.preventDefault()
+    closeWithUnsavedChoice(mainWindow!, () => { mainCloseAllowed = true })
   })
 }
 
@@ -300,9 +337,30 @@ app.whenReady().then(() => {
     }
     return { success: false, error: 'Main Agent window is not available.' }
   })
+  ipcMain.handle('qa:set-dialog-sequence', (_event, choices: unknown) => {
+    if (!Array.isArray(choices)) return { success: false }
+    qaDialogQueue.splice(0, qaDialogQueue.length, ...choices.filter((choice): choice is UnsavedChoice => choice === 'save' || choice === 'dont-save' || choice === 'cancel'))
+    return { success: true }
+  })
+  ipcMain.handle('qa:set-dirty-state', (_event, filePath: unknown, content: unknown) => {
+    const current = sharedState.get()
+    if (!current || typeof filePath !== 'string' || typeof content !== 'string' || !isSafeWorkspaceFile(current.workspacePath, filePath)) return { success: false }
+    const next = sanitizeSharedState({ ...current, selectedFile: filePath, openFiles: [...new Set([...current.openFiles, filePath])], fileContent: content, fileDirty: true })
+    qaDirtyStateLocked = true
+    sharedState.set(next)
+    for (const window of getRendererWindows()) window.webContents.send('shared-state:changed', next)
+    return { success: true }
+  })
+  ipcMain.handle('qa:close-window', (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (!window || window.isDestroyed()) return { success: false }
+    window.close()
+    return { success: true }
+  })
   ipcMain.handle('shared-state:get', () => sharedState.get())
   ipcMain.on('shared-state:publish', (event, next: SharedAppState) => {
     if (!next || next.version !== 1 || typeof next.workspacePath !== 'string') return
+    if (qaDirtyStateLocked && !next.fileDirty) return
     const safeState = sanitizeSharedState(next)
     sharedState.set(safeState)
     for (const window of getRendererWindows()) {
