@@ -8,7 +8,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
-    pool: 'threads',
+    pool: 'forks',
     fileParallelism: false,
     maxWorkers: 1,
     setupFiles: ['./src/__tests__/setup.ts'],
