@@ -132,7 +132,7 @@ export interface Settings extends DataToolSettings {
   updateChannel?: 'stable' | 'beta'
   /** Opt-in evidence-only response rules. */
   strictGrounding?: boolean
-  /** System appearance follows the operating system until the user selects a fixed theme. */
+  /** System and PIT Brand follow the operating system's light/dark appearance. */
   theme?: ThemePreference
   /** Versioned, per-workspace user-maintained notes. */
   pinnedNotes?: { version: 1; projects: Record<string, string> }

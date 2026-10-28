@@ -9,7 +9,7 @@
  * Covers: Sidebar, ErrorBoundary, SearchResults, SettingsPanel, FileBrowser
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 import { useStore } from '../store'
 import ErrorBoundary from '../components/ErrorBoundary'
@@ -106,7 +106,7 @@ describe('Store — Setters work correctly', () => {
 })
 
 describe('SettingsPanel — provider onboarding', () => {
-  it('shows an Appearance picker with System as the default and saves a selected theme', async () => {
+  it('shows all six Appearance choices and keeps an explicit System selection', async () => {
     useStore.getState().setSettings({ ...useStore.getState().settings, theme: 'system' })
     vi.mocked(window.api.saveSettings).mockResolvedValueOnce({ success: true })
     render(<SettingsPanel />)
@@ -114,13 +114,28 @@ describe('SettingsPanel — provider onboarding', () => {
     expect(useStore.getState().settings.theme).toBe('system')
     fireEvent.click(screen.getByRole('button', { name: 'Appearance' }))
     expect(screen.getByRole('radiogroup', { name: 'Appearance theme' })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: /PIT Brand \(default\)/ })).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: /System/ })).toBeChecked()
     expect(screen.getByRole('radio', { name: /Pink Light/ })).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: /Pink Dark/ })).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('radio', { name: /Pink Light/ }))
+    await act(async () => fireEvent.click(screen.getByRole('radio', { name: /Pink Light/ })))
     await waitFor(() => expect(useStore.getState().settings.theme).toBe('pink-light'))
     expect(window.api.saveSettings).toHaveBeenCalledWith(expect.objectContaining({ theme: 'pink-light' }))
+  })
+
+  it('selects PIT Brand when no preference was saved, without replacing an explicit System choice', async () => {
+    useStore.getState().setSettings({ ...useStore.getState().settings, theme: undefined })
+    vi.mocked(window.api.saveSettings).mockResolvedValueOnce({ success: true })
+    render(<SettingsPanel />)
+    fireEvent.click(screen.getByRole('button', { name: 'Appearance' }))
+    const pitBrand = screen.getByRole('radio', { name: /PIT Brand \(default\)/ })
+    expect(pitBrand).toBeChecked()
+
+    await act(async () => fireEvent.click(screen.getByRole('radio', { name: /^System/ })))
+    await waitFor(() => expect(useStore.getState().settings.theme).toBe('system'))
+    expect(screen.getByRole('radio', { name: /^System/ })).toBeChecked()
+    expect(window.api.saveSettings).toHaveBeenCalledWith(expect.objectContaining({ theme: 'system' }))
   })
 
   it('shows the build commit in the About card', () => {

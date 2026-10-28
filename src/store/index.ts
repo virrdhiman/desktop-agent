@@ -728,7 +728,7 @@ export const useStore = create<AppState>((set, get) => ({
     indexingEnabled: false,
     responseEffort: 'medium',
     strictGrounding: false,
-    theme: 'system',
+    theme: 'pit-brand',
     telemetryEnabled: false,
     updateChannel: 'stable',
   },

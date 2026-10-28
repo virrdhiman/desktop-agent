@@ -235,7 +235,7 @@
   --terminal-selection: var(--bg-tertiary);
 }
 
-:root[data-theme="pit-brand-light"] {
+:root[data-theme="pit-brand"] {
   color-scheme: light;
   --brand-green: #84B340;
   --brand-green-text: #45651f;
@@ -261,8 +261,8 @@
   --text-on-success: #ffffff;
   --text-on-warning: #ffffff;
   --text-on-error: #ffffff;
-  --accent-soft: rgba(70, 84, 147, 0.09);
-  --accent-border: rgba(70, 84, 147, 0.38);
+  --accent-soft: rgba(132, 179, 64, 0.1);
+  --accent-border: rgba(77, 113, 38, 0.34);
   --success-soft: rgba(132, 179, 64, 0.12);
   --success-border: rgba(69, 101, 31, 0.38);
   --warning-soft: rgba(133, 77, 14, 0.08);
@@ -299,7 +299,8 @@
   --terminal-selection: var(--bg-tertiary);
 }
 
-:root[data-theme="pit-brand-dark"] {
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="pit-brand"] {
   color-scheme: dark;
   --brand-green: #84B340;
   --brand-green-text: #a9d978;
@@ -361,9 +362,10 @@
   --terminal-fg: var(--text-primary);
   --terminal-cursor: var(--focus-ring);
   --terminal-selection: var(--bg-tertiary);
+  }
 }
 
-/* The default preference follows Windows/macOS/Linux appearance settings. */
+/* The explicit System palette and the PIT Brand palette both follow the OS mode. */
 :root[data-theme="system"] { color-scheme: dark; }
 @media (prefers-color-scheme: light) {
   :root[data-theme="system"] {

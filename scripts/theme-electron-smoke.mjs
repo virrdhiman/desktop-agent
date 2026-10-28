@@ -9,7 +9,15 @@ const runId = new Date().toISOString().replaceAll(':', '-').replaceAll('.', '-')
 const output = path.join(root, '.work', 'screens', `themes-${runId}`)
 const userData = path.join(root, '.work', 'theme-profiles', runId)
 const electronPath = createRequire(import.meta.url)('electron')
-const shots = ['system', 'light', 'dark', 'pink-light', 'pink-dark', 'pit-brand-light', 'pit-brand-dark']
+const cases = [
+  { preference: 'pit-brand', id: 'pit-brand-light', scheme: 'light', expectedBackground: '#ffffff' },
+  { preference: 'pit-brand', id: 'pit-brand-dark', scheme: 'dark', expectedBackground: '#08111f' },
+  { preference: 'light', id: 'light', scheme: 'light' },
+  { preference: 'dark', id: 'dark', scheme: 'dark' },
+  { preference: 'pink-light', id: 'pink-light', scheme: 'light' },
+  { preference: 'pink-dark', id: 'pink-dark', scheme: 'dark' },
+  { preference: 'system', id: 'system', scheme: 'dark' },
+]
 const env = Object.fromEntries(
   ['PATH', 'SystemRoot', 'WINDIR', 'LOCALAPPDATA', 'APPDATA', 'TEMP', 'TMP', 'USERPROFILE']
     .map((key) => [key, process.env[key]])
@@ -33,6 +41,8 @@ let app = await launch()
 try {
   let page = await app.firstWindow()
   await page.waitForLoadState('domcontentloaded')
+  await page.waitForFunction(() => document.documentElement.dataset.theme === 'pit-brand')
+  passed += 1
   const settingsButton = page.getByRole('button', { name: 'Settings', exact: true })
   await settingsButton.waitFor({ state: 'visible', timeout: 30_000 })
 
@@ -42,14 +52,18 @@ try {
   await page.getByRole('button', { name: 'Appearance' }).click()
   await page.getByRole('radiogroup', { name: 'Appearance theme' }).waitFor({ state: 'visible' })
 
-  for (const [index, theme] of shots.entries()) {
-    const radio = page.locator('input[name="pit-agent-theme"]').nth(index)
+  for (const testCase of cases) {
+    await page.emulateMedia({ colorScheme: testCase.scheme })
+    const radio = page.locator(`input[name="pit-agent-theme"][value="${testCase.preference}"]`)
     const card = radio.locator('xpath=..')
     await card.click()
-    await page.waitForFunction((selected) => document.documentElement.dataset.theme === selected, theme)
-    await page.screenshot({ path: path.join(output, `${theme}.png`), fullPage: false })
+    await page.waitForFunction(({ selected, background }) => {
+      if (document.documentElement.dataset.theme !== selected) return false
+      return !background || getComputedStyle(document.documentElement).getPropertyValue('--bg-primary').trim() === background
+    }, { selected: testCase.preference, background: testCase.expectedBackground })
+    await page.screenshot({ path: path.join(output, `${testCase.id}.png`), fullPage: false })
     const selected = await radio.isChecked()
-    if (!selected) throw new Error(`Appearance radio did not stay selected: ${theme}`)
+    if (!selected) throw new Error(`Appearance radio did not stay selected: ${testCase.preference}`)
     passed += 1
   }
 
@@ -57,11 +71,11 @@ try {
   app = await launch()
   page = await app.firstWindow()
   await page.waitForLoadState('domcontentloaded')
-  await page.waitForFunction(() => document.documentElement.dataset.theme === 'pit-brand-dark', undefined, { timeout: 30_000 })
+  await page.waitForFunction(() => document.documentElement.dataset.theme === 'system', undefined, { timeout: 30_000 })
   passed += 1
-  console.log(`Theme Electron smoke: ${passed}/${shots.length + 1} passed`)
+  console.log(`Theme Electron smoke: ${passed}/${cases.length + 2} passed`)
   console.log(`Screenshots: ${output}`)
-  console.log('Persistence: pit-brand-dark selection survived app restart in isolated userData')
+  console.log('Persistence: explicit System selection survived app restart in isolated userData')
 } finally {
   await app.close().catch(() => {})
 }

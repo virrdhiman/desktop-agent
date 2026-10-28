@@ -28,6 +28,7 @@ import {
 } from '../lib/editorIntelligence'
 import { buildInlineEditHunks, rejectInlineEditHunk, summarizeInlineEdit, type InlineEditHunk } from '../lib/inlineEdits'
 import { completionWords, filterCompletionWords } from '../lib/editorCompletions'
+import { resolveThemeMode } from '../lib/theme'
 
 const loadMonacoEditor = () => import('../lib/monacoEditor')
 const Editor = lazy(loadMonacoEditor)
@@ -69,6 +70,9 @@ export default function CodeEditor() {
   } = useStore()
 
   const [editorContent, setEditorContent] = useState('')
+  const [monacoTheme, setMonacoTheme] = useState<'vs' | 'vs-dark'>(() => (
+    resolveThemeMode(settings.theme, window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') === 'dark' ? 'vs-dark' : 'vs'
+  ))
   const [languageReady, setLanguageReady] = useState(false)
   const [references, setReferences] = useState<WorkspaceReference[]>([])
   const [diagnostics, setDiagnostics] = useState<Array<WorkspaceReference & { message: string; severity: 'error' | 'warning' | 'info' }>>([])
@@ -80,6 +84,17 @@ export default function CodeEditor() {
   const completionWordsRef = useRef<string[]>([])
   const completionEnabledRef = useRef(false)
   completionEnabledRef.current = settings.autocompleteEnabled === true
+
+  useEffect(() => {
+    const media = window.matchMedia?.('(prefers-color-scheme: dark)')
+    const updateTheme = () => {
+      const mode = resolveThemeMode(settings.theme, media?.matches ? 'dark' : 'light')
+      setMonacoTheme(mode === 'dark' ? 'vs-dark' : 'vs')
+    }
+    media?.addEventListener('change', updateTheme)
+    updateTheme()
+    return () => media?.removeEventListener('change', updateTheme)
+  }, [settings.theme])
 
   useEffect(() => {
     editorRef.current?.updateOptions({
@@ -699,7 +714,7 @@ export default function CodeEditor() {
             setEditorContent(val || '')
             if (val !== fileContent) setFileDirty(true)
           }}
-          theme="vs-dark"
+          theme={monacoTheme}
           options={{
             fontSize: 13,
             fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",

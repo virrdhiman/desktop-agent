@@ -172,13 +172,23 @@ export default function MultiTerminal() {
   }, [workspacePath, fitTerminal, readTerminalTheme])
 
   useEffect(() => {
-    const frame = requestAnimationFrame(() => {
-      for (const instance of instancesRef.current.values()) {
-        instance.terminal.options.theme = readTerminalTheme()
-        instance.terminal.refresh(0, Math.max(0, instance.terminal.rows - 1))
-      }
-    })
-    return () => cancelAnimationFrame(frame)
+    let frame = 0
+    const refreshTerminalColors = () => {
+      if (frame) cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        for (const instance of instancesRef.current.values()) {
+          instance.terminal.options.theme = readTerminalTheme()
+          instance.terminal.refresh(0, Math.max(0, instance.terminal.rows - 1))
+        }
+      })
+    }
+    const media = window.matchMedia?.('(prefers-color-scheme: dark)')
+    media?.addEventListener('change', refreshTerminalColors)
+    refreshTerminalColors()
+    return () => {
+      if (frame) cancelAnimationFrame(frame)
+      media?.removeEventListener('change', refreshTerminalColors)
+    }
   }, [themePreference, readTerminalTheme])
 
   // Mount active terminal

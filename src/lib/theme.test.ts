@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { applyThemePreference, normalizeThemePreference } from './theme'
+import { applyThemePreference, normalizeThemePreference, resolveThemeMode, THEME_PREFERENCES } from './theme'
 
 const cssPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../themes.css')
 const srcRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -31,6 +31,12 @@ function readSystemLightRule(source: string): Record<string, string> {
   return readRule(media, ':root[data-theme="system"]')
 }
 
+function readPitBrandDarkRule(source: string): Record<string, string> {
+  const media = source.match(/@media\s*\(prefers-color-scheme:\s*dark\)\s*\{([\s\S]*?)\n\}/)?.[1]
+  if (!media) throw new Error('Missing PIT Brand dark mode media rule')
+  return readRule(media, ':root[data-theme="pit-brand"]')
+}
+
 function rgb(hex: string): [number, number, number] {
   const normalized = hex.trim()
   const match = normalized.match(/^#([\da-f]{3}|[\da-f]{6})$/i)
@@ -54,8 +60,8 @@ const palettes = {
   light: readRule(css, ':root[data-theme="light"]'),
   'pink-light': readRule(css, ':root[data-theme="pink-light"]'),
   'pink-dark': readRule(css, ':root[data-theme="pink-dark"]'),
-  'pit-brand-light': readRule(css, ':root[data-theme="pit-brand-light"]'),
-  'pit-brand-dark': readRule(css, ':root[data-theme="pit-brand-dark"]'),
+  'pit-brand-light': readRule(css, ':root[data-theme="pit-brand"]'),
+  'pit-brand-dark': readPitBrandDarkRule(css),
   'system-light': readSystemLightRule(css),
 }
 
@@ -70,12 +76,15 @@ describe('theme preferences', () => {
     expect(hardcoded.map((file) => path.relative(srcRoot, file))).toEqual([])
   })
 
-  it('defaults missing or invalid saved values to System', () => {
-    expect(normalizeThemePreference(undefined)).toBe('system')
-    expect(normalizeThemePreference('old-theme')).toBe('system')
-    expect(normalizeThemePreference('pink-dark')).toBe('pink-dark')
-    expect(normalizeThemePreference('pit-brand-light')).toBe('pit-brand-light')
-    expect(normalizeThemePreference('pit-brand-dark')).toBe('pit-brand-dark')
+  it('defaults unchosen themes to PIT Brand and preserves every explicit existing choice', () => {
+    expect(THEME_PREFERENCES).toEqual(['pit-brand', 'system', 'light', 'dark', 'pink-light', 'pink-dark'])
+    expect(normalizeThemePreference(undefined)).toBe('pit-brand')
+    expect(normalizeThemePreference('old-theme')).toBe('pit-brand')
+    for (const explicit of ['system', 'light', 'dark', 'pink-light', 'pink-dark']) {
+      expect(normalizeThemePreference(explicit)).toBe(explicit)
+    }
+    expect(normalizeThemePreference('pit-brand-light')).toBe('pit-brand')
+    expect(normalizeThemePreference('pit-brand-dark')).toBe('pit-brand')
   })
 
   it('applies the selected preference to the document root', () => {
@@ -83,12 +92,21 @@ describe('theme preferences', () => {
     expect(applyThemePreference(root, 'pink-light')).toBe('pink-light')
     expect(root.dataset.theme).toBe('pink-light')
     expect(root.style.colorScheme).toBe('light')
-    expect(applyThemePreference(root, undefined)).toBe('system')
+    expect(applyThemePreference(root, undefined)).toBe('pit-brand')
     expect(root.style.colorScheme).toBe('')
-    expect(applyThemePreference(root, 'pit-brand-light')).toBe('pit-brand-light')
-    expect(root.style.colorScheme).toBe('light')
-    expect(applyThemePreference(root, 'pit-brand-dark')).toBe('pit-brand-dark')
-    expect(root.style.colorScheme).toBe('dark')
+    expect(applyThemePreference(root, 'pit-brand')).toBe('pit-brand')
+    expect(root.dataset.theme).toBe('pit-brand')
+    expect(root.style.colorScheme).toBe('')
+    expect(applyThemePreference(root, 'system')).toBe('system')
+    expect(root.style.colorScheme).toBe('')
+  })
+
+  it('resolves adaptive themes from the operating system and keeps fixed palettes fixed', () => {
+    expect(resolveThemeMode('pit-brand', 'light')).toBe('light')
+    expect(resolveThemeMode('pit-brand', 'dark')).toBe('dark')
+    expect(resolveThemeMode('system', 'dark')).toBe('dark')
+    expect(resolveThemeMode('pink-light', 'dark')).toBe('light')
+    expect(resolveThemeMode('pink-dark', 'light')).toBe('dark')
   })
 
   it('keeps normal text and semantic foreground/background pairs at WCAG AA contrast', () => {
@@ -119,7 +137,9 @@ describe('theme preferences', () => {
     const light = palettes['pit-brand-light']
     const dark = palettes['pit-brand-dark']
     expect(light['brand-green']).toBe('#84B340')
+    expect(dark['brand-green']).toBe('#84B340')
     expect(light['brand-navy']).toBe('#465493')
+    expect(dark['brand-navy']).toBe('#465493')
     expect(light.accent).toBe(light['brand-navy'])
     expect(light['text-on-accent']).toBe('#ffffff')
     expect(dark.accent).toBe(dark['brand-green'])

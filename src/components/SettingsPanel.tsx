@@ -448,7 +448,7 @@ export default function SettingsPanel() {
               <div>
                 <p className="vd-appearance-eyebrow">Settings</p>
                 <h2 id="vd-appearance-title">Appearance</h2>
-                <p>Choose how PIT Agent looks. System follows your operating system and stays the default.</p>
+                <p>Choose how PIT Agent looks. PIT Brand is the default and follows your operating system; System uses its standard palette.</p>
               </div>
               <button className="btn" type="button" onClick={() => setAppearanceOpen(false)}>Back to providers</button>
             </header>

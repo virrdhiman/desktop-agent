@@ -10,7 +10,15 @@ const runId = new Date().toISOString().replaceAll(':', '-').replaceAll('.', '-')
 const output = path.join(root, '.work', 'screens', `contrast-${runId}`)
 const userData = path.join(root, '.work', 'contrast-profiles', runId)
 const electronPath = createRequire(import.meta.url)('electron')
-const themes = ['system', 'light', 'dark', 'pink-light', 'pink-dark', 'pit-brand-light', 'pit-brand-dark']
+const themes = [
+  { preference: 'pit-brand', id: 'pit-brand-light', scheme: 'light', expectedBackground: '#ffffff' },
+  { preference: 'pit-brand', id: 'pit-brand-dark', scheme: 'dark', expectedBackground: '#08111f' },
+  { preference: 'system', id: 'system', scheme: 'dark' },
+  { preference: 'light', id: 'light', scheme: 'light' },
+  { preference: 'dark', id: 'dark', scheme: 'dark' },
+  { preference: 'pink-light', id: 'pink-light', scheme: 'light' },
+  { preference: 'pink-dark', id: 'pink-dark', scheme: 'dark' },
+]
 const sourceLogoHashes = Object.fromEntries(['pit-logo.png', 'pit-logo-trimmed.png'].map((name) => {
   const file = path.join(root, 'src', 'assets', name)
   return [name, createHash('sha256').update(fs.readFileSync(file)).digest('hex')]
@@ -170,6 +178,7 @@ try {
   await page.waitForLoadState('domcontentloaded')
   await page.getByRole('button', { name: 'Settings', exact: true }).waitFor({ state: 'visible', timeout: 30_000 })
   await page.addStyleTag({ content: '*, *::before, *::after { transition: none !important; animation: none !important; }' })
+  await page.waitForFunction(() => document.documentElement.dataset.theme === 'pit-brand')
   const skip = page.getByRole('button', { name: /Skip use defaults|Continue to PIT Agent/i })
   if (await skip.count()) await skip.first().click()
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
@@ -177,41 +186,47 @@ try {
   const radios = page.locator('input[name="pit-agent-theme"]')
   await radios.first().waitFor({ state: 'attached' })
 
-  for (const [index, theme] of themes.entries()) {
-    await radios.nth(index).locator('xpath=..').click()
-    await page.waitForFunction((selected) => document.documentElement.dataset.theme === selected, theme)
+  for (const [index, testCase] of themes.entries()) {
+    await page.emulateMedia({ colorScheme: testCase.scheme })
+    const radio = page.locator(`input[name="pit-agent-theme"][value="${testCase.preference}"]`)
+    await radio.locator('xpath=..').click()
+    await page.waitForFunction(({ selected, background }) => {
+      if (document.documentElement.dataset.theme !== selected) return false
+      return !background || getComputedStyle(document.documentElement).getPropertyValue('--bg-primary').trim() === background
+    }, { selected: testCase.preference, background: testCase.expectedBackground })
     await waitForTerminalTheme()
-    await audit(theme, 'settings-appearance')
+    await audit(testCase.id, 'settings-appearance')
+    if (testCase.id.startsWith('pit-brand-')) await page.screenshot({ path: path.join(output, `${testCase.id}-appearance.png`) })
     await page.getByRole('button', { name: 'Home', exact: true }).click()
     await page.waitForTimeout(150)
     if (index === 0) await verifyLoadedLogos()
-    await page.screenshot({ path: path.join(output, `${theme}-agent.png`) })
-    await audit(theme, 'agent-and-composer')
-    if (['dark', 'pink-dark', 'pit-brand-light', 'pit-brand-dark'].includes(theme)) {
-      await page.screenshot({ path: path.join(output, `logo-${theme}.png`) })
+    await page.screenshot({ path: path.join(output, `${testCase.id}-agent.png`) })
+    await audit(testCase.id, 'agent-and-composer')
+    if (['dark', 'pink-dark', 'pit-brand-light', 'pit-brand-dark'].includes(testCase.id)) {
+      await page.screenshot({ path: path.join(output, `logo-${testCase.id}.png`) })
     }
 
     const fileMenu = page.locator('.top-menus').getByRole('menuitem', { name: 'File', exact: true })
     await fileMenu.click()
-    await audit(theme, 'file-menu')
+    await audit(testCase.id, 'file-menu')
     await page.keyboard.press('Escape')
 
     const modelButton = page.locator('.vd-model-picker-wrap > button')
     await modelButton.click()
     await page.getByRole('dialog', { name: 'Model picker' }).waitFor({ state: 'visible' })
-    await audit(theme, 'model-dialog')
+    await audit(testCase.id, 'model-dialog')
     await page.getByRole('button', { name: 'Done', exact: true }).click()
 
     const addButton = page.getByRole('button', { name: 'Add to chat', exact: true })
     if (await addButton.count()) {
       await addButton.click()
       await page.getByRole('menu', { name: 'Add to chat' }).waitFor({ state: 'visible' })
-      await audit(theme, 'composer-menu')
+      await audit(testCase.id, 'composer-menu')
       await page.keyboard.press('Escape')
     }
 
     await page.getByRole('button', { name: 'Settings', exact: true }).click()
-    await audit(theme, 'settings')
+    await audit(testCase.id, 'settings')
     await page.getByRole('button', { name: 'Appearance', exact: true }).click()
   }
 

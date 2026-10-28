@@ -32,7 +32,7 @@ import { isTerminalPanelShortcut, mergeLayoutPreferences, normalizeLayoutPrefere
 import { initialSharedStateReady } from './lib/sharedStateSync'
 import type { Panel, SharedAppState } from './types'
 import { APP_NAME } from './lib/brand'
-import { applyThemePreference } from './lib/theme'
+import { applyThemePreference, normalizeThemePreference } from './lib/theme'
 
 type StoreSnapshot = ReturnType<typeof useStore.getState>
 
@@ -124,7 +124,11 @@ export default function App() {
     const initialize = async () => {
       try {
         const loadedSettings = await window.api.loadSettings()
-        const normalizedSettings = { ...loadedSettings, layout: normalizeLayoutPreferences(loadedSettings.layout) }
+        const normalizedSettings = {
+          ...loadedSettings,
+          theme: normalizeThemePreference(loadedSettings.theme),
+          layout: normalizeLayoutPreferences(loadedSettings.layout),
+        }
         setSettings(normalizedSettings)
         try {
           const records = await window.api.listConversations()

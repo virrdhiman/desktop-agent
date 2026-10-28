@@ -117,8 +117,7 @@ body {
 .vd-theme-preview-dark { background: var(--preview-dark-bg); }
 .vd-theme-preview-pink-light { background: var(--preview-pink-light-bg); }
 .vd-theme-preview-pink-dark { background: var(--preview-pink-dark-bg); }
-.vd-theme-preview-pit-brand-light { background: var(--preview-pit-brand-light-bg); }
-.vd-theme-preview-pit-brand-dark { background: var(--preview-pit-brand-dark-bg); }
+.vd-theme-preview-pit-brand { background: linear-gradient(105deg, var(--preview-pit-brand-light-bg) 50%, var(--preview-pit-brand-dark-bg) 50%); }
 .vd-theme-preview-sidebar { width: 24%; margin: 8px 0 8px 8px; border-radius: 4px; background: var(--preview-light-surface); }
 .vd-theme-preview-content { display: grid; flex: 1; align-content: center; gap: 7px; padding: 10px; }
 .vd-theme-preview-content > span { display: block; width: 72%; height: 6px; border-radius: 4px; background: var(--preview-light-accent); opacity: .75; }
@@ -133,12 +132,9 @@ body {
 .vd-theme-preview-pink-dark .vd-theme-preview-sidebar { background: var(--preview-pink-dark-surface); }
 .vd-theme-preview-pink-dark .vd-theme-preview-content > span { background: var(--preview-pink-dark-accent); }
 .vd-theme-preview-pink-dark .vd-theme-preview-accent { background: var(--preview-pink-dark-accent); }
-.vd-theme-preview-pit-brand-light .vd-theme-preview-sidebar { background: var(--preview-pit-brand-light-surface); }
-.vd-theme-preview-pit-brand-light .vd-theme-preview-content > span,
-.vd-theme-preview-pit-brand-light .vd-theme-preview-accent { background: var(--preview-pit-brand-light-accent); }
-.vd-theme-preview-pit-brand-dark .vd-theme-preview-sidebar { background: var(--preview-pit-brand-dark-surface); }
-.vd-theme-preview-pit-brand-dark .vd-theme-preview-content > span,
-.vd-theme-preview-pit-brand-dark .vd-theme-preview-accent { background: var(--preview-pit-brand-dark-accent); }
+.vd-theme-preview-pit-brand .vd-theme-preview-sidebar { background: linear-gradient(180deg, var(--preview-pit-brand-light-surface) 50%, var(--preview-pit-brand-dark-surface) 50%); }
+.vd-theme-preview-pit-brand .vd-theme-preview-content > span,
+.vd-theme-preview-pit-brand .vd-theme-preview-accent { background: linear-gradient(105deg, var(--preview-pit-brand-light-accent) 50%, var(--preview-pit-brand-dark-accent) 50%); }
 .vd-theme-choice-label { color: var(--text-primary); font-size: 13px; font-weight: 650; }
 .vd-theme-choice-description, .vd-appearance-note { color: var(--text-secondary); font-size: 11px; }
 .vd-appearance-note { margin-top: 14px; }
