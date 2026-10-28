@@ -10,7 +10,7 @@ const runId = new Date().toISOString().replaceAll(':', '-').replaceAll('.', '-')
 const output = path.join(root, '.work', 'screens', `contrast-${runId}`)
 const userData = path.join(root, '.work', 'contrast-profiles', runId)
 const electronPath = createRequire(import.meta.url)('electron')
-const themes = ['system', 'light', 'dark', 'pink-light', 'pink-dark']
+const themes = ['system', 'light', 'dark', 'pink-light', 'pink-dark', 'pit-brand-light', 'pit-brand-dark']
 const sourceLogoHashes = Object.fromEntries(['pit-logo.png', 'pit-logo-trimmed.png'].map((name) => {
   const file = path.join(root, 'src', 'assets', name)
   return [name, createHash('sha256').update(fs.readFileSync(file)).digest('hex')]
@@ -187,7 +187,9 @@ try {
     if (index === 0) await verifyLoadedLogos()
     await page.screenshot({ path: path.join(output, `${theme}-agent.png`) })
     await audit(theme, 'agent-and-composer')
-    if (theme === 'dark' || theme === 'pink-dark') await page.screenshot({ path: path.join(output, `logo-${theme}.png`) })
+    if (['dark', 'pink-dark', 'pit-brand-light', 'pit-brand-dark'].includes(theme)) {
+      await page.screenshot({ path: path.join(output, `logo-${theme}.png`) })
+    }
 
     const fileMenu = page.locator('.top-menus').getByRole('menuitem', { name: 'File', exact: true })
     await fileMenu.click()

@@ -9,7 +9,7 @@ const runId = new Date().toISOString().replaceAll(':', '-').replaceAll('.', '-')
 const output = path.join(root, '.work', 'screens', `themes-${runId}`)
 const userData = path.join(root, '.work', 'theme-profiles', runId)
 const electronPath = createRequire(import.meta.url)('electron')
-const shots = ['system', 'light', 'dark', 'pink-light', 'pink-dark']
+const shots = ['system', 'light', 'dark', 'pink-light', 'pink-dark', 'pit-brand-light', 'pit-brand-dark']
 const env = Object.fromEntries(
   ['PATH', 'SystemRoot', 'WINDIR', 'LOCALAPPDATA', 'APPDATA', 'TEMP', 'TMP', 'USERPROFILE']
     .map((key) => [key, process.env[key]])
@@ -57,11 +57,11 @@ try {
   app = await launch()
   page = await app.firstWindow()
   await page.waitForLoadState('domcontentloaded')
-  await page.waitForFunction(() => document.documentElement.dataset.theme === 'pink-dark', undefined, { timeout: 30_000 })
+  await page.waitForFunction(() => document.documentElement.dataset.theme === 'pit-brand-dark', undefined, { timeout: 30_000 })
   passed += 1
-  console.log(`Theme Electron smoke: ${passed}/6 passed`)
+  console.log(`Theme Electron smoke: ${passed}/${shots.length + 1} passed`)
   console.log(`Screenshots: ${output}`)
-  console.log('Persistence: pink-dark selection survived app restart in isolated userData')
+  console.log('Persistence: pit-brand-dark selection survived app restart in isolated userData')
 } finally {
   await app.close().catch(() => {})
 }

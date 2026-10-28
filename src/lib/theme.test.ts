@@ -54,6 +54,8 @@ const palettes = {
   light: readRule(css, ':root[data-theme="light"]'),
   'pink-light': readRule(css, ':root[data-theme="pink-light"]'),
   'pink-dark': readRule(css, ':root[data-theme="pink-dark"]'),
+  'pit-brand-light': readRule(css, ':root[data-theme="pit-brand-light"]'),
+  'pit-brand-dark': readRule(css, ':root[data-theme="pit-brand-dark"]'),
   'system-light': readSystemLightRule(css),
 }
 
@@ -72,6 +74,8 @@ describe('theme preferences', () => {
     expect(normalizeThemePreference(undefined)).toBe('system')
     expect(normalizeThemePreference('old-theme')).toBe('system')
     expect(normalizeThemePreference('pink-dark')).toBe('pink-dark')
+    expect(normalizeThemePreference('pit-brand-light')).toBe('pit-brand-light')
+    expect(normalizeThemePreference('pit-brand-dark')).toBe('pit-brand-dark')
   })
 
   it('applies the selected preference to the document root', () => {
@@ -81,6 +85,10 @@ describe('theme preferences', () => {
     expect(root.style.colorScheme).toBe('light')
     expect(applyThemePreference(root, undefined)).toBe('system')
     expect(root.style.colorScheme).toBe('')
+    expect(applyThemePreference(root, 'pit-brand-light')).toBe('pit-brand-light')
+    expect(root.style.colorScheme).toBe('light')
+    expect(applyThemePreference(root, 'pit-brand-dark')).toBe('pit-brand-dark')
+    expect(root.style.colorScheme).toBe('dark')
   })
 
   it('keeps normal text and semantic foreground/background pairs at WCAG AA contrast', () => {
@@ -104,6 +112,24 @@ describe('theme preferences', () => {
       for (const token of ['syntax-string', 'syntax-comment', 'syntax-number', 'syntax-keyword', 'syntax-type']) {
         expect(contrast(palette[token], palette['code-bg']), `${name}: --${token} on --code-bg`).toBeGreaterThanOrEqual(4.5)
       }
+    }
+  })
+
+  it('uses measured Productive IT logo colors with accessible green indicators', () => {
+    const light = palettes['pit-brand-light']
+    const dark = palettes['pit-brand-dark']
+    expect(light['brand-green']).toBe('#84B340')
+    expect(light['brand-navy']).toBe('#465493')
+    expect(light.accent).toBe(light['brand-navy'])
+    expect(light['text-on-accent']).toBe('#ffffff')
+    expect(dark.accent).toBe(dark['brand-green'])
+
+    for (const surface of ['bg-primary', 'bg-secondary', 'bg-tertiary']) {
+      expect(contrast(light['brand-green-text'], light[surface]), `PIT Brand Light green text on --${surface}`).toBeGreaterThanOrEqual(4.5)
+      expect(contrast(light['tab-active'], light[surface]), `PIT Brand Light active tab on --${surface}`).toBeGreaterThanOrEqual(3)
+      expect(contrast(light['focus-ring'], light[surface]), `PIT Brand Light focus ring on --${surface}`).toBeGreaterThanOrEqual(3)
+      expect(contrast(dark['brand-green'], dark[surface]), `PIT Brand Dark logo green on --${surface}`).toBeGreaterThanOrEqual(3)
+      expect(contrast(dark['focus-ring'], dark[surface]), `PIT Brand Dark focus ring on --${surface}`).toBeGreaterThanOrEqual(3)
     }
   })
 })

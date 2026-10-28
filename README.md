@@ -34,6 +34,7 @@ Your chats, settings, and keys stay on your machine. There is no account and no 
 - **Tools.** Files, code search, shell commands, git, web search, and some media and Web3 helpers. See [TOOLS.md](./TOOLS.md).
 - **Safe archive-to-CSV workflows.** Inventories ZIP files before extraction, rejects unsafe entries, and guides the agent to inspect every source, preserve provenance, and verify structured CSV output.
 - **Plan Mode.** The agent proposes a plan and waits for your approval before it changes files.
+- **Appearance themes.** Follow your system setting, choose Light or Dark, use the blush Pink Light/Pink Dark palettes, or select the logo-derived PIT Brand Light/PIT Brand Dark colors. Changes apply immediately and persist.
 - **Automatic model selection.** Discovers and ranks the models your key can call, and falls back between models and providers. See [How model selection works](#how-model-selection-works).
 - **Durable resume and recovery.** Chats, tasks, workspace state, recent tool outcomes, terminal context, and verification state survive restarts. Agent file edits get pre-change recovery checkpoints.
 - **Searchable chat history.** Reopen, rename, pin, search, export, import, restore, or delete local sessions.
