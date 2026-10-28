@@ -72,4 +72,4 @@ For a reproducible problem, use **Settings > Export diagnostics**. The JSON repo
 | The app uses the default Electron icon | Add `build/icon.ico`, `build/icon.icns`, and `build/icon.png` (512×512). See [RELEASE_CHECKLIST.md](./RELEASE_CHECKLIST.md). |
 | `npm run smoke` fails to open a window on Linux CI | It needs a display. Run it under `xvfb-run`. |
 
-Still stuck? [Open an issue](https://github.com/virrdhiman/desktop-agent/issues) with your OS, PIT Agent version, the exact error, and the optional private diagnostics report. Leave API keys out of screenshots and logs.
+Still stuck? [Open an issue](https://github.com/Productive-iT/pit-agent/issues) with your OS, PIT Agent version, the exact error, and the optional private diagnostics report. Leave API keys out of screenshots and logs.

@@ -11,8 +11,7 @@
 
 PIT Agent by [Virender Dhiman](https://virender.in) · [PIT Agent License](./LICENSE): free to use, credit required
 
-[![GitHub stars](https://img.shields.io/github/stars/virrdhiman/desktop-agent?style=social)](https://github.com/virrdhiman/desktop-agent/stargazers)
-[![Latest release](https://img.shields.io/github/v/release/virrdhiman/desktop-agent?include_prereleases&label=release)](https://github.com/virrdhiman/desktop-agent/releases)
+[Private source](https://github.com/Productive-iT/pit-agent)
 ![License](https://img.shields.io/badge/license-PIT%20Agent%20License-blueviolet)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 
@@ -48,7 +47,7 @@ Your chats, settings, and keys stay on your machine. There is no account and no 
 
 ## Download and Install
 
-1. Open the [Releases page](https://github.com/virrdhiman/desktop-agent/releases) and download the file for your system:
+1. Open the [Releases page](https://github.com/Productive-iT/pit-agent/releases) and download the file for your system:
 
    | System | File |
    |--------|------|
@@ -68,8 +67,8 @@ If no release is listed yet, [run from source](#run-from-source). Full instructi
 You need **Node.js 22.19 or newer**, **git**, and native build tools for the terminal (`node-pty`). See [prerequisites](./docs/INSTALL.md#run-from-source).
 
 ```bash
-git clone https://github.com/virrdhiman/desktop-agent.git
-cd desktop-agent
+git clone https://github.com/Productive-iT/pit-agent.git
+cd pit-agent
 npm install
 npm run dev
 ```
@@ -150,7 +149,7 @@ Your prompts and code go **only** to the AI provider you choose, plus any servic
 
 ## Support the project
 
-If PIT Agent saves you time, starring the [GitHub repository](https://github.com/virrdhiman/desktop-agent) helps other people find it. Starring is a request, not a condition of the license.
+The source repository is private: [Productive-iT/pit-agent](https://github.com/Productive-iT/pit-agent).
 
 If you share, review, demo, or write about PIT Agent, the license asks you to credit it:
 
@@ -158,7 +157,7 @@ If you share, review, demo, or write about PIT Agent, the license asks you to cr
 PIT Agent by Virender Dhiman - https://virender.in
 ```
 
-Please link to https://github.com/virrdhiman/desktop-agent as well. Bug reports and pull requests are welcome; see [docs/CONTRIBUTING.md](./docs/CONTRIBUTING.md).
+Please link to https://github.com/Productive-iT/pit-agent as well. Bug reports and pull requests are welcome to authorized contributors; see [docs/CONTRIBUTING.md](./docs/CONTRIBUTING.md).
 
 ## License
 

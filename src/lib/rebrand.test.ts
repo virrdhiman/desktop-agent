@@ -3,6 +3,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { APP_NAME, LEGACY_APP_NAME } from '../../shared/brand'
+import { REPO_URL } from './brand'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 
@@ -27,6 +28,11 @@ describe('PIT Agent identity', () => {
     expect(packageJson.build.productName).toBe(APP_NAME)
     expect(packageJson.version).toBe('1.2.0')
     expect(packageJson.author.name).toBe('Productive IT')
+    expect(REPO_URL).toBe('https://github.com/Productive-iT/pit-agent')
+    expect(packageJson.homepage).toBe(REPO_URL)
+    expect(packageJson.repository.url).toBe(`${REPO_URL}.git`)
+    expect(packageJson.bugs.url).toBe(`${REPO_URL}/issues`)
+    expect(packageJson.build.publish).toMatchObject({ provider: 'github', owner: 'Productive-iT', repo: 'pit-agent' })
     expect(packageJson.build.appId).toBe('com.vd.agent')
     expect(packageJson.name).toBe('vd-agent')
     expect(extensionPackage.displayName).toBe(`${APP_NAME} Bridge`)

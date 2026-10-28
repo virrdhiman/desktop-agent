@@ -31,7 +31,7 @@ const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const require = createRequire(path.join(repo, 'package.json'))
 const yazl = require('yazl')
 const pkg = JSON.parse(fs.readFileSync(path.join(repo, 'package.json'), 'utf8'))
-const REPO_URL = 'https://github.com/virrdhiman/desktop-agent'
+const REPO_URL = 'https://github.com/Productive-iT/pit-agent'
 const AUTHOR_URL = 'https://virender.in/'
 // Product renames must not make the smoke test touch a second real profile.
 const LEGACY_USER_DATA_FOLDER = 'VD Agent'

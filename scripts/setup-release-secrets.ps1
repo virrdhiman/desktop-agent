@@ -1,5 +1,5 @@
 param(
-  [string]$Repo = 'virrdhiman/desktop-agent',
+  [string]$Repo = 'Productive-iT/pit-agent',
   [string]$WindowsPfxPath = '',
   [string]$WindowsPfxPassword = '',
   [string]$MacP12Path = '',

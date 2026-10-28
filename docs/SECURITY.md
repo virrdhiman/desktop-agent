@@ -38,7 +38,7 @@ The system prompt tells the agent to inspect before acting and to ask before des
 
 ## Verifying downloads
 
-Download only from the [official Releases page](https://github.com/virrdhiman/desktop-agent/releases) and check the file against `SHA256SUMS.txt` (see [INSTALL.md](./INSTALL.md#verify-your-download)). Official releases should be code-signed; treat an unsigned file from anywhere else as untrusted.
+Download only from the [official Releases page](https://github.com/Productive-iT/pit-agent/releases) if you have repository access and check the file against `SHA256SUMS.txt` (see [INSTALL.md](./INSTALL.md#verify-your-download)). Official releases should be code-signed; treat an unsigned file from anywhere else as untrusted.
 
 ## Supported versions
 

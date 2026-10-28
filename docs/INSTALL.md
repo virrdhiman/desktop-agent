@@ -9,8 +9,8 @@
 
 PIT Agent is free to download and use under the [PIT Agent License](../LICENSE). Only download it from the official sources:
 
-- Releases: https://github.com/virrdhiman/desktop-agent/releases
-- Source: https://github.com/virrdhiman/desktop-agent
+- Releases: https://github.com/Productive-iT/pit-agent/releases
+- Source: https://github.com/Productive-iT/pit-agent
 
 ## System requirements
 
@@ -21,7 +21,7 @@ PIT Agent is free to download and use under the [PIT Agent License](../LICENSE).
 
 ## Download
 
-From the [latest release](https://github.com/virrdhiman/desktop-agent/releases), download one file:
+From the [latest release](https://github.com/Productive-iT/pit-agent/releases), download one file:
 
 | System | File | Notes |
 |--------|------|-------|
@@ -146,8 +146,8 @@ npm rebuild node-pty
 ### Run
 
 ```bash
-git clone https://github.com/virrdhiman/desktop-agent.git
-cd desktop-agent
+git clone https://github.com/Productive-iT/pit-agent.git
+cd pit-agent
 npm install
 npm run dev
 ```

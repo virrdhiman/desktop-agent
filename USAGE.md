@@ -36,7 +36,7 @@
 
 ## 1. Installation
 
-Most people should download the installer from [GitHub Releases](https://github.com/virrdhiman/desktop-agent/releases). See [docs/INSTALL.md](./docs/INSTALL.md) for checksums, first-launch warnings, and uninstalling.
+Download the installer from [Productive-iT/pit-agent Releases](https://github.com/Productive-iT/pit-agent/releases) if you have repository access. See [docs/INSTALL.md](./docs/INSTALL.md) for checksums, first-launch warnings, and uninstalling.
 
 ### Run from source
 
@@ -47,8 +47,8 @@ Prerequisites:
 - Build tools for `node-pty`: Visual Studio Build Tools (Windows), Xcode Command Line Tools (macOS), or `build-essential` and `python3` (Linux)
 
 ```bash
-git clone https://github.com/virrdhiman/desktop-agent.git
-cd desktop-agent
+git clone https://github.com/Productive-iT/pit-agent.git
+cd pit-agent
 npm install
 npm run dev
 ```
@@ -369,7 +369,7 @@ The most common fixes:
 The app is free to download and use, including for commercial work, under the [PIT Agent License](./LICENSE). It is proprietary, source-available software owned by Virender Dhiman: you may not resell, redistribute, or rebrand it, and you must keep the credit. Many providers have free tiers, and their limits are set by the provider and change over time. Local models cost nothing.
 
 **How do I credit PIT Agent?**
-When you share, review, or demo it, use: `PIT Agent by Virender Dhiman - https://virender.in` and link to https://github.com/virrdhiman/desktop-agent. A ⭐ on GitHub is appreciated.
+When you share, review, or demo it, use: `PIT Agent by Virender Dhiman - https://virender.in` and link to https://github.com/Productive-iT/pit-agent.
 
 **Can I use several providers?**
 Yes. Add keys for several official free providers and PIT Agent falls back between them on rate limits or unavailable models. Invalid keys are reported instead of skipped.
@@ -387,7 +387,7 @@ None.
 Yes, with a local provider such as Ollama. Editing, terminal, and git work offline.
 
 **How do I update?**
-Download the latest installer from [Releases](https://github.com/virrdhiman/desktop-agent/releases) and install it over the old version. Your settings, keys, and chats are kept. From source: `git pull && npm install && npm run dev`.
+Download the latest installer from [Releases](https://github.com/Productive-iT/pit-agent/releases) if you have access, then install it over the old version. Your settings, keys, and chats are kept. From source: `git pull && npm install && npm run dev`.
 
 **Is my data private?**
 Chats, settings, and keys stay on your machine. Prompts and the code the agent reads go to the AI provider you choose. See [docs/PRIVACY.md](./docs/PRIVACY.md).
