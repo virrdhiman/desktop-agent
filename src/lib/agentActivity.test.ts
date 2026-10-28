@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  changedLineCounts, maskAgentActivityText, reduceAgentActivity, sanitizeAgentActivityEvent,
+  agentActivityToolLabel, changedLineCounts, maskAgentActivityText, reduceAgentActivity, safeActivityFilePath, sanitizeAgentActivityEvent,
   type AgentActivityEvent,
 } from './agentActivity'
 
@@ -16,21 +16,23 @@ describe('agent activity reducer', () => {
     run = reduceAgentActivity(run, event({ type: 'command-output', runId: 'run-1', output: 'last output line', timestamp: 60 }))
     run = reduceAgentActivity(run, event({ type: 'tool-call-finished', runId: 'run-1', toolName: 'run_command', success: true, summary: 'Command passed', durationMs: 30, timestamp: 80 }))
     run = reduceAgentActivity(run, event({ type: 'file-edited', runId: 'run-1', path: 'src/app.tsx', addedLines: 2, removedLines: 1, timestamp: 90 }))
-    run = reduceAgentActivity(run, event({ type: 'run-finished', runId: 'run-1', status: 'done', durationMs: 80, timestamp: 90 }))
+    run = reduceAgentActivity(run, event({ type: 'run-finished', runId: 'run-1', status: 'done', durationMs: 80, steps: 4, timestamp: 90 }))
 
     expect(run?.status).toBe('done')
     expect(run?.steps.map((step) => step.label)).toEqual([
       'Request started', 'Waiting for local model', 'Reading src/app.tsx', 'Running npm test', 'File edited',
     ])
     expect(run?.steps[2]).toMatchObject({ status: 'done', details: 'Read 20 lines', durationMs: 12 })
-    expect(run?.steps[3]).toMatchObject({ status: 'done', details: 'Command passed' })
+    expect(run?.steps[3]).toMatchObject({ status: 'done' })
+    expect(run?.steps[3].details).toContain('last output line')
+    expect(run?.steps[3].details).toContain('Command passed')
     expect(run?.steps[4]).toMatchObject({ filePath: 'src/app.tsx', addedLines: 2, removedLines: 1 })
   })
 
   it('marks active and remaining steps cancelled when Stop ends a run', () => {
     let run = reduceAgentActivity(null, event({ type: 'run-started', runId: 'run-2', timestamp: 1 }))
     run = reduceAgentActivity(run, event({ type: 'tool-call-started', runId: 'run-2', toolName: 'run_command', label: 'Running a long command', timestamp: 2 }))
-    run = reduceAgentActivity(run, event({ type: 'run-finished', runId: 'run-2', status: 'cancelled', durationMs: 1_000, timestamp: 1_002 }))
+    run = reduceAgentActivity(run, event({ type: 'run-finished', runId: 'run-2', status: 'cancelled', durationMs: 1_000, steps: 1, timestamp: 1_002 }))
     expect(run?.status).toBe('cancelled')
     expect(run?.steps.find((step) => step.toolName === 'run_command')?.status).toBe('cancelled')
     const steps = run?.steps || []
@@ -62,5 +64,12 @@ describe('agent activity reducer', () => {
 
   it('counts changed lines without exposing file contents', () => {
     expect(changedLineCounts('one\ntwo\nthree', 'one\nchanged\nthree\nfour')).toEqual({ addedLines: 2, removedLines: 1 })
+  })
+
+  it('uses plain-language labels and suppresses sensitive paths', () => {
+    expect(agentActivityToolLabel('read_file', { path: 'C:/repo/src/app.tsx' }, 'C:/repo')).toBe('Reading src/app.tsx')
+    expect(agentActivityToolLabel('run_command', { command: 'npm test' })).toBe('Running npm test')
+    expect(agentActivityToolLabel('read_file', { path: '.env.local' })).toBe('Reading a file')
+    expect(safeActivityFilePath('config/private-key.pem')).toBeNull()
   })
 })

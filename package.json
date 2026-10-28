@@ -50,6 +50,7 @@
     "lint": "tsc --noEmit",
     "smoke": "npm run build && node scripts/smoke.mjs",
     "test:composer-e2e": "node tests/human/composer-add-menu.mjs",
+    "test:agent-activity-e2e": "node tests/human/live-agent-activity.mjs",
     "test:theme-e2e": "node scripts/theme-electron-smoke.mjs",
     "test:theme-contrast": "node scripts/theme-contrast-e2e.mjs",
     "agent:evals": "node scripts/agent-evals.mjs",

@@ -19,6 +19,12 @@ Scenarios are capability-aware: missing visible controls are recorded as `skippe
 with internal calls. Checklist additionally verifies a downloaded file's SHA-256 when a visible
 download produces one, and exercises a visible Cancel control when present.
 
+`npm run build` followed by `npm run test:agent-activity-e2e` launches the real Electron app with an
+isolated profile, a fixture workspace under `C:\vd-vms\qa-fixture`, and a local-only mock model
+endpoint. It exercises file reading, a command with live output, Stop cancellation, and saved
+activity after relaunch. Screenshots and evidence are written under `.work/screens/live-agent-activity`;
+the generated test credential and environment value are never included in evidence.
+
 The diagnostics, index-tools, and safe-change scenarios use only visible controls and record an
 exact skip reason when a provider or approval dialog is unavailable. `resume` restarts the
 packaged process and checks the saved session list; `crash` force-stops the Electron process,

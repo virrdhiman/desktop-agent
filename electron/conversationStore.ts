@@ -11,6 +11,7 @@
 import fs from 'fs'
 import path from 'path'
 import { randomUUID } from 'crypto'
+import { sanitizeAgentActivityRun, type AgentActivityRun } from '../src/lib/agentActivity'
 
 export const CONVERSATION_VERSION = 2
 export const MAX_STORED_MESSAGES = 1000
@@ -25,6 +26,7 @@ export interface StoredMessage {
   role: StoredRole
   content: string
   timestamp: number
+  activity?: AgentActivityRun
 }
 
 export interface StoredConversation {
@@ -92,11 +94,18 @@ function deriveTitle(messages: StoredMessage[]): string {
   return line ? line.slice(0, 80) : 'Untitled chat'
 }
 
-function normalizeMessages(value: unknown, id: string, fallbackTime: number): StoredMessage[] {
+function normalizeMessages(value: unknown, id: string, fallbackTime: number, secrets: string[] = []): StoredMessage[] {
   if (!Array.isArray(value)) return []
   return value.flatMap((m: any, i) => {
     if (!m || typeof m !== 'object' || typeof m.content !== 'string' || !ROLES.has(m.role)) return []
-    return [{ id: typeof m.id === 'string' && m.id ? m.id : `${id}-${i}`, role: m.role, content: m.content.slice(0, MAX_STORED_MESSAGE_CHARS), timestamp: toTimestamp(m.timestamp, fallbackTime) }]
+    const activity = sanitizeAgentActivityRun(m.activity, secrets)
+    return [{
+      id: typeof m.id === 'string' && m.id ? m.id : `${id}-${i}`,
+      role: m.role,
+      content: m.content.slice(0, MAX_STORED_MESSAGE_CHARS),
+      timestamp: toTimestamp(m.timestamp, fallbackTime),
+      ...(activity ? { activity } : {}),
+    }]
   }).slice(-MAX_STORED_MESSAGES)
 }
 
@@ -104,12 +113,12 @@ function normalizeMessages(value: unknown, id: string, fallbackTime: number): St
  * Accepts the current format and the legacy `{ messages, taskId }` files.
  * Returns null when there is nothing usable to show.
  */
-export function normalizeConversation(raw: unknown, id: string, fallbackTime: number): StoredConversation | null {
+export function normalizeConversation(raw: unknown, id: string, fallbackTime: number, secrets: string[] = []): StoredConversation | null {
   if (!raw || typeof raw !== 'object' || !isValidSessionId(id)) return null
   const data = raw as Record<string, unknown>
   if (!Array.isArray(data.messages)) return null
 
-  const messages = normalizeMessages(data.messages, id, fallbackTime)
+  const messages = normalizeMessages(data.messages, id, fallbackTime, secrets)
   if (messages.length === 0) return null
 
   const firstTs = messages[0].timestamp
@@ -125,7 +134,7 @@ export function normalizeConversation(raw: unknown, id: string, fallbackTime: nu
     createdAt,
     updatedAt,
     messages: messages.slice(-MAX_STORED_MESSAGES),
-    earlierMessages: normalizeMessages(data.earlierMessages, `${id}-earlier`, fallbackTime),
+    earlierMessages: normalizeMessages(data.earlierMessages, `${id}-earlier`, fallbackTime, secrets),
     pinnedSummary: typeof data.pinnedSummary === 'string' ? data.pinnedSummary.slice(0, 12_000) : undefined,
     parentSessionId: isValidSessionId(data.parentSessionId) ? data.parentSessionId : undefined,
     forkedFromMessageId: typeof data.forkedFromMessageId === 'string' ? data.forkedFromMessageId.slice(0, 120) : undefined,
@@ -163,7 +172,8 @@ export async function saveConversation(
   const normalized = normalizeConversation(
     { ...input, updatedAt: now, createdAt: input.createdAt ?? now },
     input.id,
-    now
+    now,
+    secrets,
   )
   if (!normalized) throw new Error('Conversation has no messages to save')
 

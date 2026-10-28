@@ -35,7 +35,42 @@ export type AgentActivityEvent =
   | { type: 'file-edited'; runId: string; path: string; addedLines: number; removedLines: number; timestamp: number }
   | { type: 'command-output'; runId: string; output: string; timestamp: number }
   | { type: 'error'; runId: string; message: string; timestamp: number }
-  | { type: 'run-finished'; runId: string; status: 'done' | 'error' | 'cancelled'; durationMs: number; timestamp: number }
+  | { type: 'run-finished'; runId: string; status: 'done' | 'error' | 'cancelled'; durationMs: number; steps: number; timestamp: number }
+
+const SECRET_PATH = /(^|[\\/])(?:\.env(?:\.|$)|[^\\/]*(?:api[-_]?key|secret|credential|private[-_]?key)[^\\/]*|[^\\/]*\.pem$)/i
+
+/** Keep labels useful while preventing sensitive names and raw file contents from entering the trace. */
+export function agentActivityToolLabel(name: string, args: Record<string, unknown>, workspace = ''): string {
+  const rawPath = typeof args.path === 'string' ? args.path : ''
+  const normalizedWorkspace = workspace.replace(/[\\/]+$/, '').replace(/\\/g, '/')
+  const normalizedPath = rawPath.replace(/\\/g, '/')
+  const pathSegments = normalizedPath.split('/')
+  const relativePath = normalizedWorkspace && normalizedPath.toLowerCase().startsWith(`${normalizedWorkspace.toLowerCase()}/`)
+    ? normalizedPath.slice(normalizedWorkspace.length + 1)
+    : pathSegments[pathSegments.length - 1] || normalizedPath
+  const safePath = !rawPath || SECRET_PATH.test(rawPath) ? '' : maskAgentActivityText(relativePath).slice(0, 150)
+  const pathLabel = safePath ? ` ${safePath}` : ''
+  if (name === 'read_file') return `Reading${pathLabel || ' a file'}`
+  if (name === 'write_file' || name === 'create_file' || name === 'edit_file' || name === 'multi_file_edit') return `Editing${pathLabel || ' files'}`
+  if (name === 'run_command') {
+    const command = typeof args.command === 'string' ? args.command.trim() : ''
+    const safePrefix = command.match(/^([A-Za-z0-9_./-]+)(?:\s+([A-Za-z0-9_./-]+))?/)
+    return safePrefix ? `Running ${safePrefix.slice(1).filter(Boolean).join(' ')}` : 'Running a command'
+  }
+  if (name === 'browser') {
+    const operation = String(args.operation || '').toLowerCase()
+    return operation.includes('search') ? 'Searching the web' : 'Using the browser'
+  }
+  if (name.includes('search')) {
+    return 'Searching the workspace'
+  }
+  return `${name.replace(/_/g, ' ')}${pathLabel}`.slice(0, 180)
+}
+
+export function safeActivityFilePath(path: string): string | null {
+  if (!path.trim() || SECRET_PATH.test(path)) return null
+  return maskAgentActivityText(path).slice(0, 240)
+}
 
 const secretAssignment = /(^|\n)(\s*(?:export\s+)?[A-Za-z_][A-Za-z\d_.-]*(?:API[_-]?KEY|ACCESS[_-]?TOKEN|REFRESH[_-]?TOKEN|TOKEN|SECRET|PASSWORD|CREDENTIAL|AUTH|PASSWD|PWD)[A-Za-z\d_.-]*\s*[:=]\s*)(.*)$/gim
 const namedSecret = /\b((?:api[\s_-]?key|access[\s_-]?token|refresh[\s_-]?token|token|password|secret|credential|authorization|auth)\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi
@@ -123,9 +158,13 @@ export function reduceAgentActivity(run: AgentActivityRun | null, event: AgentAc
       details: maskAgentActivityText(event.summary),
     })
     const steps = [...run.steps]
+    const summary = maskAgentActivityText(event.summary)
     steps[index] = {
       ...steps[index], status: event.success ? 'done' : 'error', finishedAt: event.timestamp,
-      durationMs: Math.max(0, event.durationMs), details: maskAgentActivityText(event.summary),
+      durationMs: Math.max(0, event.durationMs),
+      details: event.toolName === 'run_command' && steps[index].details
+        ? maskAgentActivityText(`${steps[index].details}\n\n${summary}`)
+        : summary,
     }
     return { ...run, updatedAt: event.timestamp, steps }
   }
@@ -159,7 +198,7 @@ export function reduceAgentActivity(run: AgentActivityRun | null, event: AgentAc
   }
 
   if (event.type === 'run-finished') {
-    const stepStatus: AgentActivityStatus = event.status === 'cancelled' ? 'cancelled' : 'done'
+    const stepStatus: AgentActivityStatus = event.status
     let steps = closeRunning(run.steps, event.timestamp, stepStatus)
     if (event.status === 'cancelled') {
       steps = cappedSteps([...steps, {
@@ -194,7 +233,7 @@ export function sanitizeAgentActivityEvent(value: unknown, knownSecrets: string[
     case 'tool-call-finished': return toolName && typeof raw.success === 'boolean'
       ? { type: 'tool-call-finished', runId, toolName, success: raw.success, summary: text(raw.summary, 1_500), durationMs: Math.max(0, Math.min(86_400_000, Number(raw.durationMs) || 0)), timestamp } : null
     case 'file-edited': {
-      if (typeof raw.path !== 'string' || /(^|[\\/])(?:\.env(?:\.|$)|[^\\/]*(?:api[-_]?key|secret|credential|private[-_]?key)[^\\/]*|[^\\/]*\.pem$)/i.test(raw.path)) return null
+      if (typeof raw.path !== 'string' || !safeActivityFilePath(raw.path)) return null
       return {
         type: 'file-edited', runId, path: text(raw.path, 240),
         addedLines: Math.max(0, Math.min(1_000_000, Math.floor(Number(raw.addedLines) || 0))),
@@ -205,9 +244,55 @@ export function sanitizeAgentActivityEvent(value: unknown, knownSecrets: string[
     case 'error': return typeof raw.message === 'string' ? { type: 'error', runId, message: text(raw.message, 500), timestamp } : null
     case 'run-finished': {
       if (raw.status !== 'done' && raw.status !== 'error' && raw.status !== 'cancelled') return null
-      return { type: 'run-finished', runId, status: raw.status, durationMs: Math.max(0, Math.min(86_400_000, Number(raw.durationMs) || 0)), timestamp }
+      return {
+        type: 'run-finished', runId, status: raw.status,
+        durationMs: Math.max(0, Math.min(86_400_000, Number(raw.durationMs) || 0)),
+        steps: Math.max(0, Math.min(MAX_AGENT_ACTIVITY_STEPS, Math.floor(Number(raw.steps) || 0))), timestamp,
+      }
     }
     default: return null
+  }
+}
+
+/** Validates activity loaded from conversation files before it reaches the UI. */
+export function sanitizeAgentActivityRun(value: unknown, knownSecrets: string[] = []): AgentActivityRun | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const raw = value as Record<string, unknown>
+  const validStatuses = new Set<AgentActivityStatus>(['running', 'done', 'error', 'cancelled'])
+  if (typeof raw.id !== 'string' || !raw.id.trim() || !validStatuses.has(raw.status as AgentActivityStatus) || !Array.isArray(raw.steps)) return undefined
+  const finite = (input: unknown, fallback = 0) => Number.isFinite(Number(input)) ? Number(input) : fallback
+  const steps: AgentActivityStep[] = raw.steps.slice(-MAX_AGENT_ACTIVITY_STEPS).flatMap((entry, index) => {
+    if (!entry || typeof entry !== 'object') return []
+    const step = entry as Record<string, unknown>
+    const kind = step.kind as AgentActivityStep['kind']
+    const status = step.status as AgentActivityStatus
+    if (!['status', 'model', 'tool', 'file', 'output', 'error', 'cancelled'].includes(kind) || !validStatuses.has(status)) return []
+    const sourceLabel = maskAgentActivityText(step.label, knownSecrets).slice(0, 180)
+    const label = SECRET_PATH.test(sourceLabel) ? 'Sensitive file operation' : sourceLabel
+    const path = typeof step.filePath === 'string' ? safeActivityFilePath(step.filePath) : null
+    const toolName = typeof step.toolName === 'string' && /^[a-z0-9_-]{1,80}$/i.test(step.toolName) ? step.toolName : undefined
+    return [{
+      id: typeof step.id === 'string' ? step.id.slice(0, 160) : `restored:${index}`,
+      kind,
+      label: label || 'Agent activity',
+      status,
+      startedAt: Math.max(0, finite(step.startedAt)),
+      ...(Number.isFinite(Number(step.finishedAt)) ? { finishedAt: Math.max(0, finite(step.finishedAt)) } : {}),
+      ...(Number.isFinite(Number(step.durationMs)) ? { durationMs: Math.max(0, Math.min(86_400_000, finite(step.durationMs))) } : {}),
+      ...(toolName ? { toolName } : {}),
+      ...(path ? { filePath: maskAgentActivityText(path, knownSecrets).slice(0, 240) } : {}),
+      ...(Number.isFinite(Number(step.addedLines)) ? { addedLines: Math.max(0, Math.min(1_000_000, Math.floor(finite(step.addedLines)))) } : {}),
+      ...(Number.isFinite(Number(step.removedLines)) ? { removedLines: Math.max(0, Math.min(1_000_000, Math.floor(finite(step.removedLines)))) } : {}),
+      ...(typeof step.details === 'string' ? { details: maskAgentActivityText(step.details, knownSecrets) } : {}),
+    }]
+  })
+  return {
+    id: raw.id.trim().slice(0, 128),
+    startedAt: Math.max(0, finite(raw.startedAt)),
+    updatedAt: Math.max(0, finite(raw.updatedAt, finite(raw.startedAt))),
+    status: raw.status as AgentActivityStatus,
+    ...(Number.isFinite(Number(raw.durationMs)) ? { durationMs: Math.max(0, Math.min(86_400_000, finite(raw.durationMs))) } : {}),
+    steps,
   }
 }
 

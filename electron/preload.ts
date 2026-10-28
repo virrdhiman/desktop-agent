@@ -17,6 +17,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type { SetupDefinition, SetupItemId } from '../src/lib/prerequisiteSetup'
 import type { DiagnosticsViewerPayload } from './diagnostics'
 import type { RepoIndexStatus, SharedAppState } from '../src/types'
+import type { AgentActivityEvent } from '../src/lib/agentActivity'
 
 /** Invoke with a timeout — prevents renderer from hanging if main process stalls */
 function invokeWithTimeout(channel: string, ...args: any[]): Promise<any> {
@@ -101,7 +102,14 @@ contextBridge.exposeInMainWorld('api', {
 
   // ═══ Agent Tools ══════════════════════════════════════════════════════════════
   // Tools the agent calls autonomously (definitions in src/types AGENT_TOOLS)
-  toolExecute: (tool: { name: string; args: Record<string, any>; workspace?: string; sessionId?: string; taskId?: string; workingMode?: 'plan' | 'build' | 'multitask' | 'ask' | 'review' | 'debug' }) => invokeWithTimeout('tool:execute', tool),
+  toolExecute: (tool: { name: string; args: Record<string, any>; workspace?: string; sessionId?: string; taskId?: string; activityRunId?: string; workingMode?: 'plan' | 'build' | 'multitask' | 'ask' | 'review' | 'debug' }) => invokeWithTimeout('tool:execute', tool),
+  publishAgentActivity: (event: AgentActivityEvent) => { ipcRenderer.send('agent:activity:publish', event) },
+  onAgentActivity: (cb: (event: AgentActivityEvent) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: AgentActivityEvent) => cb(payload)
+    ipcRenderer.on('agent:activity', listener)
+    return () => { ipcRenderer.removeListener('agent:activity', listener) }
+  },
+  cancelAgentActivity: (runId?: string) => { ipcRenderer.send('agent:activity:cancel', runId) },
   onRepoIndexStatus: (cb: (status: RepoIndexStatus) => void) => {
     const listener = (_e: unknown, status: RepoIndexStatus) => cb(status)
     ipcRenderer.on('repo-index:status', listener)
@@ -329,7 +337,10 @@ export type ElectronAPI = {
   terminalKill: (termId: string) => Promise<void>
   onTerminalData: (cb: (termId: string, data: string) => void) => void
   onTerminalExit: (cb: (termId: string, exitCode: number) => void) => void
-  toolExecute: (tool: { name: string; args: Record<string, any>; workspace?: string; sessionId?: string; taskId?: string; workingMode?: 'plan' | 'build' | 'multitask' | 'ask' | 'review' | 'debug' }) => Promise<{ result?: string; error?: string }>
+  toolExecute: (tool: { name: string; args: Record<string, any>; workspace?: string; sessionId?: string; taskId?: string; activityRunId?: string; workingMode?: 'plan' | 'build' | 'multitask' | 'ask' | 'review' | 'debug' }) => Promise<{ result?: string; error?: string }>
+  publishAgentActivity: (event: AgentActivityEvent) => void
+  onAgentActivity: (cb: (event: AgentActivityEvent) => void) => () => void
+  cancelAgentActivity: (runId?: string) => void
   onRepoIndexStatus: (cb: (status: RepoIndexStatus) => void) => () => void
   vscodeStatus: (workspace: string) => Promise<VsCodeBridgeStatus | { error: string }>
   vscodeInstallBridge: () => Promise<{ result?: string; error?: string }>

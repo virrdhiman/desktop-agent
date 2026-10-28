@@ -212,6 +212,33 @@ describe('conversationStore', () => {
     expect(saved).toMatchObject({ title: 'Resume this task', pinned: true, summary: 'A bounded handoff summary' })
   })
 
+  it('round-trips bounded, redacted agent activity with saved chat messages', async () => {
+    const secret = 'activity-test-secret-value'
+    const activity = {
+      id: 'run-session-activity', startedAt: 10, updatedAt: 20, status: 'done', durationMs: 10,
+      steps: [{
+        id: 'step-1', kind: 'tool', label: 'Running npm test', status: 'done', startedAt: 11,
+        finishedAt: 20, durationMs: 9, toolName: 'run_command', details: `finished with ${secret}`,
+      }],
+    }
+    await saveConversation(dir, {
+      id: 'session-activity',
+      messages: [msg('user-1', 'user', 'check it'), { ...msg('assistant-1', 'assistant', 'Done'), activity }],
+    }, [secret])
+
+    const saved = await readConversation(dir, 'session-activity')
+    expect(saved?.messages[1].activity).toMatchObject({ id: 'run-session-activity', status: 'done', steps: [{ label: 'Running npm test', status: 'done' }] })
+    expect(saved?.messages[1].activity?.steps[0].details).not.toContain(secret)
+    expect(fs.readFileSync(path.join(dir, 'session-activity.json'), 'utf8')).not.toContain(secret)
+  })
+
+  it('keeps legacy messages without an activity field valid', () => {
+    const legacy = normalizeConversation({ messages: [msg('old-user', 'user', 'continue'), msg('old-answer', 'assistant', 'previous answer')] }, 'session-old-activity', 42)
+    expect(legacy?.messages).toHaveLength(2)
+    expect(legacy?.messages[1]).toMatchObject({ id: 'old-answer', content: 'previous answer' })
+    expect(legacy?.messages[1]).not.toHaveProperty('activity')
+  })
+
   it('keeps the original creation time while updating the resume record', async () => {
     const first = await saveConversation(dir, {
       id: 'session-created-time',

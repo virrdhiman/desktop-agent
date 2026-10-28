@@ -27,7 +27,7 @@ import { isExternalWebUrl, isSameAppPage } from './navigation'
 import { registerFsHandlers } from './handlers/fs'
 import { registerGitHandlers } from './handlers/git'
 import { registerTerminalHandlers } from './handlers/terminal'
-import { registerToolHandlers } from './handlers/tools'
+import { cancelActiveAgentCommands, registerToolHandlers } from './handlers/tools'
 import { registerSettingsHandlers } from './handlers/settings'
 import { registerConversationHandlers } from './handlers/conversations'
 import { registerAiHandlers } from './handlers/ai'
@@ -46,6 +46,8 @@ import { APP_NAME } from '../shared/brand'
 import { isSafeWorkspaceFile, nextQaDialogChoice, type UnsavedChoice } from './windowClose'
 import type { SharedAppState } from '../src/types'
 import { shouldAcceptSharedStateUpdate } from '../src/lib/sharedStateSync'
+import { registerAgentActivityBridge } from './agentActivityBridge'
+import { loadRuntimeSettings } from './handlers/settings'
 
 // package.json has "type": "module", so the main bundle is ESM and has no CommonJS __dirname.
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -379,6 +381,12 @@ app.whenReady().then(() => {
   registerGitHandlers()
   registerTerminalHandlers(getRendererWindows)
   registerToolHandlers()
+  registerAgentActivityBridge(getRendererWindows, cancelActiveAgentCommands, async () => {
+    const settings = await loadRuntimeSettings()
+    const providerKeys = (settings.providers || []).map((provider: { apiKey?: unknown }) => provider.apiKey)
+    const environmentValues = Object.values(process.env)
+    return [...providerKeys, ...environmentValues].filter((value): value is string => typeof value === 'string' && value.length >= 8)
+  })
   registerSettingsHandlers()
   registerConversationHandlers()
   registerWorkspaceStateHandlers()

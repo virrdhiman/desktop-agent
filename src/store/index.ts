@@ -448,6 +448,7 @@ export const useStore = create<AppState>((set, get) => ({
   setCancelRequested: (value) => set({ cancelRequested: value }),
   stopGeneration: () => {
     set({ cancelRequested: true, chatLoading: false, streamingContent: '' })
+    window.api.cancelAgentActivity()
     Promise.resolve()
       .then(() => window.api.aiCancel())
       .catch(() => {})

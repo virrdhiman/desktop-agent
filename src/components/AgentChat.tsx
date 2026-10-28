@@ -27,6 +27,7 @@ import WorkingModeSelector from './WorkingModeSelector'
 import ComposerAddMenu from './ComposerAddMenu'
 import ComposerControls from './ComposerControls'
 import BrandLogo from './BrandLogo'
+import AgentActivityPanel from './AgentActivityPanel'
 import { buildConversationSummary, useStore } from '../store'
 import { contextLevel, contextWindowForModel, estimateTokens } from '../lib/chatControl'
 import { AGENT_TOOLS, type AgentTaskKind, type ChatMessage, type AgentStep, type ProviderConfig } from '../types'
@@ -37,6 +38,10 @@ import { highlightSyntax } from '../lib/highlight'
 import { APP_NAME } from '../lib/brand'
 import { imageAttachmentError, withImageContent } from '../lib/vision'
 import { toolActivityArgs, toolActivityResult } from '../lib/toolActivity'
+import {
+  agentActivityToolLabel, changedLineCounts, reduceAgentActivity, safeActivityFilePath,
+  sanitizeAgentActivityEvent, type AgentActivityEvent, type AgentActivityRun,
+} from '../lib/agentActivity'
 import { AUTHOR_NAME, AUTHOR_URL, REPO_URL } from '../lib/brand'
 import {
   MAX_TOOL_ROUNDS, assessResponse, buildContext, buildHistory, buildSystemPrompt, cleanResponse,
@@ -75,6 +80,16 @@ type QueuedQuery = {
 }
 
 const MAX_ACTIVE_QUERIES = 2
+
+function safeActivityFailureReason(error: string): string {
+  const value = error.toLowerCase()
+  if (/permission|access is denied|eacces|eperm/.test(value)) return 'Permission was denied.'
+  if (/not found|enoent|no such file/.test(value)) return 'The requested file or path was not found.'
+  if (/timed? ?out|timeout/.test(value)) return 'The operation timed out.'
+  if (/declined|cancelled by user/.test(value)) return 'The action was declined.'
+  if (/blocked/.test(value)) return 'The operation was blocked by policy.'
+  return 'The tool returned an error.'
+}
 
 function traceText(value: string, max = 6_000): string {
   const text = value.trim()
@@ -477,6 +492,9 @@ export default function AgentChat() {
   const [goalEditorOpen, setGoalEditorOpen] = useState(false)
   const [goalDraft, setGoalDraft] = useState('')
   const [pendingPlan, setPendingPlan] = useState<{ job: QueuedQuery } | null>(null)
+  const [activityRuns, setActivityRuns] = useState<Map<string, AgentActivityRun>>(() => new Map())
+  const activityRunsRef = useRef<Map<string, AgentActivityRun>>(new Map())
+  const activeActivityRunsRef = useRef<Set<string>>(new Set())
   const messagesScrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -484,6 +502,36 @@ export default function AgentChat() {
   const activeQueriesRef = useRef(0)
   const pumpingQueueRef = useRef(false)
   const voiceDraftBaseRef = useRef('')
+
+  const applyActivityEvent = useCallback((event: AgentActivityEvent) => {
+    const currentRuns = activityRunsRef.current
+    const current = currentRuns.get(event.runId) || null
+    const next = reduceAgentActivity(current, event)
+    if (!next) return
+    const updated = new Map(currentRuns)
+    updated.set(event.runId, next)
+    if (updated.size > 20) {
+      for (const [id, run] of updated) {
+        if (updated.size <= 20) break
+        if (run.status !== 'running' && id !== event.runId) updated.delete(id)
+      }
+    }
+    activityRunsRef.current = updated
+    setActivityRuns(updated)
+  }, [])
+
+  const publishActivity = useCallback((event: AgentActivityEvent) => {
+    const safe = sanitizeAgentActivityEvent(event)
+    if (!safe) return
+    applyActivityEvent(safe)
+    window.api.publishAgentActivity(safe)
+  }, [applyActivityEvent])
+
+  useEffect(() => window.api.onAgentActivity((event) => {
+    // Command output originates in main; renderer-authored events are reduced locally
+    // before publish and are intentionally not echoed back to their sender.
+    if (event.type === 'command-output' && activeActivityRunsRef.current.has(event.runId)) applyActivityEvent(event)
+  }), [applyActivityEvent])
 
   const resizeComposer = useCallback(() => {
     const element = inputRef.current
@@ -676,7 +724,7 @@ export default function AgentChat() {
     return () => window.removeEventListener('paste', handler)
   }, [])
 
-  const executeTool = useCallback(async (toolName: string, args: Record<string, any>, taskId: string) => {
+  const executeTool = useCallback(async (toolName: string, args: Record<string, any>, taskId: string, activityRunId: string) => {
     const loggedArgs = toolActivityArgs(toolName, args)
     addTerminalEntry({
       id: Date.now().toString(),
@@ -686,10 +734,15 @@ export default function AgentChat() {
     })
     try {
       const workspace = useStore.getState().workspacePath || undefined
-      let beforeEdit: string | null = null
-      if ((toolName === 'write_file' || toolName === 'create_file' || toolName === 'edit_file') && typeof args.path === 'string') {
-        const existing = await window.api.readFile(args.path).catch(() => null)
-        beforeEdit = existing && 'content' in existing ? existing.content : ''
+      const editPaths = new Set<string>()
+      if (['write_file', 'create_file', 'edit_file', 'vscode_apply_edit'].includes(toolName) && typeof args.path === 'string') editPaths.add(args.path)
+      if (toolName === 'multi_file_edit' && Array.isArray(args.edits)) {
+        for (const edit of args.edits) if (typeof edit?.path === 'string') editPaths.add(edit.path)
+      }
+      const beforeEdits = new Map<string, string>()
+      for (const editPath of editPaths) {
+        const existing = await window.api.readFile(editPath).catch(() => null)
+        beforeEdits.set(editPath, existing && 'content' in existing ? existing.content : '')
       }
       return await window.api.toolExecute({
         name: toolName,
@@ -698,11 +751,26 @@ export default function AgentChat() {
         sessionId: useStore.getState().currentSessionId || undefined,
         workingMode: useStore.getState().settings.layout?.workingMode || (useStore.getState().planMode ? 'plan' : 'build'),
         taskId,
+        activityRunId,
       }).then(async (result) => {
-        if (result && !result.error && beforeEdit !== null && typeof args.path === 'string') {
-          const after = await window.api.readFile(args.path).catch(() => null)
-          if (after && 'content' in after && after.content !== beforeEdit) {
-            useStore.getState().addFileEdit({ path: args.path, before: beforeEdit, after: after.content })
+        if (result && !result.error) {
+          for (const [editPath, beforeEdit] of beforeEdits) {
+            const after = await window.api.readFile(editPath).catch(() => null)
+            if (after && 'content' in after && after.content !== beforeEdit) {
+              useStore.getState().addFileEdit({ path: editPath, before: beforeEdit, after: after.content })
+              const workspaceRoot = workspace?.replace(/[\\/]+$/, '') || ''
+              const targetPath = after.path || editPath
+              const displayPath = workspaceRoot && targetPath.toLowerCase().startsWith(`${workspaceRoot.toLowerCase()}\\`)
+                ? targetPath.slice(workspaceRoot.length + 1)
+                : workspaceRoot && targetPath.toLowerCase().startsWith(`${workspaceRoot.toLowerCase()}/`)
+                  ? targetPath.slice(workspaceRoot.length + 1)
+                  : targetPath
+              const safePath = safeActivityFilePath(displayPath)
+              if (safePath) {
+                const counts = changedLineCounts(beforeEdit, after.content)
+                publishActivity({ type: 'file-edited', runId: activityRunId, path: safePath, ...counts, timestamp: Date.now() })
+              }
+            }
           }
         }
         return result
@@ -710,10 +778,10 @@ export default function AgentChat() {
     } catch (err: any) {
       return { error: `Tool execution failed: ${err?.message || err}` }
     }
-  }, [])
+  }, [publishActivity])
 
   /** Runs every tool block in the reply and records each run. Returns null when the reply has no tool blocks at all. */
-  const processToolCalls = useCallback(async (content: string, taskId: string, runs: ToolRun[]) => {
+  const processToolCalls = useCallback(async (content: string, taskId: string, activityRunId: string, runs: ToolRun[]) => {
     if (!hasToolBlock(content)) return null
     const { calls: toolCalls, errors: parseErrors } = parseToolCalls(content)
 
@@ -723,6 +791,12 @@ export default function AgentChat() {
     }
     for (const toolCall of toolCalls) {
       if (useStore.getState().cancelRequested) break
+      const toolStartedAt = Date.now()
+      publishActivity({
+        type: 'tool-call-started', runId: activityRunId, toolName: toolCall.name,
+        label: agentActivityToolLabel(toolCall.name, toolCall.args, useStore.getState().workspacePath || ''),
+        timestamp: toolStartedAt,
+      })
       addStepToTask(taskId, {
         id: Date.now().toString(),
         type: 'action',
@@ -731,11 +805,21 @@ export default function AgentChat() {
         toolCall: { ...toolCall, args: toolActivityArgs(toolCall.name, toolCall.args), id: Date.now().toString(), status: 'running' },
       } as AgentStep)
 
-      const result = await executeTool(toolCall.name, toolCall.args, taskId)
+      const result = await executeTool(toolCall.name, toolCall.args, taskId, activityRunId)
       addToolExecution(settings.activeProvider)
       const ok = !!result && typeof result.error !== 'string'
       const resultText = ok ? (result?.result || 'Done') : result?.error || 'No result'
       const activityResult = toolActivityResult(toolCall.name, resultText, ok)
+      const activitySummary = ok
+        ? toolCall.name === 'read_file' ? 'File read.'
+          : toolCall.name === 'run_command' ? 'Command finished.'
+            : ['write_file', 'create_file', 'edit_file', 'multi_file_edit'].includes(toolCall.name) ? 'Change applied.'
+              : 'Tool completed.'
+        : safeActivityFailureReason(resultText)
+      publishActivity({
+        type: 'tool-call-finished', runId: activityRunId, toolName: toolCall.name, success: ok,
+        summary: activitySummary, durationMs: Math.max(0, Date.now() - toolStartedAt), timestamp: Date.now(),
+      })
       runs.push({ name: toolCall.name, ok, summary: activityResult.slice(0, 1_000) })
       recordToolExecution({
         name: toolCall.name,
@@ -779,7 +863,7 @@ export default function AgentChat() {
       ))
     }
     return results.join('\n\n')
-  }, [executeTool, addTerminalEntry, addStepToTask, addOpenFile, setSelectedFile, recordToolExecution, setLastVerification])
+  }, [executeTool, addTerminalEntry, addStepToTask, addOpenFile, setSelectedFile, recordToolExecution, setLastVerification, publishActivity])
 
   /**
    * Active provider first, then official free providers with keys. Auto can recover from an
@@ -788,7 +872,7 @@ export default function AgentChat() {
    * tool rounds don't keep hitting a provider that is rate limited.
    */
   const callWithFallback = useCallback(async (
-    apiMessages: any[], preferredId?: string, taskKind: AgentTaskKind = 'analysis', stream = true
+    apiMessages: any[], preferredId?: string, taskKind: AgentTaskKind = 'analysis', stream = true, activityRunId?: string
   ): Promise<ChatOutcome> => {
     const current = useStore.getState().settings
     const base = buildProviderChain(current.providers, current.activeProvider, undefined, taskKind, Date.now(), current.taskRouting)
@@ -800,6 +884,10 @@ export default function AgentChat() {
     for (let i = 0; i < chain.length; i++) {
       const p = chain[i]
       if (useStore.getState().cancelRequested) return { error: 'Cancelled', cancelled: true }
+      if (activityRunId) publishActivity({
+        type: 'model-thinking', runId: activityRunId,
+        label: i > 0 ? 'Trying the next available model' : 'Waiting for the model response', timestamp: Date.now(),
+      })
       const override = p.id === current.activeProvider ? modelOverride : null
       setStreamingContent('')
 
@@ -882,7 +970,7 @@ export default function AgentChat() {
       return { content: result.content || useStore.getState().streamingContent, provider: p, failed }
     }
     return { error: describeProviderFailure(failed) }
-  }, [modelOverride, addTerminalEntry, setAppSettings, setStreamingContent])
+  }, [modelOverride, addTerminalEntry, setAppSettings, setStreamingContent, publishActivity])
 
   const runQueuedQuery = useCallback(async (job: QueuedQuery) => {
     const text = job.text.trim()
@@ -891,6 +979,10 @@ export default function AgentChat() {
       return
     }
     setCancelRequested(false)
+    const activityRunId = job.id.slice(0, 128)
+    const runStartedAt = Date.now()
+    activeActivityRunsRef.current.add(activityRunId)
+    publishActivity({ type: 'run-started', runId: activityRunId, timestamp: runStartedAt })
     const taskKind = classifyAgentTask(text)
     const effectivePlanMode = job.planMode ?? planMode
 
@@ -948,15 +1040,30 @@ export default function AgentChat() {
 
     const finish = (status: 'done' | 'error', notice?: string) => {
       if (notice) addMessage({ id: `${Date.now()}-notice`, role: 'system', content: notice, timestamp: Date.now() })
-      updateTask(taskId, { status })
-      updateQueuedQuery(job.id, { status })
+      const finalStatus = status === 'done' && useStore.getState().cancelRequested ? 'cancelled' : status
+      if (finalStatus === 'error') publishActivity({ type: 'error', runId: activityRunId, message: safeActivityFailureReason(notice || 'The run failed.'), timestamp: Date.now() })
+      const currentRun = activityRunsRef.current.get(activityRunId)
+      publishActivity({
+        type: 'run-finished', runId: activityRunId, status: finalStatus,
+        durationMs: Math.max(0, Date.now() - runStartedAt),
+        steps: currentRun?.steps.filter((step) => step.kind !== 'status').length || 0, timestamp: Date.now(),
+      })
+      const run = activityRunsRef.current.get(activityRunId)
+      const targetMessage = [...useStore.getState().messages].reverse().find((message) =>
+        (message.role === 'assistant' || message.role === 'system') && message.timestamp >= runStartedAt,
+      )
+      if (run && targetMessage) updateMessage(targetMessage.id, { activity: run })
+      activeActivityRunsRef.current.delete(activityRunId)
+      setActivityRuns(new Map(activityRunsRef.current))
+      updateTask(taskId, { status: finalStatus === 'error' ? 'error' : 'done' })
+      updateQueuedQuery(job.id, { status: finalStatus === 'error' ? 'error' : 'done' })
       setStreamingContent('')
     }
 
     let answeredBy: string | undefined
     let fallbackNoticeShown = false
     const call = async (): Promise<Extract<ChatOutcome, { content: string }> | null> => {
-      const outcome = await callWithFallback(apiMessages, answeredBy, taskKind, false)
+      const outcome = await callWithFallback(apiMessages, answeredBy, taskKind, false, activityRunId)
       if ('error' in outcome) {
         finish('error', outcome.cancelled ? 'Generation stopped.' : agentTurnTimeoutNotice(outcome.error) || outcome.error)
         return null
@@ -985,7 +1092,7 @@ export default function AgentChat() {
     ): Promise<string | null> => {
       const traceInput = traceText(roleMessages.map((message) => `${message.role.toUpperCase()}:\n${message.content}`).join('\n\n'))
       addStepToTask(taskId, { id: `${Date.now()}-${label}`, type: 'thought', content: `${label}: working`, timestamp: Date.now() })
-      const roleOutcome = await callWithFallback(roleMessages, preferredId, roleTaskKind, false)
+      const roleOutcome = await callWithFallback(roleMessages, preferredId, roleTaskKind, false, activityRunId)
       if ('error' in roleOutcome) {
         addStepToTask(taskId, { id: `${Date.now()}-${label}-error`, type: 'error', content: `${label}: ${roleOutcome.error}`, timestamp: Date.now() })
         addStepToTask(taskId, {
@@ -1188,7 +1295,7 @@ export default function AgentChat() {
       round++
       addStepToTask(taskId, { id: `${Date.now()}-t${round}`, type: 'thought', content: `Tool round ${round}`, timestamp: Date.now() })
 
-      const toolResult = await processToolCalls(responseContent, taskId, toolRuns)
+      const toolResult = await processToolCalls(responseContent, taskId, activityRunId, toolRuns)
       if (useStore.getState().cancelRequested) { finish('done', 'Generation stopped.'); return }
 
       apiMessages = [
@@ -1200,7 +1307,7 @@ export default function AgentChat() {
       if (!outcome) return
       addTokens(0, Math.ceil(outcome.content.length / 4))
     }
-  }, [workspacePath, selectedFile, fileContent, openFiles, allFiles, fileEditHistory, projectMemory, projectNotes, pinnedSummary, latestCheckpoint, lastVerification, tasks, toolExecutions, planMode, appSettings.customRules, appSettings.strictGrounding, appSettings.teamTokenBudget, appSettings.teamPreset, appSettings.teamProfile, appSettings.teamMode, appSettings.dynamicTeam, setCancelRequested, setStreamingContent, addTask, updateTask, addStepToTask, callWithFallback, addTokens, addMessage, processToolCalls, updateQueuedQuery])
+  }, [workspacePath, selectedFile, fileContent, openFiles, allFiles, fileEditHistory, projectMemory, projectNotes, pinnedSummary, latestCheckpoint, lastVerification, tasks, toolExecutions, planMode, appSettings.customRules, appSettings.strictGrounding, appSettings.teamTokenBudget, appSettings.teamPreset, appSettings.teamProfile, appSettings.teamMode, appSettings.dynamicTeam, setCancelRequested, setStreamingContent, addTask, updateTask, addStepToTask, callWithFallback, addTokens, addMessage, updateMessage, processToolCalls, updateQueuedQuery, publishActivity])
 
   const pumpQueryQueue = useCallback(() => {
     if (pumpingQueueRef.current) return
@@ -1378,6 +1485,13 @@ export default function AgentChat() {
     setVoiceStatus('Reading latest answer...')
     synth.speak(utterance)
   }, [])
+
+  const openActivityFile = useCallback(async (filePath: string) => {
+    const target = resolveWorkspacePath(workspacePath || undefined, filePath)
+    addOpenFile(target)
+    setSelectedFile(target)
+    try { await window.api.openIdeWindow() } catch { /* Keep the selected file available in shared Code state. */ }
+  }, [workspacePath, addOpenFile, setSelectedFile])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -1564,6 +1678,7 @@ export default function AgentChat() {
                   background: msg.role === 'user' ? 'var(--bg-tertiary)' : 'var(--bg-secondary)',
                   borderRadius: msg.role === 'user' ? '12px 12px 12px 2px' : '12px 12px 12px 12px',
                 }}>
+                  {msg.activity && <AgentActivityPanel run={msg.activity} onOpenFile={(path) => { void openActivityFile(path) }} />}
                   {msg.role === 'assistant' ? (
                     <MarkdownContent content={msg.content} />
                   ) : (
@@ -1587,6 +1702,12 @@ export default function AgentChat() {
               </div>
             ))}
 
+            {[...activityRuns.values()].filter((run) => run.status === 'running').map((run) => (
+              <div key={run.id} style={{ marginBottom: 12, overflowAnchor: 'none' }}>
+                <AgentActivityPanel run={run} answerStreaming={!!streamingContent} onOpenFile={(path) => { void openActivityFile(path) }} />
+              </div>
+            ))}
+
             {/* Streaming indicator */}
             {chatLoading && streamingContent && (
               <div style={{ marginBottom: 16 }}>
@@ -1605,7 +1726,7 @@ export default function AgentChat() {
               </div>
             )}
 
-            {chatLoading && !streamingContent && (
+            {chatLoading && !streamingContent && ![...activityRuns.values()].some((run) => run.status === 'running') && (
               <div style={{ padding: '8px 12px', color: 'var(--text-muted)', fontSize: 13 }}>
                 <span style={{ animation: 'blink 1s infinite' }}>🤔</span> Thinking...
               </div>

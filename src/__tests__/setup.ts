@@ -55,6 +55,9 @@ if (typeof window !== 'undefined') Object.defineProperty(window, 'api', {
     onTerminalData: vi.fn(),
     onTerminalExit: vi.fn(),
      toolExecute: vi.fn(),
+    publishAgentActivity: vi.fn(),
+    onAgentActivity: vi.fn(() => () => {}),
+    cancelAgentActivity: vi.fn(),
      onRepoIndexStatus: vi.fn(() => () => {}),
     vscodeStatus: vi.fn().mockResolvedValue({
       connected: false,

@@ -9,6 +9,8 @@
  * Agent tools: file ops, git ops, code search, web search, Web3, image/video, speech
  */
 import { app, BrowserWindow, ipcMain } from 'electron'
+import { cancelActiveAgentCommands, runAgentCommand } from '../agentCommandRunner'
+import { broadcastCommandActivity } from '../agentActivityBridge'
 import path from 'path'
 import fs from 'fs'
 import { simpleGit, SimpleGit } from 'simple-git'
@@ -33,6 +35,8 @@ import {
   MAX_DATA_FILE_BYTES, MAX_DATA_RESULT_CHARS,
 } from '../dataTools'
 import { dataToolDisabledReason } from '../../src/lib/dataToolSettings'
+
+export { cancelActiveAgentCommands }
 
 /** Git instances cache for tool execution */
 const toolGitInstances: Map<string, SimpleGit> = new Map()
@@ -144,7 +148,7 @@ export function registerToolHandlers() {
 
   ipcMain.handle(
     'tool:execute',
-    async (event, tool: { name: string; args: Record<string, any>; workspace?: string; sessionId?: string; taskId?: string; workingMode?: 'plan' | 'build' | 'multitask' | 'ask' | 'review' | 'debug' }) => {
+    async (event, tool: { name: string; args: Record<string, any>; workspace?: string; sessionId?: string; taskId?: string; activityRunId?: string; workingMode?: 'plan' | 'build' | 'multitask' | 'ask' | 'review' | 'debug' }) => {
       try {
         tool.args = resolveToolArgs(tool.name, tool.args, tool.workspace)
         const policySettings = await loadToolSettings()
@@ -428,12 +432,23 @@ export function registerToolHandlers() {
             return { result }
           }
           case 'run_command': {
-            const { exec } = await import('child_process')
-            return new Promise((resolve) => {
-              exec(tool.args.command, { cwd: tool.args.cwd || process.cwd(), timeout: COMMAND_TIMEOUT_MS }, (error, stdout, stderr) => {
-                resolve(formatCommandResult(tool.args.command, error, String(stdout), String(stderr)))
-              })
+            const knownSecrets = (policySettings.providers || [])
+              .map((provider: { apiKey?: unknown }) => provider.apiKey)
+              .filter((value: unknown): value is string => typeof value === 'string' && value.length >= 4)
+            const result = await runAgentCommand({
+              command: tool.args.command,
+              cwd: tool.args.cwd || process.cwd(),
+              runId: tool.activityRunId,
+              timeoutMs: COMMAND_TIMEOUT_MS,
+              knownSecrets,
+              onOutput: (output) => {
+                if (!tool.activityRunId) return
+                broadcastCommandActivity(() => BrowserWindow.getAllWindows(), {
+                  type: 'command-output', runId: tool.activityRunId, output, timestamp: Date.now(),
+                }, knownSecrets)
+              },
             })
+            return formatCommandResult(tool.args.command, result.error, result.stdout, result.stderr)
           }
           case 'api_request': {
             return { result: await executeApiRequest(tool.args as any) }
