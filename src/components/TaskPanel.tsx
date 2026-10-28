@@ -177,7 +177,7 @@ export default function TaskPanel() {
                   {/* Task steps (expanded) */}
                     {isExpanded && (
                       <div id={`task-details-${task.id}`} role="region" aria-label={`${task.title} details`} style={{ marginTop: 8, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
-                        <div aria-labelledby={`review-title-${task.id}`} style={{ marginBottom: 10, padding: 9, borderRadius: 6, background: 'rgba(59,130,246,0.06)', border: '1px solid var(--border)' }}>
+                        <div aria-labelledby={`review-title-${task.id}`} style={{ marginBottom: 10, padding: 9, borderRadius: 6, background: 'var(--accent-soft)', border: '1px solid var(--border)' }}>
                           <div id={`review-title-${task.id}`} style={{ fontSize: 12, fontWeight: 700, marginBottom: 7 }}>Post-run review</div>
                          {(() => {
                            const review = buildTaskReviewSummary(task, fileEditHistory, toolExecutions, lastVerification, latestCheckpoint)

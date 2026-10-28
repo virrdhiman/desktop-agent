@@ -16,16 +16,16 @@ describe('highlightSyntax', () => {
     }
   })
 
-  it('colors strings, keywords, numbers, and types once each', () => {
+  it('uses theme tokens for strings, keywords, numbers, and types', () => {
     const html = highlightSyntax('const x: Foo = "a" + 1')
-    expect(html).toContain('<span style="color:#c678dd">const</span>')
-    expect(html).toContain('<span style="color:#e5c07b">Foo</span>')
-    expect(html).toContain('<span style="color:#98c379">"a"</span>')
-    expect(html).toContain('<span style="color:#d19a66">1</span>')
+    expect(html).toContain('<span style="color:var(--syntax-keyword)">const</span>')
+    expect(html).toContain('<span style="color:var(--syntax-type)">Foo</span>')
+    expect(html).toContain('<span style="color:var(--syntax-string)">"a"</span>')
+    expect(html).toContain('<span style="color:var(--syntax-number)">1</span>')
   })
 
   it('does not highlight keywords inside strings', () => {
-    expect(highlightSyntax('"return if"')).toBe('<span style="color:#98c379">"return if"</span>')
+    expect(highlightSyntax('"return if"')).toBe('<span style="color:var(--syntax-string)">"return if"</span>')
   })
 
   it('escapes HTML in code', () => {
@@ -33,7 +33,7 @@ describe('highlightSyntax', () => {
   })
 
   it('uses language-specific keywords', () => {
-    expect(highlightSyntax('def run', 'python')).toContain('<span style="color:#c678dd">def</span>')
-    expect(highlightSyntax('def run', 'ts')).not.toContain('<span style="color:#c678dd">def</span>')
+    expect(highlightSyntax('def run', 'python')).toContain('<span style="color:var(--syntax-keyword)">def</span>')
+    expect(highlightSyntax('def run', 'ts')).not.toContain('<span style="color:var(--syntax-keyword)">def</span>')
   })
 })

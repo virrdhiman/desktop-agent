@@ -99,8 +99,8 @@ const DiffViewer: React.FC<DiffViewerProps> = memo(function DiffViewer({ filePat
           📝 {filePath}
         </span>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {added > 0 && <span style={{ color: '#4ade80', fontSize: 11 }}>+{added}</span>}
-          {removed > 0 && <span style={{ color: '#f87171', fontSize: 11 }}>-{removed}</span>}
+          {added > 0 && <span style={{ color: 'var(--success)', fontSize: 11 }}>+{added}</span>}
+          {removed > 0 && <span style={{ color: 'var(--error)', fontSize: 11 }}>-{removed}</span>}
           <span style={{ color: 'var(--text-muted)', fontSize: 10 }}>
             {collapsed ? '▶ expand' : '▼ collapse'}
           </span>
@@ -109,16 +109,16 @@ const DiffViewer: React.FC<DiffViewerProps> = memo(function DiffViewer({ filePat
 
       {/* Diff lines */}
       {!collapsed && (
-        <div style={{ background: '#0d1117', overflow: 'auto', maxHeight: 400 }}>
+        <div style={{ background: 'var(--code-bg)', color: 'var(--code-text)', overflow: 'auto', maxHeight: 400 }}>
           {visibleLines.map((line, i) => (
             <div
               key={i}
               style={{
                 display: 'flex', padding: '1px 12px',
-                background: line.type === 'added' ? 'rgba(74,222,128,0.12)' :
-                  line.type === 'removed' ? 'rgba(248,113,113,0.12)' : 'transparent',
-                borderLeft: line.type === 'added' ? '3px solid #4ade80' :
-                  line.type === 'removed' ? '3px solid #f87171' : '3px solid transparent',
+                background: line.type === 'added' ? 'var(--success-soft)' :
+                  line.type === 'removed' ? 'var(--error-soft)' : 'transparent',
+                borderLeft: line.type === 'added' ? '3px solid var(--success)' :
+                  line.type === 'removed' ? '3px solid var(--error)' : '3px solid transparent',
               }}
             >
               <span style={{ width: 35, textAlign: 'right', color: 'var(--text-muted)', fontSize: 10, flexShrink: 0 }}>
@@ -129,7 +129,7 @@ const DiffViewer: React.FC<DiffViewerProps> = memo(function DiffViewer({ filePat
               </span>
               <span style={{
                 marginRight: 8, width: 14, textAlign: 'center', flexShrink: 0,
-                color: line.type === 'added' ? '#4ade80' : line.type === 'removed' ? '#f87171' : 'var(--text-muted)',
+                color: line.type === 'added' ? 'var(--success)' : line.type === 'removed' ? 'var(--error)' : 'var(--text-muted)',
               }}>
                 {line.type === 'added' ? '+' : line.type === 'removed' ? '-' : ' '}
               </span>

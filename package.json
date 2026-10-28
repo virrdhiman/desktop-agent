@@ -51,6 +51,7 @@
     "smoke": "npm run build && node scripts/smoke.mjs",
     "test:composer-e2e": "node tests/human/composer-add-menu.mjs",
     "test:theme-e2e": "node scripts/theme-electron-smoke.mjs",
+    "test:theme-contrast": "node scripts/theme-contrast-e2e.mjs",
     "agent:evals": "node scripts/agent-evals.mjs",
     "agent:evals:export": "node scripts/hosted-eval-export.mjs",
     "agent:evals:import": "node scripts/hosted-eval-import.mjs",

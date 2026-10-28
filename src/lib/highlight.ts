@@ -13,11 +13,11 @@ const KEYWORDS: Record<string, string> = {
 }
 
 const COLORS = {
-  string: 'color:#98c379',
-  comment: 'color:#5c6370;font-style:italic',
-  number: 'color:#d19a66',
-  keyword: 'color:#c678dd',
-  type: 'color:#e5c07b',
+  string: 'color:var(--syntax-string)',
+  comment: 'color:var(--syntax-comment);font-style:italic',
+  number: 'color:var(--syntax-number)',
+  keyword: 'color:var(--syntax-keyword)',
+  type: 'color:var(--syntax-type)',
 }
 
 function escapeHtml(text: string): string {

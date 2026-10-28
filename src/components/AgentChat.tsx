@@ -124,7 +124,7 @@ function ToolPreview({ tool, afterTool }: { tool: { name: string; args?: Record<
       border: '1px solid var(--border)',
       borderRadius: 8,
       overflow: 'hidden',
-      background: 'rgba(59,130,246,0.06)',
+      background: 'var(--accent-soft)',
     }}>
       <div style={{
         display: 'flex',
@@ -163,7 +163,8 @@ function ToolPreview({ tool, afterTool }: { tool: { name: string; args?: Record<
           <pre style={{
             margin: 0,
             padding: 10,
-            background: '#0d1117',
+            background: 'var(--code-bg)',
+            color: 'var(--code-text)',
             borderRadius: 6,
             overflow: 'auto',
             fontSize: 12,
@@ -218,7 +219,7 @@ function MarkdownContent({ content }: { content: string }) {
                 </button>
               </div>
               <pre style={{
-                margin: 0, padding: '12px 16px', background: '#0d1117',
+                margin: 0, padding: '12px 16px', background: 'var(--code-bg)', color: 'var(--code-text)',
                 fontSize: 12, fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
                 overflow: 'auto', lineHeight: 1.5, whiteSpace: 'pre-wrap',
               }}>
@@ -1480,7 +1481,7 @@ export default function AgentChat() {
       {dragOver && (
         <div style={{
           position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(59,130,246,0.1)', border: '2px dashed var(--accent)',
+          background: 'var(--accent-soft)', border: '2px dashed var(--accent)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           zIndex: 100, borderRadius: 8,
         }}>
@@ -1493,7 +1494,7 @@ export default function AgentChat() {
       {appSettings.composerGoal && (
         <div style={{
           display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px',
-          borderBottom: '1px solid var(--border)', background: 'rgba(59,130,246,0.08)',
+          borderBottom: '1px solid var(--border)', background: 'var(--accent-soft)',
         }}>
           <span aria-hidden="true">🎯</span>
           <span style={{ flex: 1, minWidth: 0, fontSize: 12, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -1664,7 +1665,7 @@ export default function AgentChat() {
                 className="badge"
                 style={{
                   fontSize: 10,
-                  background: job.status === 'running' ? 'rgba(59,130,246,0.15)' : job.status === 'error' ? 'rgba(239,68,68,0.15)' : 'var(--bg-tertiary)',
+                  background: job.status === 'running' ? 'var(--accent-soft)' : job.status === 'error' ? 'var(--error-soft)' : 'var(--bg-tertiary)',
                   color: job.status === 'running' ? 'var(--accent)' : job.status === 'error' ? 'var(--error)' : 'var(--text-muted)',
                 }}
               >
@@ -1754,7 +1755,7 @@ export default function AgentChat() {
           </div>
         )}
         {pendingPlan && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '7px 9px', border: '1px solid var(--accent)', borderRadius: 7, background: 'rgba(59,130,246,0.08)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '7px 9px', border: '1px solid var(--accent)', borderRadius: 7, background: 'var(--accent-soft)' }}>
             <span style={{ flex: 1, fontSize: 12, color: 'var(--text-secondary)' }}>Plan ready. No tools ran.</span>
             <button className="btn btn-sm btn-primary" onClick={approvePendingPlan}>Approve and run</button>
             <button className="btn btn-sm" onClick={() => setPendingPlan(null)}>Dismiss</button>
@@ -1798,7 +1799,7 @@ export default function AgentChat() {
               <span className="badge badge-green" style={{ fontSize: 10 }}>📋 Plan Mode</span>
             )}
             {sessionStats.toolsExecuted > 0 && (
-              <span className="badge" style={{ fontSize: 9, padding: '1px 6px', background: 'rgba(168,85,247,0.15)', color: '#c084fc' }}>
+              <span className="badge" style={{ fontSize: 9, padding: '1px 6px', background: 'var(--category-community-soft)', color: 'var(--category-community)' }}>
                 ⚡ {sessionStats.toolsExecuted} tools
               </span>
             )}

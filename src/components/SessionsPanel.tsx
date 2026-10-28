@@ -147,7 +147,7 @@ export default function SessionsPanel() {
                   style={{
                     padding: '12px 14px', cursor: 'pointer',
                     border: currentSessionId === session.id ? '1px solid var(--accent)' : '1px solid var(--border)',
-                    background: currentSessionId === session.id ? 'rgba(59,130,246,0.08)' : 'var(--bg-secondary)',
+                    background: currentSessionId === session.id ? 'var(--accent-soft)' : 'var(--bg-secondary)',
                   }}
                   onClick={() => { void open(session.id) }}
                 >

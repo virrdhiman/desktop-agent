@@ -3,7 +3,7 @@ import { act, render, waitFor } from '@testing-library/react'
 import { useStore } from '../store'
 import MultiTerminal from './MultiTerminal'
 
-const { fitMock } = vi.hoisted(() => ({ fitMock: vi.fn() }))
+const { fitMock, terminalInstances } = vi.hoisted(() => ({ fitMock: vi.fn(), terminalInstances: [] as Array<{ options: { theme: Record<string, string> } }> }))
 
 vi.mock('xterm', () => ({
   Terminal: class MockTerminal {
@@ -12,6 +12,7 @@ vi.mock('xterm', () => ({
     rows = 24
     options = { theme: {} }
     _core = { _renderService: { dimensions: { css: { cell: { width: 8, height: 16 } } } } }
+    constructor() { terminalInstances.push(this) }
     loadAddon() {}
     open(container: HTMLElement) { container.appendChild(this.element) }
     onData() { return { dispose() {} } }
@@ -109,5 +110,44 @@ describe('MultiTerminal renderer safety', () => {
     global.ResizeObserver = originalObserver
     if (originalWidth) Object.defineProperty(HTMLElement.prototype, 'clientWidth', originalWidth)
     if (originalHeight) Object.defineProperty(HTMLElement.prototype, 'clientHeight', originalHeight)
+  })
+
+  it('passes concrete theme colors to xterm and refreshes them when the preference changes', async () => {
+    terminalInstances.length = 0
+    const originalWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth')
+    const originalHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientHeight')
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, value: 400 })
+    Object.defineProperty(HTMLElement.prototype, 'clientHeight', { configurable: true, value: 240 })
+    const root = document.documentElement
+    root.style.setProperty('--terminal-bg', 'var(--bg-primary)')
+    root.style.setProperty('--terminal-fg', 'var(--text-primary)')
+    root.style.setProperty('--terminal-cursor', 'var(--accent)')
+    root.style.setProperty('--terminal-selection', 'var(--bg-tertiary)')
+    root.style.setProperty('--bg-primary', '#fff8fc')
+    root.style.setProperty('--text-primary', '#25131e')
+    root.style.setProperty('--bg-tertiary', '#fbe5ef')
+    root.style.setProperty('--accent', '#be185d')
+    useStore.setState({ settings: { ...useStore.getState().settings, theme: 'pink-light' } })
+    const view = render(<MultiTerminal />)
+    await waitFor(() => expect(terminalInstances[0]?.options.theme.foreground).toBe('#25131e'))
+
+    await act(async () => {
+      root.style.setProperty('--bg-primary', '#170b14')
+      root.style.setProperty('--text-primary', '#fff1f7')
+      root.style.setProperty('--bg-tertiary', '#3a1a2d')
+      root.style.setProperty('--accent', '#ff8bc3')
+      useStore.setState({ settings: { ...useStore.getState().settings, theme: 'pink-dark' } })
+    })
+    await waitFor(() => {
+      expect(terminalInstances[0]?.options.theme).toMatchObject({
+        background: '#170b14', foreground: '#fff1f7', cursor: '#ff8bc3', selectionBackground: '#3a1a2d',
+      })
+    })
+    view.unmount()
+    root.style.cssText = ''
+    if (originalWidth) Object.defineProperty(HTMLElement.prototype, 'clientWidth', originalWidth)
+    else delete (HTMLElement.prototype as unknown as { clientWidth?: number }).clientWidth
+    if (originalHeight) Object.defineProperty(HTMLElement.prototype, 'clientHeight', originalHeight)
+    else delete (HTMLElement.prototype as unknown as { clientHeight?: number }).clientHeight
   })
 })

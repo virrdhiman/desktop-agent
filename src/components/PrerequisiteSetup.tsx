@@ -102,8 +102,8 @@ export default function PrerequisiteSetup() {
   }
 
   return (
-    <div role="dialog" aria-modal="true" aria-labelledby="setup-title" style={{ position: 'fixed', inset: 0, zIndex: 30, background: 'rgba(0,0,0,.72)', display: 'grid', placeItems: 'center', padding: 24 }}>
-      <section style={{ maxWidth: 760, width: '100%', maxHeight: '90vh', overflow: 'auto', background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 12, padding: 24, boxShadow: '0 20px 80px rgba(0,0,0,.45)' }}>
+    <div role="dialog" aria-modal="true" aria-labelledby="setup-title" style={{ position: 'fixed', inset: 0, zIndex: 30, background: 'var(--overlay-scrim)', display: 'grid', placeItems: 'center', padding: 24 }}>
+      <section style={{ maxWidth: 760, width: '100%', maxHeight: '90vh', overflow: 'auto', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 12, padding: 24, boxShadow: '0 20px 80px rgba(0,0,0,.45)' }}>
         <BrandLogo className="vd-setup-logo" />
         <h2 id="setup-title" style={{ marginTop: 0 }}>Customize {APP_NAME}</h2>
         <p>Skip to use defaults. Model and provider controls, autocomplete, OCR, indexing, update channel and telemetry are in Settings &gt; Advanced. Optional installations below are independent and require explicit consent. Downloads use only the fixed official HTTPS source selected by {APP_NAME}, are kept in the existing app data folder, and are verified before the operating system opens them.</p>

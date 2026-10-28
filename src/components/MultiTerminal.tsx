@@ -44,10 +44,12 @@ export default function MultiTerminal() {
     const style = window.getComputedStyle(document.documentElement)
     const read = (name: string, fallback: string) => style.getPropertyValue(name).trim() || fallback
     return {
-      background: read('--terminal-bg', read('--bg-primary', 'transparent')),
-      foreground: read('--terminal-fg', read('--text-primary', 'currentColor')),
-      cursor: read('--terminal-cursor', read('--accent', 'currentColor')),
-      selectionBackground: read('--terminal-selection', read('--bg-tertiary', 'transparent')),
+      // xterm expects concrete CSS colors; custom-property aliases such as
+      // `var(--text-primary)` are not valid xterm color values.
+      background: read('--bg-primary', 'transparent'),
+      foreground: read('--text-primary', 'currentColor'),
+      cursor: read('--accent', 'currentColor'),
+      selectionBackground: read('--bg-tertiary', 'transparent'),
       black: read('--bg-secondary', 'currentColor'),
       red: read('--error', 'currentColor'),
       green: read('--success', 'currentColor'),

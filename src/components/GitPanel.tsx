@@ -433,20 +433,20 @@ const SyntaxHighlightedDiff = memo(function SyntaxHighlightedDiff({
   const lines = diff.split('\n')
   const patchableHunks = canPatch ? parsePatchableHunks(diff) : new Map<number, string>()
   return (
-    <div style={{ flex: 1, overflow: 'auto', background: '#0d1117' }}>
+    <div style={{ flex: 1, overflow: 'auto', background: 'var(--code-bg)', color: 'var(--code-text)' }}>
       {lines.map((line, i) => {
         let bg = 'transparent'
         let color = 'var(--text-secondary)'
 
         if (line.startsWith('+')) {
-          bg = 'rgba(34, 197, 94, 0.12)'
-          color = '#4ade80'
+          bg = 'var(--success-soft)'
+          color = 'var(--success)'
         } else if (line.startsWith('-')) {
-          bg = 'rgba(239, 68, 68, 0.12)'
-          color = '#f87171'
+          bg = 'var(--error-soft)'
+          color = 'var(--error)'
         } else if (line.startsWith('@@')) {
-          bg = 'rgba(59, 130, 246, 0.12)'
-          color = '#60a5fa'
+          bg = 'var(--accent-soft)'
+          color = 'var(--accent)'
         } else if (line.startsWith('diff') || line.startsWith('index') || line.startsWith('---') || line.startsWith('+++')) {
           bg = 'var(--bg-tertiary)'
           color = 'var(--text-muted)'
@@ -459,9 +459,9 @@ const SyntaxHighlightedDiff = memo(function SyntaxHighlightedDiff({
             padding: '1px 16px', fontFamily: "'JetBrains Mono', monospace",
             fontSize: 12, lineHeight: 1.5, background: bg, color,
             whiteSpace: 'pre-wrap', wordBreak: 'break-all',
-            borderLeft: line.startsWith('+') ? '3px solid #4ade80' :
-                        line.startsWith('-') ? '3px solid #f87171' :
-                        line.startsWith('@') ? '3px solid #60a5fa' : '3px solid transparent',
+            borderLeft: line.startsWith('+') ? '3px solid var(--success)' :
+                        line.startsWith('-') ? '3px solid var(--error)' :
+                        line.startsWith('@') ? '3px solid var(--accent)' : '3px solid transparent',
           }}>
             <span style={{ flex: 1 }}>{line}</span>
             {patch && onApplyHunk && (
@@ -511,28 +511,28 @@ const SplitDiffView = memo(function SplitDiffView({ diff }: { diff: string }) {
   return (
     <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
       {/* Left: old */}
-      <div style={{ flex: 1, overflow: 'auto', background: '#0d1117', borderRight: '1px solid var(--border)' }}>
+      <div style={{ flex: 1, overflow: 'auto', background: 'var(--code-bg)', color: 'var(--code-text)', borderRight: '1px solid var(--border)' }}>
         {leftLines.map((line, i) => (
           <div key={i} style={{
             padding: '1px 12px', fontFamily: "'JetBrains Mono', monospace",
             fontSize: 12, lineHeight: 1.5, whiteSpace: 'pre-wrap',
-            color: line.startsWith('-') ? '#f87171' : 'var(--text-secondary)',
-            background: line.startsWith('-') ? 'rgba(239, 68, 68, 0.08)' : 'transparent',
-            borderLeft: line.startsWith('-') ? '3px solid #f87171' : '3px solid transparent',
+            color: line.startsWith('-') ? 'var(--error)' : 'var(--code-text)',
+            background: line.startsWith('-') ? 'var(--error-soft)' : 'transparent',
+            borderLeft: line.startsWith('-') ? '3px solid var(--error)' : '3px solid transparent',
           }}>
             {line}
           </div>
         ))}
       </div>
       {/* Right: new */}
-      <div style={{ flex: 1, overflow: 'auto', background: '#0d1117' }}>
+      <div style={{ flex: 1, overflow: 'auto', background: 'var(--code-bg)', color: 'var(--code-text)' }}>
         {rightLines.map((line, i) => (
           <div key={i} style={{
             padding: '1px 12px', fontFamily: "'JetBrains Mono', monospace",
             fontSize: 12, lineHeight: 1.5, whiteSpace: 'pre-wrap',
-            color: line.startsWith('+') ? '#4ade80' : 'var(--text-secondary)',
-            background: line.startsWith('+') ? 'rgba(34, 197, 94, 0.08)' : 'transparent',
-            borderLeft: line.startsWith('+') ? '3px solid #4ade80' : '3px solid transparent',
+            color: line.startsWith('+') ? 'var(--success)' : 'var(--code-text)',
+            background: line.startsWith('+') ? 'var(--success-soft)' : 'transparent',
+            borderLeft: line.startsWith('+') ? '3px solid var(--success)' : '3px solid transparent',
           }}>
             {line}
           </div>

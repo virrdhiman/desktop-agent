@@ -164,7 +164,7 @@ export const CARD = {
     borderRadius: 8,
     cursor: 'pointer' as const,
     border: '1px solid var(--accent)',
-    background: 'rgba(59, 130, 246, 0.1)',
+    background: 'var(--accent-soft)',
   },
 } as const
 

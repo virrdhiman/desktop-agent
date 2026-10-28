@@ -5,7 +5,15 @@ import { describe, expect, it } from 'vitest'
 import { applyThemePreference, normalizeThemePreference } from './theme'
 
 const cssPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../themes.css')
+const srcRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const css = fs.readFileSync(cssPath, 'utf8')
+
+function sourceFiles(folder: string): string[] {
+  return fs.readdirSync(folder, { withFileTypes: true }).flatMap((entry) => {
+    const file = path.join(folder, entry.name)
+    return entry.isDirectory() ? sourceFiles(file) : [file]
+  })
+}
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -50,6 +58,16 @@ const palettes = {
 }
 
 describe('theme preferences', () => {
+  it('keeps component foreground and background colors on theme tokens', () => {
+    const files = [
+      ...sourceFiles(path.join(srcRoot, 'components')).filter((file) => /\.tsx?$/.test(file) && !/\.(?:test|spec)\.tsx?$/.test(file)),
+      path.join(srcRoot, 'styles.ts'),
+      path.join(srcRoot, 'lib', 'highlight.ts'),
+    ]
+    const hardcoded = files.filter((file) => /\b(?:color|background(?:Color)?)\s*:\s*['"]\s*(?:#[\da-f]{3,8}|rgba?\()/i.test(fs.readFileSync(file, 'utf8')))
+    expect(hardcoded.map((file) => path.relative(srcRoot, file))).toEqual([])
+  })
+
   it('defaults missing or invalid saved values to System', () => {
     expect(normalizeThemePreference(undefined)).toBe('system')
     expect(normalizeThemePreference('old-theme')).toBe('system')
@@ -69,7 +87,7 @@ describe('theme preferences', () => {
     for (const [name, palette] of Object.entries(palettes)) {
       const surfaces = ['bg-primary', 'bg-secondary', 'bg-tertiary'].map((key) => palette[key])
       const textTokens = [
-        'text-primary', 'text-secondary', 'text-muted', 'accent', 'success', 'warning', 'error',
+        'text-primary', 'text-secondary', 'text-muted', 'text-placeholder', 'text-disabled', 'accent', 'success', 'warning', 'error',
         'category-free', 'category-local', 'category-community', 'category-media', 'category-paid',
       ]
       for (const token of textTokens) {
@@ -82,6 +100,9 @@ describe('theme preferences', () => {
         ['text-on-error', 'error'], ['statusbar-text', 'statusbar-bg'], ['code-text', 'code-bg'],
       ]) {
         expect(contrast(palette[foreground], palette[background]), `${name}: --${foreground} on --${background}`).toBeGreaterThanOrEqual(4.5)
+      }
+      for (const token of ['syntax-string', 'syntax-comment', 'syntax-number', 'syntax-keyword', 'syntax-type']) {
+        expect(contrast(palette[token], palette['code-bg']), `${name}: --${token} on --code-bg`).toBeGreaterThanOrEqual(4.5)
       }
     }
   })

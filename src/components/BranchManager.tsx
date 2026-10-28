@@ -171,7 +171,7 @@ export default function BranchManager() {
                 style={{
                   display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px',
                   borderRadius: 6, marginBottom: 2,
-                  background: gitBranches.current === branch ? 'rgba(59,130,246,0.1)' : 'transparent',
+                  background: gitBranches.current === branch ? 'var(--accent-soft)' : 'transparent',
                   border: `1px solid ${gitBranches.current === branch ? 'var(--accent)' : 'transparent'}`,
                 }}
               >
@@ -222,7 +222,7 @@ export default function BranchManager() {
               </button>
             </div>
             {stashMsg && (
-              <div style={{ marginTop: 8, padding: '6px 10px', background: 'rgba(245,158,11,0.1)', borderRadius: 6, fontSize: 12 }}>
+              <div style={{ marginTop: 8, padding: '6px 10px', background: 'var(--warning-soft)', borderRadius: 6, fontSize: 12, color: 'var(--text-primary)' }}>
                 📦 {stashMsg}
               </div>
             )}

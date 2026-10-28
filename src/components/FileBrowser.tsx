@@ -200,7 +200,7 @@ export default function FileBrowser() {
               className="file-tree-item"
               style={{
                 color: selectedFile === f.path ? 'var(--accent)' : 'var(--text-primary)',
-                background: selectedFile === f.path ? 'rgba(59,130,246,0.1)' : 'transparent',
+                background: selectedFile === f.path ? 'var(--accent-soft)' : 'transparent',
               }}
             >
               <span style={{ width: 18, textAlign: 'center' }}>

@@ -475,6 +475,7 @@ export default function SettingsPanel() {
                         </span>
                         <span className="vd-theme-choice-label">{THEME_LABELS[theme]}</span>
                         {theme === 'system' && <span className="vd-theme-choice-description">Follows your device setting</span>}
+                        {theme === 'pink-light' && <span className="vd-theme-choice-description">Soft blush surfaces with a rose-pink accent</span>}
                       </span>
                     </label>
                   )

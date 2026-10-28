@@ -161,7 +161,7 @@ export default function CommandPalette() {
     <div
       style={{
         position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-        background: 'rgba(0,0,0,0.6)', zIndex: 1000,
+        background: 'var(--overlay-scrim)', zIndex: 1000,
         display: 'flex', justifyContent: 'center', paddingTop: '15vh',
       }}
       onClick={(e) => { if (e.target === e.currentTarget) setShowCommandPalette(false) }}
@@ -230,7 +230,7 @@ export default function CommandPalette() {
                   style={{
                     display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px',
                     cursor: 'pointer', fontSize: 13,
-                    background: selectedIndex === i ? 'rgba(59,130,246,0.15)' : 'transparent',
+                    background: selectedIndex === i ? 'var(--accent-soft)' : 'transparent',
                     borderLeft: selectedIndex === i ? '2px solid var(--accent)' : '2px solid transparent',
                   }}
                 >
@@ -273,7 +273,7 @@ export default function CommandPalette() {
                         style={{
                           display: 'flex', alignItems: 'center', gap: 10, padding: '7px 16px',
                           cursor: 'pointer', fontSize: 13,
-                          background: selectedIndex === i ? 'rgba(59,130,246,0.15)' : 'transparent',
+                          background: selectedIndex === i ? 'var(--accent-soft)' : 'transparent',
                           borderLeft: selectedIndex === i ? '2px solid var(--accent)' : '2px solid transparent',
                         }}
                       >
