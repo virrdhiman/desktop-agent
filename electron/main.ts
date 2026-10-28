@@ -53,6 +53,10 @@ import { loadRuntimeSettings } from './handlers/settings'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const qaUserData = userDataOverride()
 app.setPath('userData', qaUserData || stableUserDataPath(app.getPath('appData')))
+const APP_USER_MODEL_ID = 'com.vd.agent'
+// Preserve the existing electron-builder appId so Windows groups the PIT icon
+// correctly in the taskbar and Alt+Tab switcher.
+if (process.platform === 'win32') app.setAppUserModelId(APP_USER_MODEL_ID)
 
 /** Main BrowserWindow reference — passed to handlers that need to send events to renderer */
 let mainWindow: BrowserWindow | null = null
@@ -112,13 +116,15 @@ process.on('unhandledRejection', (reason) => {
 
 // ─── Window Management ────────────────────────────────────────────────────
 
-function resolveWindowIcon(): string | undefined {
+function resolveWindowIcon(): string {
   const iconFile = process.platform === 'win32' ? 'icon.ico' : 'icon.png'
   const candidates = [
     path.join(process.resourcesPath, iconFile),
     path.join(__dirname, '../build', iconFile),
   ]
-  return candidates.find((candidate) => fs.existsSync(candidate))
+  const iconPath = candidates.find((candidate) => fs.existsSync(candidate))
+  if (!iconPath) throw new Error(`Required PIT Agent window icon not found: ${candidates.join(', ')}`)
+  return iconPath
 }
 
 function loadRenderer(window: BrowserWindow, role: 'main' | 'ide') {
@@ -221,7 +227,7 @@ function createIdeWindow(): BrowserWindow {
     title: `${APP_NAME} — Code`,
     titleBarStyle: 'hiddenInset',
     backgroundColor: '#0f172a',
-    ...(icon ? { icon } : {}),
+    icon,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -257,7 +263,7 @@ function createWindow() {
     minHeight: 600,
     titleBarStyle: 'hiddenInset',
     backgroundColor: '#0f172a',
-    ...(icon ? { icon } : {}),
+    icon,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,

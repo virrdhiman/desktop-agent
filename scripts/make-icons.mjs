@@ -313,6 +313,7 @@ function main() {
   const root = path.resolve(fileURLToPath(new URL('..', import.meta.url)))
   const srcAssets = path.join(root, 'src', 'assets')
   const build = path.join(root, 'build')
+  const publicDir = path.join(root, 'public')
   if (!fs.existsSync(source)) throw new Error(`Logo source not found: ${source}`)
   const decoded = decodePng(source)
   if (decoded.width < 1024 || decoded.height < 1024) console.warn(`Warning: logo source is low resolution (${decoded.width}x${decoded.height}); supply a vector or 2048px PNG later for sharper regenerated icons.`)
@@ -334,13 +335,18 @@ function main() {
   const mark = resample(squarePad(crop(clean, markBounds, 8), 12), 1024, 1024)
   fs.mkdirSync(srcAssets, { recursive: true })
   fs.mkdirSync(build, { recursive: true })
+  fs.mkdirSync(publicDir, { recursive: true })
   fs.writeFileSync(path.join(srcAssets, 'pit-logo.png'), encodePng(clean.width, clean.height, clean.pixels))
   fs.writeFileSync(path.join(srcAssets, 'pit-logo-trimmed.png'), encodePng(trimmed.width, trimmed.height, trimmed.pixels))
   fs.writeFileSync(path.join(build, 'icon.png'), encodePng(1024, 1024, mark.pixels))
-  fs.writeFileSync(path.join(build, 'icon.ico'), writeIco(mark, [16, 24, 32, 48, 64, 128, 256]))
+  const ico = writeIco(mark, [16, 24, 32, 48, 64, 128, 256])
+  fs.writeFileSync(path.join(build, 'icon.ico'), ico)
   fs.writeFileSync(path.join(build, 'icon.icns'), writeIcns(mark))
+  fs.writeFileSync(path.join(publicDir, 'favicon-32.png'), encodePng(32, 32, resample(mark, 32, 32).pixels))
+  fs.writeFileSync(path.join(publicDir, 'favicon-64.png'), encodePng(64, 64, resample(mark, 64, 64).pixels))
+  fs.writeFileSync(path.join(publicDir, 'favicon.ico'), ico)
   console.log(`Generated full logo ${clean.width}x${clean.height}, trimmed logo ${trimmed.width}x${trimmed.height}, and gears mark 1024x1024`)
-  console.log('Generated build/icon.png, build/icon.ico, and build/icon.icns')
+  console.log('Generated build/icon.png, build/icon.ico, build/icon.icns, and public favicon PNG/ICO assets')
 }
 
 export { removeWhiteMatte }
