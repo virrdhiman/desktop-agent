@@ -30,6 +30,7 @@ import type {
   Settings, ProviderConfig, Panel, AgentTask, CheckpointSummary, ToolExecutionSummary, VerificationSummary, RepoIndexStatus,
 } from '../types'
 import { compactConversation, summarizeMessages } from '../lib/chatControl'
+import { MAX_AGENT_ACTIVITY_DETAIL_CHARS, MAX_AGENT_ACTIVITY_STEPS } from '../lib/agentActivity'
 
 export const AUTOSAVE_DELAY_MS = 800
 export const MAX_SESSIONS_IN_MEMORY = 100
@@ -62,7 +63,18 @@ function isPersistable(messages: ChatMessage[]) {
 }
 
 function toStoredMessages(messages: ChatMessage[]) {
-  return messages.map(({ id, role, content, timestamp }) => ({ id, role, content, timestamp }))
+  return messages.map(({ id, role, content, timestamp, activity }) => ({
+    id, role, content, timestamp,
+    ...(activity ? {
+      activity: {
+        ...activity,
+        steps: activity.steps.slice(-MAX_AGENT_ACTIVITY_STEPS).map((step) => ({
+          ...step,
+          ...(step.details ? { details: step.details.slice(-MAX_AGENT_ACTIVITY_DETAIL_CHARS) } : {}),
+        })),
+      },
+    } : {}),
+  }))
 }
 
 function summaryMessage(summary: string): ChatMessage {

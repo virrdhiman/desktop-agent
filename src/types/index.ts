@@ -19,6 +19,7 @@
 import type { DataToolSettings } from '../lib/dataToolSettings'
 import type { LayoutPreferences } from '../lib/layoutPersistence'
 import type { ThemePreference } from '../lib/theme'
+import type { AgentActivityRun } from '../lib/agentActivity'
 import { APP_NAME } from '../lib/brand'
 
 export interface FileEntry {
@@ -145,6 +146,8 @@ export interface ChatMessage {
   fileContext?: string
   toolCalls?: ToolCall[]
   streaming?: boolean
+  /** Bounded, redacted run progress attached to the completed assistant response. */
+  activity?: AgentActivityRun
 }
 
 export interface ChatSession {

@@ -75,6 +75,23 @@ describe('session auto-save', () => {
     expect(Object.keys(api.saveConversation.mock.calls[0][0].messages[0]).sort()).toEqual(['content', 'id', 'role', 'timestamp'])
   })
 
+  it('persists bounded activity with the assistant message while older messages remain valid', async () => {
+    useStore.getState().addMessage(user('1', 'Inspect the file'))
+    useStore.getState().addMessage({
+      ...assistant('2', 'The file contains one export.'),
+      activity: {
+        id: 'run-1', startedAt: 1, updatedAt: 3, status: 'done', durationMs: 2,
+        steps: [{ id: 'step-1', kind: 'tool', label: 'Reading src/index.ts', status: 'done', startedAt: 1, finishedAt: 3, details: 'Read file' }],
+      },
+    })
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY_MS + 10)
+
+    const saved = api.saveConversation.mock.calls[0][0]
+    expect(saved.messages[0]).not.toHaveProperty('activity')
+    expect(saved.messages[1].activity).toMatchObject({ id: 'run-1', status: 'done', steps: [{ label: 'Reading src/index.ts' }] })
+    expect(useStore.getState().sessions[0].messages[1].activity?.steps).toHaveLength(1)
+  })
+
   it('persists bounded resume context alongside the messages', async () => {
     const history = [user('1', 'resume this work'), ...Array.from({ length: 20 }, (_, index) => assistant(`a-${index}`, `progress ${index}`))]
     useStore.setState({
