@@ -3,10 +3,7 @@ import path from 'node:path'
 import zlib from 'node:zlib'
 import { fileURLToPath } from 'node:url'
 
-const root = path.resolve(fileURLToPath(new URL('..', import.meta.url)))
 const source = path.resolve(process.argv[2] || 'C:/vd-vms/assets/pit-logo.png')
-const srcAssets = path.join(root, 'src', 'assets')
-const build = path.join(root, 'build')
 
 function crc32(bytes) {
   let crc = 0xffffffff
@@ -117,7 +114,9 @@ function dominantColors(image) {
     const r = image.pixels[i]
     const g = image.pixels[i + 1]
     const b = image.pixels[i + 2]
-    if (Math.min(r, g, b) > 245 || Math.max(r, g, b) - Math.min(r, g, b) < 18) continue
+    const minimum = Math.min(r, g, b)
+    const maximum = Math.max(r, g, b)
+    if (image.pixels[i + 3] < 240 || minimum > 245 || maximum - minimum < 18 || (maximum - minimum) / Math.max(1, maximum) < 0.35) continue
     const key = `${r},${g},${b}`
     counts.set(key, (counts.get(key) || 0) + 1)
   }
@@ -137,10 +136,19 @@ function removeWhiteMatte(image) {
   const output = Buffer.from(image.pixels)
   for (let i = 0; i < output.length; i += 4) {
     const color = [output[i], output[i + 1], output[i + 2]]
+    const sourceAlpha = image.pixels[i + 3]
+    if (sourceAlpha === 0) continue
+    // Remove white everywhere, including enclosed counters and gaps. This is
+    // intentionally pixel based rather than a flood fill from the canvas edge.
     if (Math.min(...color) > 250 && Math.max(...color) - Math.min(...color) < 8) {
+      output[i] = 0
+      output[i + 1] = 0
+      output[i + 2] = 0
       output[i + 3] = 0
       continue
     }
+    // Existing fractional alpha is already antialiased; don't matte it twice.
+    if (sourceAlpha < 255) continue
     let best = { error: Infinity, alpha: 0, color }
     for (const foreground of palette) {
       const vector = foreground.map((channel) => 255 - channel)
@@ -302,6 +310,9 @@ function writeIcns(image) {
 }
 
 function main() {
+  const root = path.resolve(fileURLToPath(new URL('..', import.meta.url)))
+  const srcAssets = path.join(root, 'src', 'assets')
+  const build = path.join(root, 'build')
   if (!fs.existsSync(source)) throw new Error(`Logo source not found: ${source}`)
   const decoded = decodePng(source)
   if (decoded.width < 1024 || decoded.height < 1024) console.warn(`Warning: logo source is low resolution (${decoded.width}x${decoded.height}); supply a vector or 2048px PNG later for sharper regenerated icons.`)
@@ -332,4 +343,6 @@ function main() {
   console.log('Generated build/icon.png, build/icon.ico, and build/icon.icns')
 }
 
-main()
+export { removeWhiteMatte }
+
+if (import.meta.url.startsWith('file:') && process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main()
